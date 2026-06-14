@@ -1,0 +1,120 @@
+:root {
+  color-scheme: light dark;
+
+  /* Brand palette */
+  --cb-color-coffee: #6f4e37;
+  --cb-color-gold: #c8a165;
+  --cb-color-cream: #efe4d3;
+  --cb-color-ivory: #f7f3ee;
+  --cb-color-espresso: #1e1b18;
+  --cb-color-caramel: #b87942;
+
+  /* Semantic colors: light defaults, overridden by themes.css */
+  --cb-text-primary: var(--cb-color-espresso);
+  --cb-text-secondary: #625a52;
+  --cb-text-muted: #81776d;
+  --cb-text-inverse: #ffffff;
+
+  --cb-bg-page: var(--cb-color-ivory);
+  --cb-bg-surface: #ffffff;
+  --cb-bg-soft: #eee7de;
+  --cb-bg-elevated: #ffffff;
+  --cb-bg-dark: var(--cb-color-espresso);
+
+  --cb-border-soft: #e3dbd1;
+  --cb-border-strong: #b9aa9b;
+
+  --cb-success: #357a52;
+  --cb-warning: #9b681f;
+  --cb-danger: #a13c3c;
+  --cb-info: #3d6f91;
+
+  /* Typography */
+  --cb-font-display: "Playfair Display", Georgia, serif;
+  --cb-font-body: Inter, "HarmonyOS Sans", system-ui, sans-serif;
+
+  --cb-font-size-xs: 0.75rem;
+  --cb-font-size-sm: 0.875rem;
+  --cb-font-size-md: 1rem;
+  --cb-font-size-lg: 1.125rem;
+  --cb-font-size-xl: 1.25rem;
+  --cb-font-size-2xl: 1.5rem;
+  --cb-font-size-3xl: 1.875rem;
+  --cb-font-size-4xl: 2.25rem;
+  --cb-font-size-5xl: 3rem;
+  --cb-font-size-display: clamp(3rem, 7vw, 4.5rem);
+
+  --cb-line-tight: 1.2;
+  --cb-line-normal: 1.5;
+  --cb-line-relaxed: 1.7;
+
+  --cb-font-regular: 400;
+  --cb-font-medium: 500;
+  --cb-font-semibold: 600;
+  --cb-font-bold: 700;
+
+  /* Spacing: 4px scale */
+  --cb-space-1: 0.25rem;
+  --cb-space-2: 0.5rem;
+  --cb-space-3: 0.75rem;
+  --cb-space-4: 1rem;
+  --cb-space-5: 1.25rem;
+  --cb-space-6: 1.5rem;
+  --cb-space-7: 1.75rem;
+  --cb-space-8: 2rem;
+  --cb-space-9: 2.25rem;
+  --cb-space-10: 2.5rem;
+  --cb-space-11: 2.75rem;
+  --cb-space-12: 3rem;
+  --cb-space-13: 3.25rem;
+  --cb-space-14: 3.5rem;
+  --cb-space-15: 3.75rem;
+  --cb-space-16: 4rem;
+  --cb-space-17: 4.25rem;
+  --cb-space-18: 4.5rem;
+  --cb-space-19: 4.75rem;
+  --cb-space-20: 5rem;
+  --cb-space-21: 5.25rem;
+  --cb-space-22: 5.5rem;
+  --cb-space-23: 5.75rem;
+  --cb-space-24: 6rem;
+
+  /* Shape */
+  --cb-radius-xs: 0.25rem;
+  --cb-radius-sm: 0.5rem;
+  --cb-radius-md: 0.75rem;
+  --cb-radius-lg: 1rem;
+  --cb-radius-xl: 1.25rem;
+  --cb-radius-2xl: 1.5rem;
+  --cb-radius-pill: 999rem;
+
+  /* Elevation */
+  --cb-shadow-sm: 0 0.125rem 0.5rem rgb(30 27 24 / 0.06);
+  --cb-shadow-md: 0 0.5rem 1.5rem rgb(30 27 24 / 0.08);
+  --cb-shadow-lg: 0 1rem 2.5rem rgb(30 27 24 / 0.1);
+  --cb-shadow-xl: 0 1.5rem 4rem rgb(30 27 24 / 0.14);
+  --cb-shadow-hover: 0 1.25rem 3rem rgb(30 27 24 / 0.13);
+  --cb-shadow-focus: 0 0 0 0.1875rem
+    color-mix(in srgb, var(--cb-color-coffee) 18%, transparent);
+  --cb-shadow-glow: 0 0 var(--cb-space-12)
+    color-mix(in srgb, var(--cb-color-gold) 48%, transparent);
+
+  /* Layering */
+  --cb-z-dropdown: 100;
+  --cb-z-sticky: 200;
+  --cb-z-modal: 500;
+  --cb-z-toast: 600;
+
+  /* Motion */
+  --cb-duration-fast: 150ms;
+  --cb-duration-normal: 250ms;
+  --cb-duration-slow: 400ms;
+  --cb-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --cb-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Containers */
+  --cb-container-sm: 40rem;
+  --cb-container-md: 48rem;
+  --cb-container-lg: 64rem;
+  --cb-container-xl: 80rem;
+}

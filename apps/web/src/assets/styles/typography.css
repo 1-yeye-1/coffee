@@ -1,0 +1,107 @@
+body {
+  color: var(--cb-text-primary);
+  font-family: var(--cb-font-body);
+  font-size: var(--cb-font-size-md);
+  font-weight: var(--cb-font-regular);
+  line-height: var(--cb-line-normal);
+  background: var(--cb-bg-page);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin-block: 0;
+  color: var(--cb-text-primary);
+  font-family: var(--cb-font-display);
+  font-weight: var(--cb-font-semibold);
+  line-height: var(--cb-line-tight);
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: clamp(var(--cb-font-size-4xl), 5vw, var(--cb-font-size-5xl));
+}
+
+h2 {
+  font-size: clamp(var(--cb-font-size-3xl), 4vw, var(--cb-font-size-4xl));
+}
+
+h3 {
+  font-size: var(--cb-font-size-2xl);
+}
+
+h4 {
+  font-size: var(--cb-font-size-xl);
+}
+
+h5,
+h6 {
+  font-size: var(--cb-font-size-lg);
+}
+
+p {
+  margin-block: 0;
+  color: var(--cb-text-secondary);
+  line-height: var(--cb-line-relaxed);
+}
+
+small {
+  color: var(--cb-text-muted);
+  font-size: var(--cb-font-size-sm);
+}
+
+.page-title {
+  max-width: 18ch;
+  font-size: clamp(var(--cb-font-size-4xl), 6vw, var(--cb-font-size-display));
+  font-weight: var(--cb-font-bold);
+  letter-spacing: -0.025em;
+}
+
+.page-subtitle {
+  max-width: 44rem;
+  color: var(--cb-text-secondary);
+  font-size: clamp(var(--cb-font-size-md), 2vw, var(--cb-font-size-lg));
+}
+
+.section-title {
+  font-size: clamp(var(--cb-font-size-2xl), 4vw, var(--cb-font-size-4xl));
+  letter-spacing: -0.015em;
+}
+
+.section-eyebrow {
+  color: var(--cb-color-caramel);
+  font-size: var(--cb-font-size-xs);
+  font-weight: var(--cb-font-bold);
+  letter-spacing: 0.14em;
+  line-height: var(--cb-line-normal);
+  text-transform: uppercase;
+}
+
+.rich-text {
+  max-width: 72ch;
+  color: var(--cb-text-secondary);
+  line-height: var(--cb-line-relaxed);
+}
+
+.rich-text > * + * {
+  margin-block-start: var(--cb-space-4);
+}
+
+.rich-text h2,
+.rich-text h3,
+.rich-text h4 {
+  margin-block-start: var(--cb-space-8);
+}
+
+.rich-text a {
+  color: var(--cb-color-coffee);
+  text-decoration: underline;
+  text-decoration-color: var(--cb-color-gold);
+  text-underline-offset: 0.2em;
+}
+

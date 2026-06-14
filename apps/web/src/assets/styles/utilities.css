@@ -1,0 +1,119 @@
+.text-muted {
+  color: var(--cb-text-muted);
+}
+
+.text-primary {
+  color: var(--cb-text-primary);
+}
+
+.text-center {
+  text-align: center;
+}
+
+.flex {
+  display: flex;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-sm {
+  gap: var(--cb-space-2);
+}
+
+.gap-md {
+  gap: var(--cb-space-4);
+}
+
+.gap-lg {
+  gap: var(--cb-space-6);
+}
+
+.hidden-mobile {
+  display: none !important;
+}
+
+.hidden-desktop {
+  display: initial !important;
+}
+
+.is-loading {
+  cursor: progress;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.is-error {
+  color: var(--cb-danger);
+}
+
+.is-success {
+  color: var(--cb-success);
+}
+
+.cb-button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  padding: var(--cb-space-3) var(--cb-space-5);
+  align-items: center;
+  justify-content: center;
+  color: var(--cb-text-inverse);
+  font-weight: var(--cb-font-semibold);
+  line-height: 1;
+  background: var(--cb-color-coffee);
+  border: 0.0625rem solid transparent;
+  border-radius: var(--cb-radius-lg);
+  box-shadow: var(--cb-shadow-sm);
+  transition:
+    color var(--cb-duration-fast) var(--cb-ease-standard),
+    background-color var(--cb-duration-fast) var(--cb-ease-standard),
+    box-shadow var(--cb-duration-normal) var(--cb-ease-standard),
+    transform var(--cb-duration-normal) var(--cb-ease-emphasized);
+}
+
+.cb-button:hover {
+  box-shadow: var(--cb-shadow-md);
+  transform: translateY(-0.0625rem);
+}
+
+.cb-button:active {
+  box-shadow: var(--cb-shadow-sm);
+  transform: translateY(0);
+}
+
+.cb-badge {
+  display: inline-flex;
+  width: fit-content;
+  padding: var(--cb-space-2) var(--cb-space-3);
+  align-items: center;
+  color: var(--cb-color-coffee);
+  font-size: var(--cb-font-size-xs);
+  font-weight: var(--cb-font-bold);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  background: var(--cb-bg-soft);
+  border: 0.0625rem solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-pill);
+}
+
+@media (min-width: 48rem) {
+  .hidden-mobile {
+    display: initial !important;
+  }
+
+  .hidden-desktop {
+    display: none !important;
+  }
+}
+

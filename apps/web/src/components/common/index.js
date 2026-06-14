@@ -1,0 +1,8 @@
+export { default as AppFooter } from './AppFooter.vue'
+export { default as AppHeader } from './AppHeader.vue'
+export { default as CartTrigger } from './CartTrigger.vue'
+export { default as GlobalSearchTrigger } from './GlobalSearchTrigger.vue'
+export { default as LayoutShell } from './LayoutShell.vue'
+export { default as MobileNavigation } from './MobileNavigation.vue'
+export { default as ThemeToggle } from './ThemeToggle.vue'
+export { default as UserMenu } from './UserMenu.vue'
