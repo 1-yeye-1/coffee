@@ -6,26 +6,38 @@ import { ROUTE_NAMES } from '../route-names'
 
 export const authRoutes = [
   {
-    path: '/',
+    path: '/login',
     component: AuthLayout,
     children: [
       {
-        path: 'login',
+        path: '',
         name: ROUTE_NAMES.LOGIN,
         component: LoginView,
-        meta: { title: 'Login', guestOnly: true },
+        meta: { title: '后台登录', guestOnly: true },
       },
+    ],
+  },
+  {
+    path: '/forgot-password',
+    component: AuthLayout,
+    children: [
       {
-        path: 'forgot-password',
+        path: '',
         name: ROUTE_NAMES.FORGOT_PASSWORD,
         component: PlaceholderView,
-        meta: { title: 'Forgot Password', guestOnly: true },
+        meta: { title: '忘记密码', guestOnly: true },
       },
+    ],
+  },
+  {
+    path: '/reset-password',
+    component: AuthLayout,
+    children: [
       {
-        path: 'reset-password',
+        path: '',
         name: ROUTE_NAMES.RESET_PASSWORD,
         component: PlaceholderView,
-        meta: { title: 'Reset Password', guestOnly: true },
+        meta: { title: '重置密码', guestOnly: true },
       },
     ],
   },

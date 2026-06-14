@@ -32,8 +32,8 @@ const adminMenuOpen = ref(false)
         {{ collapsed ? '→' : '←' }}
       </button>
       <div>
-        <strong>Administration</strong>
-        <small>Workspace overview</small>
+        <strong>后台管理</strong>
+        <small>运营工作台</small>
       </div>
     </div>
 
@@ -61,14 +61,14 @@ const adminMenuOpen = ref(false)
         >
           <span class="admin-header__avatar">A</span>
           <span class="admin-header__profile-copy">
-            <strong>Administrator</strong>
-            <small>Super Admin</small>
+            <strong>管理员</strong>
+            <small>超级管理员</small>
           </span>
           <span aria-hidden="true">⌄</span>
         </button>
         <div v-if="adminMenuOpen" class="admin-header__menu" role="menu">
           <button type="button" role="menuitem">个人设置</button>
-          <RouterLink to="/dashboard" role="menuitem">Dashboard</RouterLink>
+          <RouterLink to="/dashboard" role="menuitem">仪表盘</RouterLink>
         </div>
       </div>
     </div>

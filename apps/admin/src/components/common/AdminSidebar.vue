@@ -9,13 +9,13 @@ defineProps({
 defineEmits(['navigate'])
 
 const items = [
-  { label: 'Dashboard', to: '/dashboard', icon: 'D' },
-  { label: 'Books', to: '/books', icon: 'B' },
-  { label: 'Products', to: '/products', icon: 'P' },
-  { label: 'Orders', to: '/orders', icon: 'O' },
-  { label: 'Events', to: '/events', icon: 'E' },
-  { label: 'Community', to: '/community', icon: 'C' },
-  { label: 'Bookings', to: '/bookings', icon: 'R' },
+  { label: '仪表盘', to: '/dashboard', icon: 'D' },
+  { label: '图书管理', to: '/books', icon: 'B' },
+  { label: '商品管理', to: '/products', icon: 'P' },
+  { label: '订单管理', to: '/orders', icon: 'O' },
+  { label: '活动管理', to: '/events', icon: 'E' },
+  { label: '社区审核', to: '/community', icon: 'C' },
+  { label: '预约管理', to: '/bookings', icon: 'R' },
 ]
 
 function isActive(path, currentPath) {
@@ -32,11 +32,11 @@ function isActive(path, currentPath) {
       <span class="admin-sidebar__mark">CB</span>
       <span v-if="!collapsed || mobile" class="admin-sidebar__brand-text">
         Coffee Book
-        <small>Administration</small>
+        <small>后台管理</small>
       </span>
     </RouterLink>
 
-    <nav class="admin-sidebar__nav" aria-label="Admin navigation">
+    <nav class="admin-sidebar__nav" aria-label="后台导航">
       <RouterLink
         v-for="item in items"
         :key="item.to"
@@ -51,8 +51,8 @@ function isActive(path, currentPath) {
     </nav>
 
     <div v-if="!collapsed || mobile" class="admin-sidebar__footer">
-      <BaseBadge variant="premium">Coffee Book Admin</BaseBadge>
-      <small>Operational workspace</small>
+      <BaseBadge variant="premium">Coffee Book 后台</BaseBadge>
+      <small>运营管理工作台</small>
     </div>
   </aside>
 </template>

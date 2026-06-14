@@ -10,17 +10,17 @@ const layoutName = computed(() => route.meta.layoutPreview || 'PublicLayout')
 const layouts = [
   {
     name: 'PublicLayout',
-    description: 'Public storefront layout with header, content, and footer.',
+    description: '前台公共布局，包含顶部导航、内容区和页脚。',
     to: '/layout-preview',
   },
   {
     name: 'AuthLayout',
-    description: 'Authentication layout for login and registration.',
+    description: '登录与注册使用的认证布局。',
     to: '/layout-preview/auth',
   },
   {
     name: 'MemberLayout',
-    description: 'Account layout with member navigation and content.',
+    description: '会员中心布局，包含会员导航和内容区。',
     to: '/account/layout-preview',
   },
 ]
@@ -29,10 +29,10 @@ const layouts = [
 <template>
   <section class="layout-preview cb-stack" aria-labelledby="layout-preview-title">
     <div class="cb-stack">
-      <BaseBadge variant="premium">Layout System</BaseBadge>
+      <BaseBadge variant="premium">布局系统</BaseBadge>
       <h1 id="layout-preview-title" class="page-title">{{ layoutName }}</h1>
       <p class="page-subtitle">
-        This page verifies public, auth, and member layout structure for the web app.
+        此页面用于验证前台、认证和会员中心布局结构。
       </p>
     </div>
 
@@ -44,7 +44,7 @@ const layouts = [
       >
         <div class="cb-stack">
           <BaseBadge :variant="layout.name === layoutName ? 'success' : 'neutral'">
-            {{ layout.name === layoutName ? 'Current Layout' : 'Preview Route' }}
+            {{ layout.name === layoutName ? '当前布局' : '预览路由' }}
           </BaseBadge>
           <h2>{{ layout.name }}</h2>
           <p>{{ layout.description }}</p>
@@ -52,7 +52,7 @@ const layouts = [
             :variant="layout.name === layoutName ? 'secondary' : 'outline'"
             @click="$router.push(layout.to)"
           >
-            View layout
+            查看布局
           </BaseButton>
         </div>
       </BaseCard>

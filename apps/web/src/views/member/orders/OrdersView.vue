@@ -51,7 +51,7 @@ onMounted(() => orderStore.fetchOrders())
 <template>
   <div class="member-orders cb-fade-in">
     <header class="member-page-title">
-      <span class="section-eyebrow">My Orders</span>
+      <span class="section-eyebrow">我的订单</span>
       <h2 class="page-title">我的订单</h2>
       <p class="text-muted">查看交易记录并管理订单状态。</p>
     </header>

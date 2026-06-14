@@ -6,16 +6,16 @@ import ThemeToggle from '@/components/common/ThemeToggle.vue'
   <div class="auth-layout">
     <section class="auth-layout__brand">
       <div class="auth-layout__brand-content cb-stack">
-        <RouterLink class="auth-layout__logo" to="/dashboard">Coffee Book Admin</RouterLink>
-        <span class="section-eyebrow">Back Office</span>
-        <h1>Operations, content, and orders.</h1>
-        <p>Manage Coffee Book books, products, events, community review, orders, and bookings.</p>
+        <RouterLink class="auth-layout__logo" to="/dashboard">Coffee Book 后台</RouterLink>
+        <span class="section-eyebrow">后台管理</span>
+        <h1>运营、内容与订单管理。</h1>
+        <p>管理 Coffee Book 的图书、商品、活动、社区审核、订单和预约。</p>
       </div>
     </section>
 
     <section class="auth-layout__content">
       <div class="auth-layout__toolbar">
-        <span>Admin portal</span>
+        <span>后台入口</span>
         <ThemeToggle />
       </div>
       <div class="auth-layout__view">

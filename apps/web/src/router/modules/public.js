@@ -134,7 +134,7 @@ export const publicRoutes = [
         path: 'layout-preview',
         name: ROUTE_NAMES.LAYOUT_PREVIEW,
         component: LayoutPreview,
-        meta: { title: 'Layout System', layoutPreview: 'PublicLayout' },
+        meta: { title: '布局系统', layoutPreview: 'PublicLayout' },
       },
       {
         path: '403',

@@ -34,9 +34,9 @@ async function submit() {
 <template>
   <BaseCard class="auth-form-card" variant="elevated">
     <div class="cb-stack auth-form-card__intro">
-      <span class="section-eyebrow">Administration</span>
-      <h2 class="page-title">Coffee Book Admin</h2>
-      <p class="text-muted">Operational workspace login</p>
+      <span class="section-eyebrow">后台管理</span>
+      <h2 class="page-title">Coffee Book 后台登录</h2>
+      <p class="text-muted">请使用管理员账号进入运营工作台。</p>
     </div>
     <form class="cb-stack auth-form" @submit.prevent="submit">
       <BaseInput v-model="form.username" label="用户名" autocomplete="username" placeholder="请输入管理员用户名" />

@@ -222,7 +222,7 @@ onBeforeUnmount(() => {
     <section class="home-section cb-section">
       <div class="cb-container">
         <header class="section-heading" data-reveal>
-          <div><span class="section-eyebrow">Upcoming Events</span><h2 class="section-title">文化活动</h2></div>
+          <div><span class="section-eyebrow">近期活动</span><h2 class="section-title">文化活动</h2></div>
           <p>让阅读从书页延伸到人与人的相遇，在城市里共享真实的灵感。</p>
         </header>
         <div class="event-grid">
@@ -241,7 +241,7 @@ onBeforeUnmount(() => {
     <section class="home-section home-section--dark cb-section">
       <div class="cb-container community-grid">
         <BaseCard class="community-intro" variant="elevated" data-reveal>
-          <BaseBadge variant="premium">Coffee Book Community</BaseBadge>
+          <BaseBadge variant="premium">Coffee Book 社区</BaseBadge>
           <h2>与同样热爱阅读和咖啡的人相遇</h2>
           <p>分享正在阅读的书、今天喝到的风味，以及城市里适合独处和交流的角落。</p>
           <div class="community-intro__metrics"><div><strong>9.8K</strong><span>社区成员</span></div><div><strong>2.4K</strong><span>每月分享</span></div></div>

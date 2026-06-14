@@ -24,11 +24,11 @@ onMounted(() => {
     <section class="engagement-hero">
       <div class="cb-container engagement-hero__grid">
         <div class="engagement-hero__copy">
-          <BaseBadge variant="premium">Coffee Book Events</BaseBadge>
+          <BaseBadge variant="premium">Coffee Book 活动</BaseBadge>
           <h1 class="page-title">活动中心</h1>
           <p class="page-subtitle">让阅读、咖啡与城市文化，在真实的相遇中继续生长。</p>
         </div>
-        <div class="engagement-hero__art"><strong>Meet, read and create together.</strong></div>
+        <div class="engagement-hero__art"><strong>一起相遇、阅读和创造。</strong></div>
       </div>
     </section>
 

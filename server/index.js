@@ -54,6 +54,23 @@ const server = createServer(async (req, res) => {
       return success(res, { database: env.db.name })
     }
 
+    if (req.method === 'GET' && req.pathname === '/api') {
+      return success(res, {
+        name: 'Coffee Book API',
+        message: '后端接口服务运行正常，请访问 /api/health 或具体业务接口。',
+        endpoints: [
+          '/api/health',
+          '/api/auth/login',
+          '/api/books',
+          '/api/products',
+          '/api/events',
+          '/api/community/posts',
+          '/api/booking/spaces',
+          '/api/admin/dashboard',
+        ],
+      })
+    }
+
     const handled = await router.handle(req, res)
     if (!handled) failure(res, 404, '接口不存在', 404)
   } catch (error) {

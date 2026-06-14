@@ -4,16 +4,16 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const crumbs = computed(() => {
-  const result = [{ label: 'Admin', to: '/dashboard' }]
+  const result = [{ label: '后台', to: '/dashboard' }]
   if (route.path !== '/dashboard') {
-    result.push({ label: route.meta.title || 'Current Page', to: route.path })
+    result.push({ label: route.meta.title || '当前页面', to: route.path })
   }
   return result
 })
 </script>
 
 <template>
-  <nav class="admin-breadcrumb" aria-label="Breadcrumb">
+  <nav class="admin-breadcrumb" aria-label="面包屑">
     <template v-for="(crumb, index) in crumbs" :key="crumb.to">
       <span v-if="index" aria-hidden="true">/</span>
       <RouterLink v-if="index < crumbs.length - 1" :to="crumb.to">{{ crumb.label }}</RouterLink>

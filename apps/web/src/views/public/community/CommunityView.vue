@@ -30,12 +30,12 @@ onMounted(() => {
     <section class="engagement-hero">
       <div class="cb-container engagement-hero__grid">
         <div class="engagement-hero__copy">
-          <BaseBadge variant="premium">Coffee Book Community</BaseBadge>
+          <BaseBadge variant="premium">Coffee Book 社区</BaseBadge>
           <h1 class="page-title">社区</h1>
           <p class="page-subtitle">分享正在阅读的书、杯中的风味，以及城市里值得停留的角落。</p>
           <BaseButton @click="router.push('/community/create')">发布帖子</BaseButton>
         </div>
-        <div class="engagement-hero__art"><strong>Stories are better when shared.</strong></div>
+        <div class="engagement-hero__art"><strong>故事因为分享而更有温度。</strong></div>
       </div>
     </section>
 
