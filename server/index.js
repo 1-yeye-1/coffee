@@ -60,12 +60,13 @@ const server = createServer(async (req, res) => {
         message: '后端接口服务运行正常，请访问 /api/health 或具体业务接口。',
         endpoints: [
           '/api/health',
+          '/api/auth/send-code',
           '/api/auth/login',
           '/api/books',
           '/api/products',
           '/api/events',
-          '/api/community/posts',
-          '/api/booking/spaces',
+          '/api/posts',
+          '/api/spaces',
           '/api/admin/dashboard',
         ],
       })

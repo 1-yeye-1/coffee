@@ -61,7 +61,15 @@ export const useAuthStore = defineStore('auth', {
       this.loading = true
       this.error = ''
       try {
-        return (await authApi.register(payload)).data
+        const response = await authApi.register(payload)
+        if (response.data?.token) {
+          this.user = response.data.user
+          this.accessToken = response.data.token
+          this.persist()
+          window.dispatchEvent(new CustomEvent('coffee-book:auth-login'))
+          return this.user
+        }
+        return response.data
       } catch (error) {
         this.error = error.message
         throw error

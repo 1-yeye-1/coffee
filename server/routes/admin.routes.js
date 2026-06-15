@@ -10,7 +10,14 @@ import { createBook, deleteBook, findBookById, updateBook, updateBookStatus } fr
 import { findPost, listPosts, updatePostStatus } from '../services/community.service.js'
 import { createEvent, deleteEvent, findEventById, listEvents, updateEvent } from '../services/events.service.js'
 import { createProduct, deleteProduct, findProductById, updateProduct, updateProductStatus } from '../services/products.service.js'
-import { changeOrderStatus, getOrderDetail, listOrders } from '../services/orders.service.js'
+import {
+  changeOrderStatus,
+  confirmOrderPayment,
+  expireOrderPayment,
+  getOrderDetail,
+  listOrders,
+  rejectOrderPayment,
+} from '../services/orders.service.js'
 import { failure, paginated, success } from '../utils/response.js'
 
 function requireFields(res, payload, fields) {
@@ -96,6 +103,18 @@ export function registerAdminRoutes(router) {
   })
   router.patch('/api/admin/orders/:id/status', requireAdmin, async (req, res) => {
     return success(res, await changeOrderStatus(req.params.id, req.body.status, null, true, req.user.id))
+  })
+
+  router.patch('/api/admin/orders/:id/confirm-payment', requireAdmin, async (req, res) => {
+    return success(res, await confirmOrderPayment(req.params.id, req.user.id), '支付已确认')
+  })
+
+  router.patch('/api/admin/orders/:id/reject-payment', requireAdmin, async (req, res) => {
+    return success(res, await rejectOrderPayment(req.params.id, req.user.id), '支付已驳回')
+  })
+
+  router.patch('/api/admin/orders/:id/expire', requireAdmin, async (req, res) => {
+    return success(res, await expireOrderPayment(req.params.id, req.user.id), '订单已标记过期')
   })
 
   router.get('/api/admin/events', requireAdmin, async (req, res) => {

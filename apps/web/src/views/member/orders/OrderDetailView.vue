@@ -13,25 +13,27 @@ const cartStore = useCartStore()
 const orderStore = useOrderStore()
 const toastVisible = ref(route.query.created === '1')
 const toastTitle = ref(route.query.created === '1' ? '订单创建成功' : '')
-const toastMessage = ref(route.query.created === '1' ? '订单已保存到本地订单中心。' : '')
+const toastMessage = ref(route.query.created === '1' ? '订单已创建，请在有效时间内完成模拟支付。' : '')
 const order = computed(() => orderStore.currentOrder || orderStore.getOrderById(route.params.id))
 
 const statusMeta = {
   pending_payment: { label: '待支付', badge: 'warning', step: 1 },
+  pending_review: { label: '待后台确认', badge: 'warning', step: 2 },
   paid: { label: '已支付', badge: 'info', step: 3 },
   completed: { label: '已完成', badge: 'success', step: 4 },
   cancelled: { label: '已取消', badge: 'neutral', step: 1 },
+  payment_expired: { label: '支付已过期', badge: 'neutral', step: 1 },
 }
-const timeline = ['提交订单', '支付订单', '商家处理', '订单完成']
+const timeline = ['提交订单', '模拟支付', '后台确认', '订单完成']
 const pickupNames = {
   city: 'Coffee Book 城市阅读店',
   campus: 'Coffee Book 校园店',
   riverside: 'Coffee Book 江畔店',
 }
-const paymentNames = {
-  wechat: '微信支付',
-  alipay: '支付宝',
-  store: '到店支付',
+const paymentNames = { wechat: '微信支付', alipay: '支付宝', store: '到店支付' }
+
+function meta(status) {
+  return statusMeta[status] || statusMeta.pending_payment
 }
 
 function formatDate(value) {
@@ -49,19 +51,17 @@ function notify(title, message) {
   toastVisible.value = false
   toastTitle.value = title
   toastMessage.value = message
-  nextTick(() => {
-    toastVisible.value = true
-  })
+  nextTick(() => { toastVisible.value = true })
 }
 
 async function pay() {
   await orderStore.payOrder(order.value.id)
-  notify('支付状态已更新', '该订单已标记为已支付。')
+  notify('已提交支付', '订单已进入后台确认流程，请等待管理员审核。')
 }
 
 async function cancel() {
   await orderStore.cancelOrder(order.value.id)
-  notify('订单已取消', '该订单已标记为已取消。')
+  notify('订单已取消', '该订单已标记为取消。')
 }
 
 async function confirm() {
@@ -69,7 +69,9 @@ async function confirm() {
   notify('订单已完成', '感谢确认收货。')
 }
 
-function loadOrder() { return orderStore.fetchOrderDetail(route.params.id) }
+function loadOrder() {
+  return orderStore.fetchOrderDetail(route.params.id)
+}
 watch(() => route.params.id, loadOrder)
 onMounted(loadOrder)
 
@@ -81,17 +83,17 @@ function buyAgain() {
 
 <template>
   <div class="member-order-detail cb-fade-in">
-    <BaseButton variant="ghost" size="sm" @click="router.push('/account/orders')">← 返回我的订单</BaseButton>
+    <BaseButton variant="ghost" size="sm" @click="router.push('/account/orders')">返回我的订单</BaseButton>
 
     <template v-if="order">
       <section class="order-status-card">
         <div class="order-status-card__top">
           <div>
-            <span class="section-eyebrow">Order Detail</span>
-            <h2>订单号 {{ order.id }}</h2>
+            <span class="section-eyebrow">订单详情</span>
+            <h2>订单号 {{ order.orderNo || order.id }}</h2>
             <p class="text-muted">创建于 {{ formatDate(order.createdAt) }}</p>
           </div>
-          <BaseBadge :variant="statusMeta[order.status].badge">{{ statusMeta[order.status].label }}</BaseBadge>
+          <BaseBadge :variant="meta(order.status).badge">{{ meta(order.status).label }}</BaseBadge>
         </div>
 
         <div class="order-timeline" aria-label="订单状态时间线">
@@ -99,7 +101,7 @@ function buyAgain() {
             v-for="(step, index) in timeline"
             :key="step"
             class="order-timeline__step"
-            :class="{ 'is-active': index < statusMeta[order.status].step }"
+            :class="{ 'is-active': index < meta(order.status).step }"
           >
             <span>{{ step }}</span>
           </div>
@@ -109,8 +111,7 @@ function buyAgain() {
           <BaseButton v-if="order.status === 'pending_payment'" @click="pay">去支付</BaseButton>
           <BaseButton v-if="order.status === 'pending_payment'" variant="outline" @click="cancel">取消订单</BaseButton>
           <BaseButton v-if="order.status === 'paid'" @click="confirm">确认收货</BaseButton>
-          <BaseButton v-if="order.status === 'completed'" @click="buyAgain">再次购买</BaseButton>
-          <BaseButton v-if="order.status === 'cancelled'" @click="buyAgain">重新购买</BaseButton>
+          <BaseButton v-if="['completed', 'cancelled', 'payment_expired'].includes(order.status)" @click="buyAgain">再次购买</BaseButton>
         </div>
       </section>
 
@@ -122,7 +123,7 @@ function buyAgain() {
               <div class="commerce-product__visual" aria-hidden="true" />
               <div class="commerce-product__copy">
                 <h3>{{ item.name }}</h3>
-                <p>{{ item.category }}<template v-if="item.flavor?.length"> · {{ item.flavor.join(' · ') }}</template></p>
+                <p>{{ item.category }}<template v-if="item.flavor?.length"> / {{ item.flavor.join(' / ') }}</template></p>
                 <strong>¥{{ item.price }} × {{ item.quantity }}</strong>
               </div>
             </div>
@@ -133,13 +134,13 @@ function buyAgain() {
           <div class="commerce-panel__header"><h2>{{ order.deliveryType === 'pickup' ? '自取信息' : '配送信息' }}</h2></div>
           <div class="detail-list">
             <template v-if="order.deliveryType === 'pickup'">
-              <div class="detail-list__row"><span>自取门店</span><strong>{{ pickupNames[order.pickupStore] }}</strong></div>
+              <div class="detail-list__row"><span>自取门店</span><strong>{{ pickupNames[order.pickupStore] || order.pickupStore || '门店自取' }}</strong></div>
               <div class="detail-list__row"><span>取货方式</span><strong>出示订单号到店领取</strong></div>
             </template>
             <template v-else>
-              <div class="detail-list__row"><span>收货人</span><strong>{{ order.address.recipient }}</strong></div>
-              <div class="detail-list__row"><span>手机号</span><strong>{{ order.address.phone }}</strong></div>
-              <div class="detail-list__row"><span>收货地址</span><strong>{{ order.address.region }} {{ order.address.detail }}</strong></div>
+              <div class="detail-list__row"><span>收货人</span><strong>{{ order.address?.recipient }}</strong></div>
+              <div class="detail-list__row"><span>手机号</span><strong>{{ order.address?.phone }}</strong></div>
+              <div class="detail-list__row"><span>收货地址</span><strong>{{ order.address?.region }} {{ order.address?.detail }}</strong></div>
             </template>
             <div v-if="order.orderNote" class="detail-list__row"><span>订单备注</span><strong>{{ order.orderNote }}</strong></div>
           </div>
@@ -148,9 +149,10 @@ function buyAgain() {
         <section class="commerce-panel">
           <div class="commerce-panel__header"><h2>支付信息</h2></div>
           <div class="detail-list">
-            <div class="detail-list__row"><span>支付方式</span><strong>{{ paymentNames[order.paymentMethod] }}</strong></div>
-            <div class="detail-list__row"><span>支付状态</span><strong>{{ statusMeta[order.status].label }}</strong></div>
-            <div class="detail-list__row"><span>支付时间</span><strong>{{ formatDate(order.timeline.paidAt) }}</strong></div>
+            <div class="detail-list__row"><span>支付方式</span><strong>{{ paymentNames[order.paymentMethod] || order.paymentMethod }}</strong></div>
+            <div class="detail-list__row"><span>支付状态</span><strong>{{ meta(order.status).label }}</strong></div>
+            <div class="detail-list__row"><span>支付有效期</span><strong>{{ formatDate(order.paymentExpiresAt) }}</strong></div>
+            <div class="detail-list__row"><span>支付时间</span><strong>{{ formatDate(order.timeline?.paidAt) }}</strong></div>
           </div>
         </section>
 
@@ -170,11 +172,11 @@ function buyAgain() {
     <EmptyState
       v-else
       title="未找到该订单"
-      description="订单不存在，或本地订单数据已经被清除。"
+      description="订单不存在，或本地订单数据已被清除。"
       action-label="返回我的订单"
       @action="router.push('/account/orders')"
     >
-      <template #icon>◇</template>
+      <template #icon>□</template>
     </EmptyState>
 
     <div class="page-toast">

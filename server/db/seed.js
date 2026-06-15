@@ -18,14 +18,15 @@ async function seedAdmin(connection) {
   const passwordHash = await hashPassword('admin123456')
   await connection.execute(
     `INSERT INTO users
-      (username, nickname, password_hash, role, status)
-     VALUES (?, ?, ?, ?, ?)
+      (username, nickname, phone, password_hash, role, status)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
       nickname = VALUES(nickname),
+      phone = VALUES(phone),
       password_hash = VALUES(password_hash),
       role = VALUES(role),
       status = VALUES(status)`,
-    ['admin', '系统管理员', passwordHash, 'admin', 'active'],
+    ['admin', '系统管理员', '13800000000', passwordHash, 'admin', 'active'],
   )
 }
 

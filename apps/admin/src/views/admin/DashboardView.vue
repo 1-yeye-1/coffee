@@ -40,7 +40,7 @@ const recentColumns = [
 const recentOrders = computed(() => orderStore.orders.slice(0, 5).map((item) => ({
   id: item.id, user: item.address?.recipient || 'Coffee Reader', amount: `¥${item.amounts.total}`, status: item.status, time: new Date(item.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
 })))
-const statusText = { pending_payment: '待支付', paid: '已支付', completed: '已完成', cancelled: '已取消' }
+const statusText = { pending_payment: '待支付', pending_review: '待确认', paid: '已支付', completed: '已完成', cancelled: '已取消', payment_expired: '支付过期' }
 
 onMounted(async () => {
   await Promise.all([

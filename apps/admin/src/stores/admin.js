@@ -230,6 +230,27 @@ export const useAdminStore = defineStore('admin', {
         await this.fetchAdminOrders(); return order
       } catch (error) { this.apiError = error.message; throw error }
     },
+    async confirmAdminOrderPayment(id) {
+      try {
+        const order = (await adminApi.confirmAdminOrderPayment(id)).data
+        await this.fetchAdminOrders()
+        return order
+      } catch (error) { this.apiError = error.message; throw error }
+    },
+    async rejectAdminOrderPayment(id) {
+      try {
+        const order = (await adminApi.rejectAdminOrderPayment(id)).data
+        await this.fetchAdminOrders()
+        return order
+      } catch (error) { this.apiError = error.message; throw error }
+    },
+    async expireAdminOrderPayment(id) {
+      try {
+        const order = (await adminApi.expireAdminOrderPayment(id)).data
+        await this.fetchAdminOrders()
+        return order
+      } catch (error) { this.apiError = error.message; throw error }
+    },
     async fetchAdminBookings(params = {}) {
       return this.fetchAdminCollection('bookings', params)
     },

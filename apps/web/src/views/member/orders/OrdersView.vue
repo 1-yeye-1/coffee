@@ -12,13 +12,16 @@ const activeStatus = ref('all')
 
 const statusMeta = {
   pending_payment: { label: '待支付', badge: 'warning' },
+  pending_review: { label: '待确认', badge: 'warning' },
   paid: { label: '已支付', badge: 'info' },
   completed: { label: '已完成', badge: 'success' },
   cancelled: { label: '已取消', badge: 'neutral' },
+  payment_expired: { label: '支付过期', badge: 'neutral' },
 }
 const tabs = [
   { label: '全部', value: 'all' },
   { label: '待支付', value: 'pending_payment' },
+  { label: '待确认', value: 'pending_review' },
   { label: '已支付', value: 'paid' },
   { label: '已完成', value: 'completed' },
   { label: '已取消', value: 'cancelled' },
@@ -31,9 +34,13 @@ const visibleOrders = computed(() =>
 const stats = computed(() => ({
   all: orderStore.orders.length,
   pending_payment: orderStore.orders.filter((order) => order.status === 'pending_payment').length,
+  pending_review: orderStore.orders.filter((order) => order.status === 'pending_review').length,
   paid: orderStore.orders.filter((order) => order.status === 'paid').length,
-  completed: orderStore.orders.filter((order) => order.status === 'completed').length,
 }))
+
+function meta(status) {
+  return statusMeta[status] || statusMeta.pending_payment
+}
 
 function formatDate(value) {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -59,8 +66,8 @@ onMounted(() => orderStore.fetchOrders())
     <section class="order-stats" aria-label="订单统计">
       <div class="order-stat"><strong>{{ stats.all }}</strong><span>全部订单</span></div>
       <div class="order-stat"><strong>{{ stats.pending_payment }}</strong><span>待支付</span></div>
+      <div class="order-stat"><strong>{{ stats.pending_review }}</strong><span>待确认</span></div>
       <div class="order-stat"><strong>{{ stats.paid }}</strong><span>已支付</span></div>
-      <div class="order-stat"><strong>{{ stats.completed }}</strong><span>已完成</span></div>
     </section>
 
     <BaseTabs v-model="activeStatus" :tabs="tabs">
@@ -68,10 +75,10 @@ onMounted(() => orderStore.fetchOrders())
         <article v-for="order in visibleOrders" :key="order.id" class="order-card">
           <header class="order-card__header">
             <div class="order-card__meta">
-              <strong>订单号 {{ order.id }}</strong>
+              <strong>订单号 {{ order.orderNo || order.id }}</strong>
               <small>{{ formatDate(order.createdAt) }}</small>
             </div>
-            <BaseBadge :variant="statusMeta[order.status].badge">{{ statusMeta[order.status].label }}</BaseBadge>
+            <BaseBadge :variant="meta(order.status).badge">{{ meta(order.status).label }}</BaseBadge>
           </header>
 
           <div class="order-card__products">
@@ -114,7 +121,7 @@ onMounted(() => orderStore.fetchOrders())
           action-label="去咖啡商城"
           @action="router.push('/coffee')"
         >
-          <template #icon>◇</template>
+          <template #icon>□</template>
         </EmptyState>
       </div>
     </BaseTabs>

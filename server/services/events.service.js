@@ -121,7 +121,7 @@ export async function registerEvent(eventId, userId) {
       return null
     }
     if (Number(event.attendees) >= Number(event.capacity)) {
-      const error = new Error('Event is full')
+      const error = new Error('活动名额已满')
       error.statusCode = 409
       throw error
     }

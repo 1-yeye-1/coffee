@@ -2,31 +2,61 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import * as authApi from '@/api/auth'
 import { BaseButton, BaseCard, BaseInput } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const error = ref('')
-const form = reactive({ username: '', nickname: '', email: '', phone: '', password: '', confirmPassword: '' })
+const success = ref('')
+const sending = ref(false)
+const form = reactive({ nickname: '', phone: '', code: '', password: '', confirmPassword: '' })
+
+function isPhone(value) {
+  return /^1\d{10}$/.test(String(value || '').trim())
+}
 
 function validate() {
-  if (!form.username.trim()) return '用户名不能为空。'
+  if (!isPhone(form.phone)) return '请输入 11 位手机号。'
+  if (!form.code.trim()) return '请输入短信验证码。'
   if (form.password.length < 6) return '密码至少需要 6 位。'
   if (form.password !== form.confirmPassword) return '两次输入的密码不一致。'
-  if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return '邮箱格式不正确。'
   return ''
+}
+
+async function sendCode() {
+  error.value = ''
+  success.value = ''
+  if (!isPhone(form.phone)) {
+    error.value = '请输入 11 位手机号后再获取验证码。'
+    return
+  }
+  sending.value = true
+  try {
+    const response = await authApi.sendCode({ phone: form.phone.trim(), scene: 'register' })
+    success.value = response.data.devCode
+      ? `验证码已发送，开发环境验证码：${response.data.devCode}`
+      : '验证码已发送，请留意短信。'
+  } catch (requestError) {
+    error.value = requestError.message
+  } finally {
+    sending.value = false
+  }
 }
 
 async function submit() {
   error.value = validate()
+  success.value = ''
   if (error.value) return
   try {
     await authStore.register({
-      username: form.username.trim(), nickname: form.nickname.trim(), email: form.email.trim(),
-      phone: form.phone.trim(), password: form.password,
+      nickname: form.nickname.trim(),
+      phone: form.phone.trim(),
+      code: form.code.trim(),
+      password: form.password,
+      confirmPassword: form.confirmPassword,
     })
-    await authStore.login({ username: form.username.trim(), password: form.password })
     await router.replace('/')
   } catch (requestError) {
     error.value = requestError.message
@@ -37,17 +67,20 @@ async function submit() {
 <template>
   <BaseCard class="auth-form-card" variant="elevated">
     <div class="cb-stack auth-form-card__intro">
-      <span class="section-eyebrow">Join Coffee Book</span>
-      <h2 class="page-title">创建你的账户</h2>
-      <p class="text-muted">收藏阅读灵感，管理订单、预约和活动记录。</p>
+      <span class="section-eyebrow">加入 Coffee Book</span>
+      <h2 class="page-title">创建你的账号</h2>
+      <p class="text-muted">用手机号注册，保存订单、预约、活动和社区互动记录。</p>
     </div>
     <form class="auth-form" @submit.prevent="submit">
-      <BaseInput v-model="form.username" label="用户名" autocomplete="username" />
-      <BaseInput v-model="form.nickname" label="昵称" autocomplete="nickname" />
-      <BaseInput v-model="form.email" label="邮箱" type="email" autocomplete="email" />
-      <BaseInput v-model="form.phone" label="手机号" type="tel" autocomplete="tel" />
+      <BaseInput v-model="form.nickname" label="昵称" autocomplete="nickname" placeholder="可选，默认使用手机号后四位" />
+      <BaseInput v-model="form.phone" label="手机号" type="tel" autocomplete="tel" placeholder="请输入 11 位手机号" />
+      <div class="auth-code-row">
+        <BaseInput v-model="form.code" label="短信验证码" inputmode="numeric" placeholder="请输入验证码" />
+        <BaseButton type="button" variant="outline" :loading="sending" @click="sendCode">获取验证码</BaseButton>
+      </div>
       <BaseInput v-model="form.password" label="密码" password autocomplete="new-password" hint="至少 6 位" />
       <BaseInput v-model="form.confirmPassword" label="确认密码" password autocomplete="new-password" />
+      <p v-if="success" class="auth-form__success" role="status">{{ success }}</p>
       <p v-if="error" class="auth-form__error" role="alert">{{ error }}</p>
       <BaseButton type="submit" size="lg" :loading="authStore.loading">注册并登录</BaseButton>
     </form>
@@ -59,9 +92,21 @@ async function submit() {
 .auth-form-card { display: grid; gap: var(--cb-space-6); }
 .auth-form-card__intro { gap: var(--cb-space-2); }
 .auth-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cb-space-4); }
-.auth-form > :first-child, .auth-form > :nth-child(5), .auth-form > :nth-child(6), .auth-form__error, .auth-form .base-button { grid-column: 1 / -1; }
-.auth-form__error { padding: var(--cb-space-3) var(--cb-space-4); color: var(--cb-danger); background: color-mix(in srgb, var(--cb-danger) 10%, transparent); border-radius: var(--cb-radius-lg); }
+.auth-code-row,
+.auth-form > :first-child,
+.auth-form__error,
+.auth-form__success,
+.auth-form .base-button[type="submit"] { grid-column: 1 / -1; }
+.auth-code-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--cb-space-3); align-items: end; }
+.auth-form__error,
+.auth-form__success { padding: var(--cb-space-3) var(--cb-space-4); border-radius: var(--cb-radius-lg); }
+.auth-form__error { color: var(--cb-danger); background: color-mix(in srgb, var(--cb-danger) 10%, transparent); }
+.auth-form__success { color: var(--cb-success); background: color-mix(in srgb, var(--cb-success) 10%, transparent); }
 .auth-form-card__footer { color: var(--cb-text-muted); font-size: var(--cb-font-size-sm); }
 .auth-form-card__footer a { color: var(--cb-color-coffee); font-weight: var(--cb-font-semibold); }
-@media (max-width: 35rem) { .auth-form { grid-template-columns: 1fr; } .auth-form > * { grid-column: 1 !important; } }
+@media (max-width: 35rem) {
+  .auth-form,
+  .auth-code-row { grid-template-columns: 1fr; }
+  .auth-form > * { grid-column: 1 !important; }
+}
 </style>

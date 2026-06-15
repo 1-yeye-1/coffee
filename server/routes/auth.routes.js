@@ -1,49 +1,61 @@
+import { pool } from '../db/mysql.js'
+import { requireAuth } from '../middlewares/auth.js'
 import {
+  assertPhone,
   authenticate,
   createUser,
-  emailExists,
   findUserById,
-  usernameExists,
+  phoneExists,
+  sendVerificationCode,
+  verifyCode,
 } from '../services/auth.service.js'
-import { requireAuth } from '../middlewares/auth.js'
 import { signToken } from '../utils/jwt.js'
 import { failure, success } from '../utils/response.js'
-import { isEmail, normalizeOptional, requiredString } from '../utils/validator.js'
+
+function serializeSession(user) {
+  return {
+    token: signToken(user),
+    user,
+  }
+}
 
 export function registerAuthRoutes(router) {
+  router.post('/api/auth/send-code', async (req, res) => {
+    const data = await sendVerificationCode(req.body.phone, req.body.scene || 'login')
+    return success(res, data, '验证码已发送')
+  })
+
   router.post('/api/auth/register', async (req, res) => {
-    const username = String(req.body.username || '').trim()
+    const phone = String(req.body.phone || '').trim()
     const password = String(req.body.password || '')
-    const nickname = normalizeOptional(req.body.nickname)
-    const email = normalizeOptional(req.body.email)
-    const phone = normalizeOptional(req.body.phone)
+    const confirmPassword = String(req.body.confirmPassword || password)
 
-    if (!requiredString(username)) return failure(res, 400, 'username 必填')
-    if (!requiredString(password)) return failure(res, 400, 'password 必填')
-    if (password.length < 6) return failure(res, 400, 'password 长度至少 6 位')
-    if (!isEmail(email)) return failure(res, 400, 'email 格式不正确')
-    if (await usernameExists(username)) return failure(res, 400, 'username 已存在')
-    if (await emailExists(email)) return failure(res, 400, 'email 已存在')
+    assertPhone(phone)
+    if (password.length < 6) return failure(res, 400, '密码至少需要 6 位')
+    if (password !== confirmPassword) return failure(res, 400, '两次输入的密码不一致')
 
+    const connection = await pool.getConnection()
     try {
-      const user = await createUser({ username, password, nickname, email, phone })
-      return success(res, user, '注册成功', 201)
+      await connection.beginTransaction()
+      if (await phoneExists(phone, connection)) {
+        throw Object.assign(new Error('该手机号已注册'), { statusCode: 409 })
+      }
+      await verifyCode(phone, 'register', req.body.code, connection)
+      const user = await createUser({ ...req.body, phone, password }, connection)
+      await connection.commit()
+      return success(res, serializeSession(user), '注册成功', 201)
     } catch (error) {
-      if (error.code === 'ER_DUP_ENTRY') return failure(res, 400, '账号信息已存在')
+      await connection.rollback()
       throw error
+    } finally {
+      connection.release()
     }
   })
 
   router.post('/api/auth/login', async (req, res) => {
-    const username = String(req.body.username || '').trim()
-    const password = String(req.body.password || '')
-    if (!username || !password) return failure(res, 400, '请输入账号和密码')
-
-    const user = await authenticate(username, password)
-    if (!user) return failure(res, 400, '账号或密码错误')
+    const user = await authenticate(req.body)
     if (user.status === 'disabled') return failure(res, 403, '账号已被禁用', 403)
-
-    return success(res, { token: signToken(user), user })
+    return success(res, serializeSession(user), '登录成功')
   })
 
   router.get('/api/auth/me', requireAuth, async (req, res) => {
@@ -52,5 +64,7 @@ export function registerAuthRoutes(router) {
     return success(res, user)
   })
 
-  router.post('/api/auth/logout', requireAuth, async (_req, res) => success(res))
+  router.post('/api/auth/logout', requireAuth, async (_req, res) => {
+    return success(res, {}, '已退出登录')
+  })
 }

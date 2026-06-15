@@ -1,58 +1,131 @@
+import { randomInt } from 'node:crypto'
+
+import { env } from '../config/env.js'
 import { pool } from '../db/mysql.js'
 import { hashPassword, verifyPassword } from '../utils/crypto.js'
 
-const publicColumns = `
+const userColumns = `
   id, username, nickname, email, phone, avatar, role, status, points, level,
   created_at AS createdAt, updated_at AS updatedAt
 `
+const phonePattern = /^1\d{10}$/
+const codeScenes = new Set(['login', 'register'])
 
-export async function findUserByUsername(username) {
-  const [rows] = await pool.execute(
-    `SELECT ${publicColumns}, password_hash AS passwordHash
-     FROM users WHERE username = ? LIMIT 1`,
-    [username],
+export function normalizePhone(phone) {
+  return String(phone || '').trim()
+}
+
+export function assertPhone(phone) {
+  if (!phonePattern.test(normalizePhone(phone))) {
+    throw Object.assign(new Error('请输入 11 位中国大陆手机号'), { statusCode: 400 })
+  }
+}
+
+export async function findUserByIdentifier(identifier, connection = pool) {
+  const value = String(identifier || '').trim()
+  const [rows] = await connection.execute(
+    `SELECT ${userColumns}, password_hash AS passwordHash
+     FROM users WHERE username = ? OR phone = ? LIMIT 1`,
+    [value, value],
   )
   return rows[0] || null
 }
 
 export async function findUserById(id) {
-  const [rows] = await pool.execute(
-    `SELECT ${publicColumns} FROM users WHERE id = ? LIMIT 1`,
-    [id],
-  )
+  const [rows] = await pool.execute(`SELECT ${userColumns} FROM users WHERE id = ? LIMIT 1`, [id])
   return rows[0] || null
 }
 
-export async function usernameExists(username) {
-  const [rows] = await pool.execute(
-    'SELECT id FROM users WHERE username = ? LIMIT 1',
-    [username],
-  )
-  return rows.length > 0
+export async function phoneExists(phone, connection = pool) {
+  const [rows] = await connection.execute('SELECT id FROM users WHERE phone = ? LIMIT 1', [normalizePhone(phone)])
+  return Boolean(rows[0])
 }
 
-export async function emailExists(email) {
-  if (!email) return false
-  const [rows] = await pool.execute(
-    'SELECT id FROM users WHERE email = ? LIMIT 1',
-    [email],
+export async function createUser(payload, connection = pool) {
+  const phone = normalizePhone(payload.phone)
+  const username = String(payload.username || phone).trim()
+  const nickname = String(payload.nickname || `用户${phone.slice(-4)}`).trim()
+  const passwordHash = await hashPassword(payload.password)
+  const [result] = await connection.execute(
+    `INSERT INTO users (username, nickname, phone, email, password_hash, role, status)
+     VALUES (?, ?, ?, ?, ?, 'user', 'active')`,
+    [username, nickname, phone, payload.email || null, passwordHash],
   )
-  return rows.length > 0
+  const [rows] = await connection.execute(`SELECT ${userColumns} FROM users WHERE id = ?`, [result.insertId])
+  return rows[0]
 }
 
-export async function createUser({ username, password, nickname, email, phone }) {
-  const passwordHash = await hashPassword(password)
-  const [result] = await pool.execute(
-    `INSERT INTO users (username, nickname, email, phone, password_hash)
-     VALUES (?, ?, ?, ?, ?)`,
-    [username, nickname, email, phone, passwordHash],
+export async function sendVerificationCode(phone, scene = 'login') {
+  const normalizedPhone = normalizePhone(phone)
+  assertPhone(normalizedPhone)
+  if (!codeScenes.has(scene)) throw Object.assign(new Error('验证码场景无效'), { statusCode: 400 })
+
+  const [[latest]] = await pool.execute(
+    `SELECT TIMESTAMPDIFF(SECOND, created_at, CURRENT_TIMESTAMP) AS secondsAgo
+     FROM verification_codes WHERE phone = ? AND scene = ? ORDER BY id DESC LIMIT 1`,
+    [normalizedPhone, scene],
   )
-  return findUserById(result.insertId)
+  if (latest && Number(latest.secondsAgo) < 60) {
+    throw Object.assign(new Error('验证码发送过于频繁，请稍后再试'), { statusCode: 429 })
+  }
+
+  const [[daily]] = await pool.execute(
+    `SELECT COUNT(*) AS total FROM verification_codes
+     WHERE phone = ? AND scene = ? AND DATE(created_at) = CURRENT_DATE`,
+    [normalizedPhone, scene],
+  )
+  if (Number(daily.total) >= 10) {
+    throw Object.assign(new Error('今日验证码发送次数已达上限'), { statusCode: 429 })
+  }
+
+  const code = String(randomInt(0, 1000000)).padStart(6, '0')
+  const codeHash = await hashPassword(code)
+  await pool.execute(
+    `INSERT INTO verification_codes (phone, scene, code_hash, expires_at)
+     VALUES (?, ?, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 5 MINUTE))`,
+    [normalizedPhone, scene, codeHash],
+  )
+
+  return {
+    phone: normalizedPhone,
+    scene,
+    expiresIn: 300,
+    devCode: env.nodeEnv === 'production' ? undefined : code,
+  }
 }
 
-export async function authenticate(username, password) {
-  const user = await findUserByUsername(username)
-  if (!user || !(await verifyPassword(password, user.passwordHash))) return null
+export async function verifyCode(phone, scene, code, connection = pool) {
+  const normalizedPhone = normalizePhone(phone)
+  assertPhone(normalizedPhone)
+  if (!String(code || '').trim()) throw Object.assign(new Error('请输入验证码'), { statusCode: 400 })
+
+  const [rows] = await connection.execute(
+    `SELECT id, code_hash AS codeHash FROM verification_codes
+     WHERE phone = ? AND scene = ? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+     ORDER BY id DESC LIMIT 1`,
+    [normalizedPhone, scene],
+  )
+  const record = rows[0]
+  if (!record || !await verifyPassword(String(code).trim(), record.codeHash)) {
+    throw Object.assign(new Error('验证码无效或已过期'), { statusCode: 400 })
+  }
+  await connection.execute('UPDATE verification_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?', [record.id])
+}
+
+export async function authenticate(payload) {
+  const identifier = String(payload.phone || payload.username || '').trim()
+  if (!identifier) throw Object.assign(new Error('请输入手机号或用户名'), { statusCode: 400 })
+
+  const user = await findUserByIdentifier(identifier)
+  if (!user) throw Object.assign(new Error('账号不存在'), { statusCode: 401 })
+
+  if (payload.code) {
+    if (!user.phone) throw Object.assign(new Error('该账号未绑定手机号'), { statusCode: 400 })
+    await verifyCode(user.phone, 'login', payload.code)
+  } else if (!payload.password || !await verifyPassword(payload.password, user.passwordHash)) {
+    throw Object.assign(new Error('手机号/用户名或密码错误'), { statusCode: 401 })
+  }
+
   const { passwordHash, ...safeUser } = user
   return safeUser
 }

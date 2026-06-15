@@ -21,8 +21,22 @@ CREATE TABLE IF NOT EXISTS users (
   PRIMARY KEY (id),
   UNIQUE KEY uk_users_username (username),
   UNIQUE KEY uk_users_email (email),
+  UNIQUE KEY uk_users_phone (phone),
   KEY idx_users_status (status),
   KEY idx_users_role (role)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS verification_codes (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  phone VARCHAR(40) NOT NULL,
+  scene VARCHAR(30) NOT NULL,
+  code_hash VARCHAR(255) NOT NULL,
+  used_at TIMESTAMP NULL,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_verification_codes_phone_scene (phone, scene),
+  KEY idx_verification_codes_created_at (created_at)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS books (
@@ -133,6 +147,7 @@ CREATE TABLE IF NOT EXISTS orders (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   order_no VARCHAR(80) NOT NULL,
   user_id BIGINT UNSIGNED NOT NULL,
+  source VARCHAR(30) NOT NULL DEFAULT 'cart',
   receiver_name VARCHAR(120) NULL,
   receiver_phone VARCHAR(40) NULL,
   delivery_type VARCHAR(30) NOT NULL,
@@ -189,7 +204,9 @@ CREATE TABLE IF NOT EXISTS payments (
   method VARCHAR(50) NOT NULL,
   status VARCHAR(30) NOT NULL,
   paid_at TIMESTAMP NULL,
+  expires_at TIMESTAMP NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_payments_payment_no (payment_no),
   KEY idx_payments_order_id (order_id),

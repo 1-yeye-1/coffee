@@ -86,6 +86,22 @@ export const useOrderStore = defineStore('orders', {
       persistOrders(this.orders)
       return order
     },
+    async buyNow(payload) {
+      if (useAuthStore().isAuthenticated) {
+        try {
+          const order = (await ordersApi.buyNow(payload)).data
+          this.orders.unshift(order)
+          this.currentOrder = order
+          this.source = 'api'
+          this.error = ''
+          return order
+        } catch (error) {
+          this.error = error.message
+          throw error
+        }
+      }
+      throw new Error('请先登录后再购买')
+    },
     async cancelOrder(id) {
       if (useAuthStore().isAuthenticated) {
         try { const order=(await ordersApi.cancelOrder(id)).data; await this.fetchOrders(); this.currentOrder=order; return order }
@@ -105,7 +121,7 @@ export const useOrderStore = defineStore('orders', {
       const order = this.getOrderById(id)
       if (!order || order.status !== 'pending_payment') return
       const paidAt = new Date().toISOString()
-      order.status = 'paid'
+      order.status = 'pending_review'
       order.timeline.paidAt = paidAt
       order.timeline.processingAt = paidAt
       persistOrders(this.orders)

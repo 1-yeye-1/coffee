@@ -84,7 +84,7 @@ export async function createBooking(payload, userId) {
     ])
     const space = spaces[0]
     if (!space) {
-      const error = new Error('Space not found')
+      const error = new Error('空间不存在')
       error.statusCode = 404
       throw error
     }
@@ -96,7 +96,7 @@ export async function createBooking(payload, userId) {
     )
     const slot = slots[0]
     if (!slot) {
-      const error = new Error('Slot not found')
+      const error = new Error('预约时段不存在')
       error.statusCode = 404
       throw error
     }
@@ -105,7 +105,7 @@ export async function createBooking(payload, userId) {
       [slot.id],
     )
     if (Number(reserved[0].total) >= Number(slot.capacity)) {
-      const error = new Error('Slot is full')
+      const error = new Error('该时段预约已满')
       error.statusCode = 409
       throw error
     }

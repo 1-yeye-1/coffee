@@ -4,8 +4,8 @@ const baseURL = String(process.env.SMOKE_API_BASE_URL || `http://127.0.0.1:${pro
 const adminUsername = process.env.SMOKE_ADMIN_USERNAME || 'admin'
 const adminPassword = process.env.SMOKE_ADMIN_PASSWORD || 'admin123456'
 const stamp = Date.now()
-const smokeUser = `smoke_${stamp}`
-const smokeOtherUser = `smoke_other_${stamp}`
+const smokePhone = `139${String(stamp).slice(-8)}`
+const smokeOtherPhone = `138${String(stamp).slice(-8)}`
 const createdPostSlugs = []
 
 function logPass(name) {
@@ -35,8 +35,9 @@ async function request(method, path, { token, body, expectedStatus } = {}) {
 }
 
 async function cleanup() {
-  const usernames = [smokeUser, smokeOtherUser]
-  const [users] = await pool.query('SELECT id FROM users WHERE username IN (?)', [usernames])
+  const phones = [smokePhone, smokeOtherPhone]
+  await pool.query('DELETE FROM verification_codes WHERE phone IN (?)', [phones])
+  const [users] = await pool.query('SELECT id FROM users WHERE phone IN (?) OR username IN (?)', [phones, phones])
   const userIds = users.map((row) => row.id)
   if (userIds.length) {
     const [orders] = await pool.query('SELECT id FROM orders WHERE user_id IN (?)', [userIds])
@@ -81,16 +82,26 @@ async function main() {
   await request('GET', '/admin/dashboard', { token: adminToken })
   logPass('admin dashboard')
 
-  await request('POST', '/auth/register', {
+  const registerCode = await request('POST', '/auth/send-code', {
+    body: { phone: smokePhone, scene: 'register' },
+  })
+  assert(registerCode.payload.data.devCode, 'dev verification code missing')
+  logPass('send register code')
+
+  const register = await request('POST', '/auth/register', {
     body: {
-      username: smokeUser,
+      phone: smokePhone,
       password: 'smoke123456',
-      email: `${smokeUser}@example.local`,
+      confirmPassword: 'smoke123456',
+      code: registerCode.payload.data.devCode,
       nickname: 'Smoke User',
     },
   })
+  assert(register.payload.data.token, 'register token missing')
+  logPass('phone register')
+
   const userLogin = await request('POST', '/auth/login', {
-    body: { username: smokeUser, password: 'smoke123456' },
+    body: { phone: smokePhone, password: 'smoke123456' },
   })
   const userToken = userLogin.payload.data.token
   const forbidden = await request('GET', '/admin/dashboard', { token: userToken, expectedStatus: 403 })
@@ -116,6 +127,17 @@ async function main() {
   assert(order.payload.data.id, 'order id missing')
   await request('PATCH', `/orders/${order.payload.data.id}/cancel`, { token: userToken })
   logPass('order basic flow')
+
+  const buyNow = await request('POST', '/orders/buy-now', {
+    token: userToken,
+    body: { productId: product.id, quantity: 1, deliveryType: 'pickup', pickupStore: 'Smoke Store', paymentMethod: 'wechat' },
+  })
+  assert(buyNow.payload.data.source === 'buy_now', 'buy-now order source invalid')
+  const pay = await request('PATCH', `/orders/${buyNow.payload.data.id}/pay`, { token: userToken })
+  assert(pay.payload.data.status === 'pending_review', 'paid order should wait for review')
+  const confirmPayment = await request('PATCH', `/admin/orders/${buyNow.payload.data.id}/confirm-payment`, { token: adminToken })
+  assert(confirmPayment.payload.data.status === 'paid', 'admin confirm should mark paid')
+  logPass('buy-now payment review flow')
 
   const events = await request('GET', '/events?page=1&pageSize=3')
   assert(events.payload.data.length > 0, 'events list empty')
