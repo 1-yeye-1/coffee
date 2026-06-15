@@ -141,4 +141,3 @@ defineProps({
   clip-path: inset(50%);
 }
 </style>
-

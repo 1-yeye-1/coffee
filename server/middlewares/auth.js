@@ -23,7 +23,12 @@ async function verifyAccount(req, res, expectedType) {
   }
 
   if (payload.accountType !== expectedType) {
-    failure(res, expectedType === 'admin' ? 403 : 401, expectedType === 'admin' ? '无管理员权限' : '请使用普通用户账号登录', expectedType === 'admin' ? 403 : 401)
+    failure(
+      res,
+      expectedType === 'admin' ? 403 : 401,
+      expectedType === 'admin' ? '无管理员权限' : '请使用普通用户账号登录',
+      expectedType === 'admin' ? 403 : 401,
+    )
     return false
   }
 

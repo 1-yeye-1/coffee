@@ -13,6 +13,7 @@ const items = [
   { label: '图书管理', to: '/books', icon: 'B' },
   { label: '商品管理', to: '/products', icon: 'P' },
   { label: '订单管理', to: '/orders', icon: 'O' },
+  { label: '用户管理', to: '/users', icon: 'U' },
   { label: '活动管理', to: '/events', icon: 'E' },
   { label: '社区审核', to: '/community', icon: 'C' },
   { label: '预约管理', to: '/bookings', icon: 'R' },

@@ -110,7 +110,7 @@ export const useAdminStore = defineStore('admin', {
       return this.dashboardStats
     },
     async fetchAdminCollection(collection, params = {}) {
-      if (!['books', 'products', 'events', 'posts', 'bookings'].includes(collection)) return this[collection]
+      if (!['books', 'products', 'events', 'posts', 'bookings', 'users'].includes(collection)) return this[collection]
       this.apiLoading = true
       this.apiError = ''
       try {
@@ -120,6 +120,7 @@ export const useAdminStore = defineStore('admin', {
           events: adminApi.fetchAdminEvents,
           posts: adminApi.fetchAdminPosts,
           bookings: adminApi.fetchAdminBookings,
+          users: adminApi.fetchAdminUsers,
         }[collection]
         const response = await request({ page: 1, pageSize: 100, ...params })
         this[collection] = response.data.map((item) => ({
@@ -203,7 +204,17 @@ export const useAdminStore = defineStore('admin', {
       post.featured = !post.featured
       persist(this.$state)
     },
-    updateUser(id, changes) {
+    async updateUser(id, changes) {
+      if (this.dataSource === 'api') {
+        try {
+          await adminApi.updateAdminUser(id, changes)
+          await this.fetchAdminCollection('users')
+          return
+        } catch (error) {
+          this.apiError = error.message
+          throw error
+        }
+      }
       const user = this.users.find((item) => item.id === id)
       if (!user) return
       Object.assign(user, changes)

@@ -56,6 +56,62 @@ CREATE TABLE IF NOT EXISTS verification_codes (
   KEY idx_verification_codes_created_at (created_at)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS user_points (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  points INT NOT NULL,
+  type VARCHAR(30) NOT NULL,
+  source VARCHAR(80) NOT NULL,
+  description VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_user_points_user (user_id),
+  KEY idx_user_points_created_at (created_at),
+  CONSTRAINT fk_user_points_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS user_notifications (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  content VARCHAR(500) NULL,
+  type VARCHAR(50) NOT NULL DEFAULT 'system',
+  read_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_user_notifications_user (user_id),
+  KEY idx_user_notifications_read (read_at),
+  CONSTRAINT fk_user_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS user_addresses (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  recipient VARCHAR(120) NOT NULL,
+  phone VARCHAR(40) NOT NULL,
+  region VARCHAR(255) NOT NULL,
+  detail VARCHAR(500) NOT NULL,
+  is_default TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_user_addresses_user (user_id),
+  CONSTRAINT fk_user_addresses_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS user_favorites (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  target_type VARCHAR(30) NOT NULL,
+  target_id BIGINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_user_favorites_target (user_id, target_type, target_id),
+  KEY idx_user_favorites_user (user_id),
+  KEY idx_user_favorites_target (target_type, target_id),
+  CONSTRAINT fk_user_favorites_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS books (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   slug VARCHAR(190) NOT NULL,

@@ -5,6 +5,7 @@ import AdminCommunityView from '@/views/admin/AdminCommunityView.vue'
 import AdminEventsView from '@/views/admin/AdminEventsView.vue'
 import AdminOrdersView from '@/views/admin/AdminOrdersView.vue'
 import AdminProductsView from '@/views/admin/AdminProductsView.vue'
+import AdminUsersView from '@/views/admin/AdminUsersView.vue'
 import DashboardView from '@/views/admin/DashboardView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 
@@ -24,6 +25,7 @@ export const adminRoutes = [
       { path: 'books', name: ROUTE_NAMES.ADMIN_BOOKS, component: AdminBooksView, meta: { ...adminMeta, title: '图书管理' } },
       { path: 'products', name: ROUTE_NAMES.ADMIN_PRODUCTS, component: AdminProductsView, meta: { ...adminMeta, title: '商品管理' } },
       { path: 'orders', name: ROUTE_NAMES.ADMIN_ORDERS, component: AdminOrdersView, meta: { ...adminMeta, title: '订单管理' } },
+      { path: 'users', component: AdminUsersView, meta: { ...adminMeta, title: '用户管理' } },
       { path: 'events', name: ROUTE_NAMES.ADMIN_EVENTS, component: AdminEventsView, meta: { ...adminMeta, title: '活动管理' } },
       { path: 'community', name: ROUTE_NAMES.ADMIN_COMMUNITY, component: AdminCommunityView, meta: { ...adminMeta, title: '社区审核' } },
       { path: 'bookings', name: ROUTE_NAMES.ADMIN_BOOKINGS, component: AdminBookingsView, meta: { ...adminMeta, title: '预约管理' } },

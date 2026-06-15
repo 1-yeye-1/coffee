@@ -27,10 +27,29 @@ async function migrate() {
     await dropForeignKeyIfExists(connection, 'coffee', 'audit_logs', 'fk_audit_logs_operator')
     await ensureIndex(connection, 'coffee', 'users', 'uk_users_phone', 'UNIQUE KEY uk_users_phone (phone)')
     await ensureIndex(connection, 'coffee', 'audit_logs', 'idx_audit_logs_operator', 'KEY idx_audit_logs_operator (operator_type, operator_id)')
+    await removeLegacyAdminUsers(connection)
     console.log('Database migration completed: coffee (schema.sql)')
   } finally {
     await connection.end()
   }
+}
+
+async function removeLegacyAdminUsers(connection) {
+  await connection.query(
+    `DELETE c FROM carts c
+     INNER JOIN users u ON u.id = c.user_id
+     WHERE (u.username = 'admin' OR u.phone = '13800000000')
+       AND u.role = 'admin'`,
+  )
+  await connection.query(
+    `DELETE FROM users
+     WHERE (username = 'admin' OR phone = '13800000000')
+       AND role = 'admin'
+       AND id NOT IN (SELECT DISTINCT user_id FROM orders)
+       AND id NOT IN (SELECT DISTINCT user_id FROM posts WHERE user_id IS NOT NULL)
+       AND id NOT IN (SELECT DISTINCT user_id FROM bookings)
+       AND id NOT IN (SELECT DISTINCT user_id FROM event_registrations)`,
+  )
 }
 
 async function ensureColumn(connection, schema, table, column, definition) {

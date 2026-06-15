@@ -28,9 +28,18 @@ async function seedAdmin(connection) {
     ['admin', '系统管理员', '13800000000', passwordHash, 'active'],
   )
   await connection.execute(
-    `UPDATE users
-     SET status = 'disabled'
-     WHERE (username = 'admin' OR phone = '13800000000') AND role = 'admin'`,
+    `DELETE c FROM carts c
+     INNER JOIN users u ON u.id = c.user_id
+     WHERE (u.username = 'admin' OR u.phone = '13800000000') AND u.role = 'admin'`,
+  )
+  await connection.execute(
+    `DELETE FROM users
+     WHERE (username = 'admin' OR phone = '13800000000')
+       AND role = 'admin'
+       AND id NOT IN (SELECT DISTINCT user_id FROM orders)
+       AND id NOT IN (SELECT DISTINCT user_id FROM posts WHERE user_id IS NOT NULL)
+       AND id NOT IN (SELECT DISTINCT user_id FROM bookings)
+       AND id NOT IN (SELECT DISTINCT user_id FROM event_registrations)`,
   )
 }
 
@@ -63,6 +72,65 @@ async function seedUsers(connection) {
       user.points,
       user.level,
     ])
+  }
+
+  for (const user of users) {
+    const [[row]] = await connection.execute('SELECT id FROM users WHERE phone = ? LIMIT 1', [user.phone])
+    if (!row?.id) continue
+    await connection.execute(
+      `INSERT INTO user_points (user_id, points, type, source, description)
+       SELECT ?, ?, 'earn', 'seed', ?
+       FROM DUAL WHERE NOT EXISTS (
+         SELECT 1 FROM user_points WHERE user_id = ? AND source = 'seed' AND description = ? LIMIT 1
+       )`,
+      [row.id, user.points, '初始化会员积分', row.id, '初始化会员积分'],
+    )
+    await connection.execute(
+      `INSERT INTO user_notifications (user_id, title, content, type)
+       SELECT ?, '欢迎加入 Coffee Book', '你的普通用户账号已创建，可在会员中心查看订单、预约、积分和帖子。', 'system'
+       FROM DUAL WHERE NOT EXISTS (
+         SELECT 1 FROM user_notifications WHERE user_id = ? AND title = '欢迎加入 Coffee Book' LIMIT 1
+       )`,
+      [row.id, row.id],
+    )
+    await connection.execute(
+      `INSERT INTO user_addresses (user_id, recipient, phone, region, detail, is_default)
+       SELECT ?, ?, ?, '上海市 / 黄浦区', 'Coffee Book 示例地址 1 号', 1
+       FROM DUAL WHERE NOT EXISTS (
+         SELECT 1 FROM user_addresses WHERE user_id = ? AND is_default = 1 LIMIT 1
+       )`,
+      [row.id, user.nickname, user.phone, row.id],
+    )
+  }
+
+  const [allUsers] = await connection.execute(
+    "SELECT id, nickname, phone FROM users WHERE role = 'user' ORDER BY id",
+  )
+  for (const user of allUsers) {
+    await connection.execute(
+      `INSERT INTO user_points (user_id, points, type, source, description)
+       SELECT ?, 0, 'earn', 'account-sync', '账号资料同步记录'
+       FROM DUAL WHERE NOT EXISTS (
+         SELECT 1 FROM user_points WHERE user_id = ? LIMIT 1
+       )`,
+      [user.id, user.id],
+    )
+    await connection.execute(
+      `INSERT INTO user_notifications (user_id, title, content, type)
+       SELECT ?, '欢迎加入 Coffee Book', '你的普通用户账号已同步到会员中心，可查看订单、预约、积分、帖子和通知。', 'system'
+       FROM DUAL WHERE NOT EXISTS (
+         SELECT 1 FROM user_notifications WHERE user_id = ? LIMIT 1
+       )`,
+      [user.id, user.id],
+    )
+    await connection.execute(
+      `INSERT INTO user_addresses (user_id, recipient, phone, region, detail, is_default)
+       SELECT ?, ?, ?, '待完善', '请在地址管理中补充详细地址', 1
+       FROM DUAL WHERE NOT EXISTS (
+         SELECT 1 FROM user_addresses WHERE user_id = ? LIMIT 1
+       )`,
+      [user.id, user.nickname || 'Coffee Book 用户', user.phone || '', user.id],
+    )
   }
 }
 
@@ -193,10 +261,16 @@ async function seedEvents(connection) {
 }
 
 async function seedCommunityPosts(connection) {
+  const [seedUsers] = await connection.execute(
+    `SELECT id FROM users
+     WHERE phone IN ('13900000001', '13900000002', '13900000003', '13900000004')
+     ORDER BY FIELD(phone, '13900000001', '13900000002', '13900000003', '13900000004')`,
+  )
   const postSql = `INSERT INTO posts
-    (slug, title, author, avatar, topic, excerpt, content, status, featured, likes_count, comments_count, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (slug, user_id, title, author, avatar, topic, excerpt, content, status, featured, likes_count, comments_count, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
+      user_id = VALUES(user_id),
       title = VALUES(title),
       author = VALUES(author),
       avatar = VALUES(avatar),
@@ -217,6 +291,7 @@ async function seedCommunityPosts(connection) {
   for (const [index, post] of communitySeedPosts.entries()) {
     await connection.execute(postSql, [
       post.slug,
+      seedUsers[index]?.id || null,
       post.title,
       post.author,
       post.avatar,

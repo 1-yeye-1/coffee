@@ -1,4 +1,5 @@
 import { registerAdminRoutes } from './admin.routes.js'
+import { registerAccountRoutes } from './account.routes.js'
 import { registerAuthRoutes } from './auth.routes.js'
 import { registerBooksRoutes } from './books.routes.js'
 import { registerBookingRoutes } from './booking.routes.js'
@@ -61,6 +62,7 @@ export function createRouter() {
   registerBookingRoutes(router)
   registerCartRoutes(router)
   registerOrdersRoutes(router)
+  registerAccountRoutes(router)
   registerAdminRoutes(router)
   return router
 }

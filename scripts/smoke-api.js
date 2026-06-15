@@ -61,9 +61,9 @@ async function main() {
   assert(admins[0]?.status === 'active', 'default admin should exist in admin_users')
   logPass('admin_users default admin')
 
-  const [mixedAdmins] = await pool.query("SELECT id FROM users WHERE (username = 'admin' OR phone = '13800000000') AND role = 'admin' AND status = 'active'")
-  assert(mixedAdmins.length === 0, 'users table should not contain active backend admin')
-  logPass('users admin disabled')
+  const [mixedAdmins] = await pool.query("SELECT id FROM users WHERE (username = 'admin' OR phone = '13800000000') AND role = 'admin'")
+  assert(mixedAdmins.length === 0, 'users table should not contain backend admin accounts')
+  logPass('users admin separated')
 
   const frontAdminLogin = await request('POST', '/auth/login', {
     body: { username: adminUsername, password: adminPassword },

@@ -1,27 +1,24 @@
 import MemberLayout from '@/layouts/MemberLayout.vue'
 import LayoutPreview from '@/views/LayoutPreview.vue'
-import PlaceholderView from '@/views/PlaceholderView.vue'
-import OrderDetailView from '@/views/member/orders/OrderDetailView.vue'
-import OrdersView from '@/views/member/orders/OrdersView.vue'
+import AccountOverviewView from '@/views/member/AccountOverviewView.vue'
 import ActivitiesView from '@/views/member/ActivitiesView.vue'
+import AddressesView from '@/views/member/AddressesView.vue'
 import BookingsView from '@/views/member/BookingsView.vue'
 import FavoritesView from '@/views/member/FavoritesView.vue'
 import MembershipView from '@/views/member/MembershipView.vue'
+import MyPostsView from '@/views/member/MyPostsView.vue'
+import NotificationsView from '@/views/member/NotificationsView.vue'
+import OrderDetailView from '@/views/member/orders/OrderDetailView.vue'
+import OrdersView from '@/views/member/orders/OrdersView.vue'
+import PointsView from '@/views/member/PointsView.vue'
 import ProfileView from '@/views/member/ProfileView.vue'
+import SecurityView from '@/views/member/SecurityView.vue'
 
 import { ROUTE_NAMES } from '../route-names'
 
 const memberMeta = {
   requiresAuth: true,
 }
-
-const memberSections = [
-  ['security', '安全设置'],
-  ['points', '积分记录'],
-  ['posts', '我的帖子'],
-  ['notifications', '通知中心'],
-  ['addresses', '地址管理'],
-]
 
 export const memberRoutes = [
   {
@@ -32,14 +29,9 @@ export const memberRoutes = [
       {
         path: '',
         name: ROUTE_NAMES.ACCOUNT,
-        component: PlaceholderView,
+        component: AccountOverviewView,
         meta: { ...memberMeta, title: '账户概览' },
       },
-      ...memberSections.map(([path, title]) => ({
-        path,
-        component: PlaceholderView,
-        meta: { ...memberMeta, title },
-      })),
       {
         path: 'profile',
         name: ROUTE_NAMES.PROFILE,
@@ -47,10 +39,20 @@ export const memberRoutes = [
         meta: { ...memberMeta, title: '个人资料' },
       },
       {
+        path: 'security',
+        component: SecurityView,
+        meta: { ...memberMeta, title: '安全设置' },
+      },
+      {
         path: 'membership',
         name: ROUTE_NAMES.MEMBERSHIP,
         component: MembershipView,
         meta: { ...memberMeta, title: '会员权益' },
+      },
+      {
+        path: 'points',
+        component: PointsView,
+        meta: { ...memberMeta, title: '积分记录' },
       },
       {
         path: 'favorites',
@@ -71,6 +73,21 @@ export const memberRoutes = [
         meta: { ...memberMeta, title: '活动报名记录' },
       },
       {
+        path: 'posts',
+        component: MyPostsView,
+        meta: { ...memberMeta, title: '我的帖子' },
+      },
+      {
+        path: 'notifications',
+        component: NotificationsView,
+        meta: { ...memberMeta, title: '通知中心' },
+      },
+      {
+        path: 'addresses',
+        component: AddressesView,
+        meta: { ...memberMeta, title: '地址管理' },
+      },
+      {
         path: 'orders',
         name: ROUTE_NAMES.ORDERS,
         component: OrdersView,
@@ -86,7 +103,7 @@ export const memberRoutes = [
         path: 'layout-preview',
         name: ROUTE_NAMES.MEMBER_LAYOUT_PREVIEW,
         component: LayoutPreview,
-        meta: { ...memberMeta, title: 'Member Layout', layoutPreview: 'MemberLayout' },
+        meta: { ...memberMeta, title: '会员中心布局预览', layoutPreview: 'MemberLayout' },
       },
     ],
   },
