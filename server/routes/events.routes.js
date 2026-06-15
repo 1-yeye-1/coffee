@@ -1,4 +1,4 @@
-import { requireAuth } from '../middlewares/auth.js'
+﻿import { requireUser } from '../middlewares/auth.js'
 import {
   cancelEventRegistration,
   findEventBySlug,
@@ -19,13 +19,13 @@ export function registerEventsRoutes(router) {
     return success(res, event)
   })
 
-  router.post('/api/events/:id/register', requireAuth, async (req, res) => {
+  router.post('/api/events/:id/register', requireUser, async (req, res) => {
     const event = await registerEvent(req.params.id, req.user.id)
     if (!event) return failure(res, 404, '活动不存在', 404)
     return success(res, event, '报名成功', 201)
   })
 
-  router.delete('/api/events/:id/register', requireAuth, async (req, res) => {
+  router.delete('/api/events/:id/register', requireUser, async (req, res) => {
     if (!await cancelEventRegistration(req.params.id, req.user.id)) {
       return failure(res, 404, '报名记录不存在', 404)
     }

@@ -1,4 +1,5 @@
 import { requireAdmin } from '../middlewares/auth.js'
+import { authenticateAdmin, findAdminById } from '../services/auth.service.js'
 import {
   getDashboardStats,
   listAdminBooks,
@@ -19,6 +20,7 @@ import {
   rejectOrderPayment,
 } from '../services/orders.service.js'
 import { failure, paginated, success } from '../utils/response.js'
+import { signAdminToken } from '../utils/jwt.js'
 
 function requireFields(res, payload, fields) {
   const missing = fields.find((field) => payload[field] === undefined || payload[field] === null || String(payload[field]).trim() === '')
@@ -27,6 +29,21 @@ function requireFields(res, payload, fields) {
 }
 
 export function registerAdminRoutes(router) {
+  router.post('/api/admin/auth/login', async (req, res) => {
+    const admin = await authenticateAdmin(req.body)
+    return success(res, { token: signAdminToken(admin), admin }, '后台登录成功')
+  })
+
+  router.get('/api/admin/auth/me', requireAdmin, async (req, res) => {
+    const admin = await findAdminById(req.user.id)
+    if (!admin) return failure(res, 404, '管理员不存在', 404)
+    return success(res, admin)
+  })
+
+  router.post('/api/admin/auth/logout', requireAdmin, async (_req, res) => {
+    return success(res, {}, '已退出后台登录')
+  })
+
   router.get('/api/admin/dashboard', requireAdmin, async (_req, res) => {
     return success(res, await getDashboardStats())
   })

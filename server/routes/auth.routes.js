@@ -1,5 +1,5 @@
 import { pool } from '../db/mysql.js'
-import { requireAuth } from '../middlewares/auth.js'
+import { requireUser } from '../middlewares/auth.js'
 import {
   assertPhone,
   authenticate,
@@ -9,12 +9,12 @@ import {
   sendVerificationCode,
   verifyCode,
 } from '../services/auth.service.js'
-import { signToken } from '../utils/jwt.js'
+import { signUserToken } from '../utils/jwt.js'
 import { failure, success } from '../utils/response.js'
 
 function serializeSession(user) {
   return {
-    token: signToken(user),
+    token: signUserToken(user),
     user,
   }
 }
@@ -54,17 +54,16 @@ export function registerAuthRoutes(router) {
 
   router.post('/api/auth/login', async (req, res) => {
     const user = await authenticate(req.body)
-    if (user.status === 'disabled') return failure(res, 403, '账号已被禁用', 403)
     return success(res, serializeSession(user), '登录成功')
   })
 
-  router.get('/api/auth/me', requireAuth, async (req, res) => {
+  router.get('/api/auth/me', requireUser, async (req, res) => {
     const user = await findUserById(req.user.id)
     if (!user) return failure(res, 404, '用户不存在', 404)
     return success(res, user)
   })
 
-  router.post('/api/auth/logout', requireAuth, async (_req, res) => {
+  router.post('/api/auth/logout', requireUser, async (_req, res) => {
     return success(res, {}, '已退出登录')
   })
 }

@@ -12,20 +12,32 @@ function sign(input) {
   return createHmac('sha256', env.jwtSecret).update(input).digest('base64url')
 }
 
-export function signToken(user) {
+function signPayload(payload) {
   const now = Math.floor(Date.now() / 1000)
   const header = encode({ alg: 'HS256', typ: 'JWT' })
-  const payload = encode({
-    id: user.id,
-    username: user.username,
-    role: user.role,
-    status: user.status,
-    iat: now,
-    exp: now + TOKEN_TTL_SECONDS,
-  })
-  const input = `${header}.${payload}`
+  const body = encode({ ...payload, iat: now, exp: now + TOKEN_TTL_SECONDS })
+  const input = `${header}.${body}`
   return `${input}.${sign(input)}`
 }
+
+export function signUserToken(user) {
+  return signPayload({
+    id: user.id,
+    phone: user.phone,
+    accountType: 'user',
+  })
+}
+
+export function signAdminToken(admin) {
+  return signPayload({
+    id: admin.id,
+    username: admin.username,
+    phone: admin.phone,
+    accountType: 'admin',
+  })
+}
+
+export const signToken = signUserToken
 
 export function verifyToken(token) {
   const [header, payload, signature] = String(token || '').split('.')

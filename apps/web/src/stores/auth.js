@@ -1,15 +1,15 @@
-import { defineStore } from 'pinia'
+﻿import { defineStore } from 'pinia'
 
 import * as authApi from '@/api/auth'
 
-const STORAGE_KEY = 'coffee-book-auth'
+const TOKEN_KEY = 'coffee_web_token'
+const USER_KEY = 'coffee_web_user'
 
 function readStoredAuth() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
     return {
-      user: saved.user || null,
-      accessToken: saved.accessToken || null,
+      user: JSON.parse(localStorage.getItem(USER_KEY) || 'null'),
+      accessToken: localStorage.getItem(TOKEN_KEY) || null,
     }
   } catch {
     return { user: null, accessToken: null }
@@ -24,20 +24,21 @@ export const useAuthStore = defineStore('auth', {
     restored: false,
   }),
   getters: {
-    isAuthenticated: (state) => Boolean(state.accessToken),
+    isAuthenticated: (state) => Boolean(state.accessToken && state.user),
   },
   actions: {
     persist() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        user: this.user,
-        accessToken: this.accessToken,
-      }))
+      if (this.accessToken) localStorage.setItem(TOKEN_KEY, this.accessToken)
+      else localStorage.removeItem(TOKEN_KEY)
+      if (this.user) localStorage.setItem(USER_KEY, JSON.stringify(this.user))
+      else localStorage.removeItem(USER_KEY)
     },
     clearSession() {
       this.user = null
       this.accessToken = null
       this.error = ''
-      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(USER_KEY)
       this.restored = true
     },
     async login(credentials) {
@@ -62,14 +63,11 @@ export const useAuthStore = defineStore('auth', {
       this.error = ''
       try {
         const response = await authApi.register(payload)
-        if (response.data?.token) {
-          this.user = response.data.user
-          this.accessToken = response.data.token
-          this.persist()
-          window.dispatchEvent(new CustomEvent('coffee-book:auth-login'))
-          return this.user
-        }
-        return response.data
+        this.user = response.data.user
+        this.accessToken = response.data.token
+        this.persist()
+        window.dispatchEvent(new CustomEvent('coffee-book:auth-login'))
+        return this.user
       } catch (error) {
         this.error = error.message
         throw error

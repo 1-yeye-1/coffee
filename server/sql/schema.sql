@@ -26,6 +26,23 @@ CREATE TABLE IF NOT EXISTS users (
   KEY idx_users_role (role)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS admin_users (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  username VARCHAR(80) NOT NULL,
+  phone VARCHAR(40) NULL,
+  nickname VARCHAR(120) NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  avatar VARCHAR(500) NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'active',
+  last_login_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_admin_users_username (username),
+  UNIQUE KEY uk_admin_users_phone (phone),
+  KEY idx_admin_users_status (status)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS verification_codes (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   phone VARCHAR(40) NOT NULL,
@@ -107,12 +124,11 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   module VARCHAR(100) NOT NULL,
   payload JSON NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  operator_type VARCHAR(30) NOT NULL DEFAULT 'user',
   PRIMARY KEY (id),
+  KEY idx_audit_logs_operator (operator_type, operator_id),
   KEY idx_audit_logs_module (module),
-  KEY idx_audit_logs_created_at (created_at),
-  CONSTRAINT fk_audit_logs_operator
-    FOREIGN KEY (operator_id) REFERENCES users(id)
-    ON DELETE SET NULL
+  KEY idx_audit_logs_created_at (created_at)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS carts (

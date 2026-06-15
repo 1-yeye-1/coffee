@@ -62,6 +62,7 @@ const server = createServer(async (req, res) => {
           '/api/health',
           '/api/auth/send-code',
           '/api/auth/login',
+          '/api/admin/auth/login',
           '/api/books',
           '/api/products',
           '/api/events',

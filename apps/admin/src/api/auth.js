@@ -1,19 +1,15 @@
-import { request } from './request'
-
-export function register(payload) {
-  return request('/auth/register', { method: 'POST', body: payload })
-}
+﻿import { request } from './request'
 
 export function login(payload) {
-  return request('/auth/login', { method: 'POST', body: payload })
+  return request('/admin/auth/login', { method: 'POST', body: payload })
 }
 
 export function getCurrentUser() {
-  return request('/auth/me', { timeoutMs: 1200 })
+  return request('/admin/auth/me', { timeoutMs: 1200 })
 }
 
 export const fetchMe = getCurrentUser
 
 export function logout() {
-  return request('/auth/logout', { method: 'POST' })
+  return request('/admin/auth/logout', { method: 'POST' })
 }

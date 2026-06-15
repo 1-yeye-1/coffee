@@ -27,8 +27,12 @@ export const listAdminBooks = listBooks
 export const listAdminProducts = listProducts
 
 export async function writeAudit(operatorId, action, module, payload = null, connection = pool) {
+  const adminActionPrefixes = ['book.', 'product.', 'event.', 'post.status', 'booking.status', 'order.status', 'order.payment']
+  const operatorType = payload?.operatorType || (adminActionPrefixes.some((prefix) => action.startsWith(prefix)) ? 'admin' : 'user')
+  const safePayload = payload?.operatorType ? { ...payload } : payload
+  if (safePayload?.operatorType) delete safePayload.operatorType
   await connection.execute(
-    'INSERT INTO audit_logs (operator_id, action, module, payload) VALUES (?, ?, ?, ?)',
-    [operatorId || null, action, module, payload ? JSON.stringify(payload) : null],
+    'INSERT INTO audit_logs (operator_id, operator_type, action, module, payload) VALUES (?, ?, ?, ?, ?)',
+    [operatorId || null, operatorType, action, module, safePayload ? JSON.stringify(safePayload) : null],
   )
 }

@@ -23,7 +23,10 @@ async function migrate() {
     await ensureColumn(connection, 'coffee', 'orders', 'source', "VARCHAR(30) NOT NULL DEFAULT 'cart' AFTER user_id")
     await ensureColumn(connection, 'coffee', 'payments', 'expires_at', 'TIMESTAMP NULL AFTER paid_at')
     await ensureColumn(connection, 'coffee', 'payments', 'updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at')
+    await ensureColumn(connection, 'coffee', 'audit_logs', 'operator_type', "VARCHAR(30) NOT NULL DEFAULT 'user' AFTER operator_id")
+    await dropForeignKeyIfExists(connection, 'coffee', 'audit_logs', 'fk_audit_logs_operator')
     await ensureIndex(connection, 'coffee', 'users', 'uk_users_phone', 'UNIQUE KEY uk_users_phone (phone)')
+    await ensureIndex(connection, 'coffee', 'audit_logs', 'idx_audit_logs_operator', 'KEY idx_audit_logs_operator (operator_type, operator_id)')
     console.log('Database migration completed: coffee (schema.sql)')
   } finally {
     await connection.end()
@@ -49,6 +52,17 @@ async function ensureIndex(connection, schema, table, indexName, definition) {
   )
   if (Number(rows[0].total) === 0) {
     await connection.query(`ALTER TABLE \`${schema}\`.\`${table}\` ADD ${definition}`)
+  }
+}
+
+async function dropForeignKeyIfExists(connection, schema, table, constraintName) {
+  const [rows] = await connection.execute(
+    `SELECT COUNT(*) AS total FROM information_schema.TABLE_CONSTRAINTS
+     WHERE CONSTRAINT_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY'`,
+    [schema, table, constraintName],
+  )
+  if (Number(rows[0].total) > 0) {
+    await connection.query(`ALTER TABLE \`${schema}\`.\`${table}\` DROP FOREIGN KEY \`${constraintName}\``)
   }
 }
 

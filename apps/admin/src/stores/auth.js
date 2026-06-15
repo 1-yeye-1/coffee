@@ -1,15 +1,15 @@
-import { defineStore } from 'pinia'
+﻿import { defineStore } from 'pinia'
 
 import * as authApi from '@/api/auth'
 
-const STORAGE_KEY = 'coffee-book-auth'
+const TOKEN_KEY = 'coffee_admin_token'
+const ADMIN_KEY = 'coffee_admin_user'
 
 function readStoredAuth() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
     return {
-      user: saved.user || null,
-      accessToken: saved.accessToken || null,
+      user: JSON.parse(localStorage.getItem(ADMIN_KEY) || 'null'),
+      accessToken: localStorage.getItem(TOKEN_KEY) || null,
     }
   } catch {
     return { user: null, accessToken: null }
@@ -24,20 +24,21 @@ export const useAuthStore = defineStore('auth', {
     restored: false,
   }),
   getters: {
-    isAuthenticated: (state) => Boolean(state.accessToken),
+    isAuthenticated: (state) => Boolean(state.accessToken && state.user),
   },
   actions: {
     persist() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        user: this.user,
-        accessToken: this.accessToken,
-      }))
+      if (this.accessToken) localStorage.setItem(TOKEN_KEY, this.accessToken)
+      else localStorage.removeItem(TOKEN_KEY)
+      if (this.user) localStorage.setItem(ADMIN_KEY, JSON.stringify(this.user))
+      else localStorage.removeItem(ADMIN_KEY)
     },
     clearSession() {
       this.user = null
       this.accessToken = null
       this.error = ''
-      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(ADMIN_KEY)
       this.restored = true
     },
     async login(credentials) {
@@ -45,23 +46,11 @@ export const useAuthStore = defineStore('auth', {
       this.error = ''
       try {
         const response = await authApi.login(credentials)
-        this.user = response.data.user
+        this.user = response.data.admin
         this.accessToken = response.data.token
         this.persist()
         window.dispatchEvent(new CustomEvent('coffee-book:auth-login'))
         return this.user
-      } catch (error) {
-        this.error = error.message
-        throw error
-      } finally {
-        this.loading = false
-      }
-    },
-    async register(payload) {
-      this.loading = true
-      this.error = ''
-      try {
-        return (await authApi.register(payload)).data
       } catch (error) {
         this.error = error.message
         throw error

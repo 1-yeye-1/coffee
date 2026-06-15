@@ -1,4 +1,4 @@
-import { requireAuth } from '../middlewares/auth.js'
+﻿import { requireUser } from '../middlewares/auth.js'
 import {
   cancelBooking,
   createBooking,
@@ -32,12 +32,12 @@ export function registerBookingRoutes(router) {
     return success(res, await listSpaceSlots(req.params.slug))
   })
 
-  router.post('/api/bookings', requireAuth, async (req, res) => {
+  router.post('/api/bookings', requireUser, async (req, res) => {
     if (!requireBodyFields(res, req.body, ['date', 'time', 'contactName', 'phone'])) return false
     return success(res, await createBooking(req.body, req.user.id), '预约成功', 201)
   })
 
-  router.delete('/api/bookings/:id', requireAuth, async (req, res) => {
+  router.delete('/api/bookings/:id', requireUser, async (req, res) => {
     if (!await cancelBooking(req.params.id, req.user.id)) return failure(res, 404, '预约不存在', 404)
     return success(res)
   })

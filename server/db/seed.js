@@ -17,16 +17,20 @@ function toMysqlTimestamp(value) {
 async function seedAdmin(connection) {
   const passwordHash = await hashPassword('admin123456')
   await connection.execute(
-    `INSERT INTO users
-      (username, nickname, phone, password_hash, role, status)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO admin_users
+      (username, nickname, phone, password_hash, status)
+     VALUES (?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
       nickname = VALUES(nickname),
       phone = VALUES(phone),
       password_hash = VALUES(password_hash),
-      role = VALUES(role),
       status = VALUES(status)`,
-    ['admin', '系统管理员', '13800000000', passwordHash, 'admin', 'active'],
+    ['admin', '系统管理员', '13800000000', passwordHash, 'active'],
+  )
+  await connection.execute(
+    `UPDATE users
+     SET status = 'disabled'
+     WHERE (username = 'admin' OR phone = '13800000000') AND role = 'admin'`,
   )
 }
 

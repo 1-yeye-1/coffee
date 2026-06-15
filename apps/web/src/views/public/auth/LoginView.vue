@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const form = reactive({ identifier: '', password: '', code: '' })
+const form = reactive({ phone: '', password: '', code: '' })
 const error = ref('')
 const success = ref('')
 const sending = ref(false)
@@ -21,13 +21,13 @@ function isPhone(value) {
 async function sendCode() {
   error.value = ''
   success.value = ''
-  if (!isPhone(form.identifier)) {
+  if (!isPhone(form.phone)) {
     error.value = '请输入 11 位手机号后再获取验证码。'
     return
   }
   sending.value = true
   try {
-    const response = await authApi.sendCode({ phone: form.identifier.trim(), scene: 'login' })
+    const response = await authApi.sendCode({ phone: form.phone.trim(), scene: 'login' })
     success.value = response.data.devCode
       ? `验证码已发送，开发环境验证码：${response.data.devCode}`
       : '验证码已发送，请留意短信。'
@@ -41,9 +41,8 @@ async function sendCode() {
 async function submit() {
   error.value = ''
   success.value = ''
-  const identifier = form.identifier.trim()
-  if (!identifier) {
-    error.value = '请输入手机号或用户名。'
+  if (!isPhone(form.phone)) {
+    error.value = '请输入 11 位手机号。'
     return
   }
   if (!form.password && !form.code) {
@@ -51,10 +50,7 @@ async function submit() {
     return
   }
   try {
-    const payload = isPhone(identifier)
-      ? { phone: identifier, password: form.password, code: form.code }
-      : { username: identifier, password: form.password }
-    await authStore.login(payload)
+    await authStore.login({ phone: form.phone.trim(), password: form.password, code: form.code.trim() })
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
     await router.replace(redirect || '/')
   } catch (requestError) {
@@ -68,15 +64,10 @@ async function submit() {
     <div class="cb-stack auth-form-card__intro">
       <span class="section-eyebrow">欢迎回来</span>
       <h2 class="page-title">登录 Coffee Book</h2>
-      <p class="text-muted">继续管理订单、预约、活动和社区互动记录。</p>
+      <p class="text-muted">使用手机号登录，继续管理订单、预约、活动和社区互动记录。</p>
     </div>
     <form class="cb-stack auth-form" @submit.prevent="submit">
-      <BaseInput
-        v-model="form.identifier"
-        label="手机号或用户名"
-        autocomplete="username"
-        placeholder="手机号登录；管理员也可输入 admin"
-      />
+      <BaseInput v-model="form.phone" label="手机号" type="tel" autocomplete="tel" placeholder="请输入手机号" />
       <BaseInput v-model="form.password" label="密码" password autocomplete="current-password" placeholder="请输入密码" />
       <div class="auth-code-row">
         <BaseInput v-model="form.code" label="短信验证码" inputmode="numeric" placeholder="手机号登录可填写验证码" />

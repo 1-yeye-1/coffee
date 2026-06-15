@@ -1,4 +1,4 @@
-import { requireAuth } from '../middlewares/auth.js'
+﻿import { requireUser } from '../middlewares/auth.js'
 import {
   createComment,
   createPost,
@@ -29,18 +29,18 @@ export function registerCommunityRoutes(router) {
     return success(res, post)
   })
 
-  router.post('/api/posts', requireAuth, async (req, res) => {
+  router.post('/api/posts', requireUser, async (req, res) => {
     if (!requireBodyFields(res, req.body, ['title', 'content'])) return false
     return success(res, await createPost(req.body, req.user), '发布成功，等待审核', 201)
   })
 
-  router.post('/api/posts/:id/comments', requireAuth, async (req, res) => {
+  router.post('/api/posts/:id/comments', requireUser, async (req, res) => {
     if (!requireBodyFields(res, req.body, ['content'])) return false
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
     return success(res, await createComment(req.params.id, req.body, req.user), '评论成功', 201)
   })
 
-  router.post('/api/posts/:id/like', requireAuth, async (req, res) => {
+  router.post('/api/posts/:id/like', requireUser, async (req, res) => {
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
     return success(res, await togglePostLike(req.params.id, req.user.id))
   })

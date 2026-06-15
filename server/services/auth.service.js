@@ -8,6 +8,10 @@ const userColumns = `
   id, username, nickname, email, phone, avatar, role, status, points, level,
   created_at AS createdAt, updated_at AS updatedAt
 `
+const adminColumns = `
+  id, username, phone, nickname, avatar, status, last_login_at AS lastLoginAt,
+  created_at AS createdAt, updated_at AS updatedAt
+`
 const phonePattern = /^1\d{10}$/
 const codeScenes = new Set(['login', 'register'])
 
@@ -33,6 +37,21 @@ export async function findUserByIdentifier(identifier, connection = pool) {
 
 export async function findUserById(id) {
   const [rows] = await pool.execute(`SELECT ${userColumns} FROM users WHERE id = ? LIMIT 1`, [id])
+  return rows[0] || null
+}
+
+export async function findAdminById(id) {
+  const [rows] = await pool.execute(`SELECT ${adminColumns} FROM admin_users WHERE id = ? LIMIT 1`, [id])
+  return rows[0] || null
+}
+
+export async function findAdminByIdentifier(identifier, connection = pool) {
+  const value = String(identifier || '').trim()
+  const [rows] = await connection.execute(
+    `SELECT ${adminColumns}, password_hash AS passwordHash
+     FROM admin_users WHERE username = ? OR phone = ? LIMIT 1`,
+    [value, value],
+  )
   return rows[0] || null
 }
 
@@ -118,6 +137,7 @@ export async function authenticate(payload) {
 
   const user = await findUserByIdentifier(identifier)
   if (!user) throw Object.assign(new Error('账号不存在'), { statusCode: 401 })
+  if (user.status !== 'active') throw Object.assign(new Error('账号不存在或已被禁用'), { statusCode: 401 })
 
   if (payload.code) {
     if (!user.phone) throw Object.assign(new Error('该账号未绑定手机号'), { statusCode: 400 })
@@ -128,4 +148,20 @@ export async function authenticate(payload) {
 
   const { passwordHash, ...safeUser } = user
   return safeUser
+}
+
+export async function authenticateAdmin(payload) {
+  const identifier = String(payload.username || payload.phone || '').trim()
+  const password = String(payload.password || '')
+  if (!identifier || !password) throw Object.assign(new Error('请输入管理员账号和密码'), { statusCode: 400 })
+
+  const admin = await findAdminByIdentifier(identifier)
+  if (!admin || !await verifyPassword(password, admin.passwordHash)) {
+    throw Object.assign(new Error('当前账号不是管理员或密码错误'), { statusCode: 401 })
+  }
+  if (admin.status !== 'active') throw Object.assign(new Error('管理员账号已被禁用'), { statusCode: 403 })
+  await pool.execute('UPDATE admin_users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?', [admin.id])
+
+  const { passwordHash, ...safeAdmin } = admin
+  return safeAdmin
 }

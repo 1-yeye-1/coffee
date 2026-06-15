@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -14,19 +14,15 @@ const error = ref('')
 async function submit() {
   error.value = ''
   if (!form.username.trim() || !form.password) {
-    error.value = '请输入用户名和密码。'
+    error.value = '请输入管理员账号和密码。'
     return
   }
   try {
-    const user = await authStore.login(form)
-    if (user.role !== 'admin') {
-      await router.replace('/403')
-      return
-    }
+    await authStore.login(form)
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
     await router.replace(redirect || '/dashboard')
   } catch (requestError) {
-    error.value = requestError.message
+    error.value = requestError.message || '当前账号不是管理员。'
   }
 }
 </script>
@@ -34,12 +30,12 @@ async function submit() {
 <template>
   <BaseCard class="auth-form-card" variant="elevated">
     <div class="cb-stack auth-form-card__intro">
-      <span class="section-eyebrow">后台管理</span>
+      <span class="section-eyebrow">后台管理员登录</span>
       <h2 class="page-title">Coffee Book 后台登录</h2>
-      <p class="text-muted">请使用管理员账号进入运营工作台。</p>
+      <p class="text-muted">请使用后台管理员账号进入运营工作台，普通用户账号不能登录后台。</p>
     </div>
     <form class="cb-stack auth-form" @submit.prevent="submit">
-      <BaseInput v-model="form.username" label="用户名" autocomplete="username" placeholder="请输入管理员用户名" />
+      <BaseInput v-model="form.username" label="管理员账号" autocomplete="username" placeholder="请输入管理员用户名或手机号" />
       <BaseInput v-model="form.password" label="密码" password autocomplete="current-password" placeholder="请输入密码" />
       <p v-if="error" class="auth-form__error" role="alert">{{ error }}</p>
       <BaseButton type="submit" size="lg" :loading="authStore.loading">登录后台</BaseButton>

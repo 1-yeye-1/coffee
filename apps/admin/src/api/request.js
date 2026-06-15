@@ -1,18 +1,15 @@
-const defaultBaseURL = import.meta.env.DEV ? 'http://127.0.0.1:4173/api' : ''
+﻿const defaultBaseURL = import.meta.env.DEV ? 'http://127.0.0.1:4173/api' : ''
 const baseURL = String(import.meta.env.VITE_API_BASE_URL || defaultBaseURL).replace(/\/$/, '')
-const AUTH_STORAGE_KEY = 'coffee-book-auth'
+const TOKEN_KEY = 'coffee_admin_token'
 const DEFAULT_TIMEOUT_MS = 8000
 
 function readToken() {
-  try {
-    return JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || '{}').accessToken || null
-  } catch {
-    return null
-  }
+  return localStorage.getItem(TOKEN_KEY) || null
 }
 
 function clearAuth() {
-  localStorage.removeItem(AUTH_STORAGE_KEY)
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem('coffee_admin_user')
   window.dispatchEvent(new CustomEvent('coffee-book:auth-expired'))
 }
 
@@ -45,12 +42,7 @@ export async function request(path, options = {}) {
 
   try {
     const { timeoutMs: _timeoutMs, ...fetchOptions } = options
-    response = await fetch(`${baseURL}${path}`, {
-      ...fetchOptions,
-      headers,
-      body,
-      signal: controller.signal,
-    })
+    response = await fetch(`${baseURL}${path}`, { ...fetchOptions, headers, body, signal: controller.signal })
   } catch (error) {
     const message = error.name === 'AbortError'
       ? '请求超时，请检查 API 服务是否可用'
@@ -74,11 +66,7 @@ export async function request(path, options = {}) {
       : response.status === 404
         ? '请求的资源不存在'
         : '请求失败'
-    throw new ApiError(payload.message || fallbackMessage, {
-      code: payload.code,
-      status: response.status,
-      data: payload.data,
-    })
+    throw new ApiError(payload.message || fallbackMessage, { code: payload.code, status: response.status, data: payload.data })
   }
 
   return payload
