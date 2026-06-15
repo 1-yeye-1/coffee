@@ -34,6 +34,38 @@ async function seedAdmin(connection) {
   )
 }
 
+async function seedUsers(connection) {
+  const passwordHash = await hashPassword('user123456')
+  const users = [
+    { username: 'reader_chen', phone: '13900000001', nickname: '陈晨', level: '普通会员', points: 120 },
+    { username: 'reader_lin', phone: '13900000002', nickname: '林知夏', level: '银卡会员', points: 680 },
+    { username: 'reader_zhou', phone: '13900000003', nickname: '周屿', level: '金卡会员', points: 1280 },
+    { username: 'reader_gu', phone: '13900000004', nickname: '顾言', level: '普通会员', points: 260 },
+    { username: 'reader_tang', phone: '13900000005', nickname: '唐果', level: '银卡会员', points: 520 },
+  ]
+  const sql = `INSERT INTO users
+    (username, nickname, phone, password_hash, role, status, points, level)
+    VALUES (?, ?, ?, ?, 'user', 'active', ?, ?)
+    ON DUPLICATE KEY UPDATE
+      nickname = VALUES(nickname),
+      phone = VALUES(phone),
+      role = 'user',
+      status = 'active',
+      points = VALUES(points),
+      level = VALUES(level)`
+
+  for (const user of users) {
+    await connection.execute(sql, [
+      user.username,
+      user.nickname,
+      user.phone,
+      passwordHash,
+      user.points,
+      user.level,
+    ])
+  }
+}
+
 async function seedBooks(connection) {
   const sql = `INSERT INTO books
     (slug, title, author, category, rating, stock, status, cover_tone, summary,
@@ -271,6 +303,7 @@ async function seed() {
   try {
     await connection.beginTransaction()
     await seedAdmin(connection)
+    await seedUsers(connection)
     await seedBooks(connection)
     await seedProducts(connection)
     await seedEvents(connection)
@@ -279,7 +312,7 @@ async function seed() {
     const seedSql = await readFile(seedSqlPath, 'utf8')
     await connection.query(seedSql)
     await connection.commit()
-    console.log(`Database seed completed: 1 admin, ${books.length} books, ${products.length} products, ${events.length} events, ${communitySeedPosts.length} posts`)
+    console.log(`Database seed completed: 1 admin, 5 users, ${books.length} books, ${products.length} products, ${events.length} events, ${communitySeedPosts.length} posts`)
   } catch (error) {
     await connection.rollback()
     throw error

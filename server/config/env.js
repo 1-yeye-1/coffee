@@ -17,7 +17,7 @@ if (databaseName !== 'coffee') {
 export const env = Object.freeze({
   nodeEnv: process.env.NODE_ENV || 'development',
   serverPort: Number(process.env.SERVER_PORT || 4173),
-  corsOrigin: process.env.CORS_ORIGIN || 'http://127.0.0.1:5173,http://localhost:5173',
+  corsOrigin: process.env.CORS_ORIGIN || 'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174',
   db: {
     host: process.env.DB_HOST || '127.0.0.1',
     port: Number(process.env.DB_PORT || 3306),

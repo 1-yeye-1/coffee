@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref } from 'vue'
 
 import ThemeToggle from './ThemeToggle.vue'
@@ -62,7 +62,7 @@ const adminMenuOpen = ref(false)
           <span class="admin-header__avatar">A</span>
           <span class="admin-header__profile-copy">
             <strong>管理员</strong>
-            <small>超级管理员</small>
+            <small>后台账号</small>
           </span>
           <span aria-hidden="true">⌄</span>
         </button>
@@ -126,33 +126,38 @@ const adminMenuOpen = ref(false)
   place-items: center;
   color: var(--cb-text-secondary);
   background: transparent;
-  border: 0;
-  border-radius: var(--cb-radius-md);
+  border: 0.0625rem solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-lg);
 }
 
 .admin-header__collapse:hover,
 .admin-header__mobile-menu:hover,
 .admin-header__icon-button:hover {
-  color: var(--cb-text-primary);
+  color: var(--cb-color-coffee);
   background: var(--cb-bg-soft);
 }
 
+.admin-header__mobile-menu {
+  display: inline-grid;
+}
+
 .admin-header__icon-button svg {
-  width: 1.2rem;
+  width: 1.125rem;
+  height: 1.125rem;
   fill: none;
   stroke: currentcolor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.75;
+  stroke-width: 2;
 }
 
 .admin-header__dot {
   position: absolute;
-  top: var(--cb-space-2);
-  right: var(--cb-space-2);
-  width: var(--cb-space-2);
-  height: var(--cb-space-2);
-  background: var(--cb-color-caramel);
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  background: var(--cb-danger);
   border-radius: var(--cb-radius-pill);
 }
 
@@ -162,7 +167,7 @@ const adminMenuOpen = ref(false)
 
 .admin-header__profile-trigger {
   display: flex;
-  min-height: 2.75rem;
+  min-height: 2.5rem;
   padding: var(--cb-space-1) var(--cb-space-2);
   align-items: center;
   gap: var(--cb-space-2);
@@ -184,21 +189,20 @@ const adminMenuOpen = ref(false)
   color: var(--cb-text-inverse);
   font-weight: var(--cb-font-bold);
   background: var(--cb-color-coffee);
-  border-radius: var(--cb-radius-md);
+  border-radius: var(--cb-radius-pill);
 }
 
 .admin-header__profile-copy {
   display: none;
-  text-align: start;
+  text-align: left;
 }
 
 .admin-header__menu {
   position: absolute;
-  z-index: var(--cb-z-dropdown);
   top: calc(100% + var(--cb-space-2));
   right: 0;
   display: grid;
-  width: 10rem;
+  min-width: 10rem;
   padding: var(--cb-space-2);
   background: var(--cb-bg-elevated);
   border: 0.0625rem solid var(--cb-border-soft);
@@ -206,44 +210,30 @@ const adminMenuOpen = ref(false)
   box-shadow: var(--cb-shadow-lg);
 }
 
-.admin-header__menu button,
-.admin-header__menu a {
-  padding: var(--cb-space-3);
+.admin-header__menu a,
+.admin-header__menu button {
+  padding: var(--cb-space-2) var(--cb-space-3);
   color: var(--cb-text-secondary);
-  text-align: start;
+  text-align: left;
   background: transparent;
   border: 0;
   border-radius: var(--cb-radius-md);
 }
 
-.admin-header__menu button:hover,
-.admin-header__menu a:hover {
-  color: var(--cb-text-primary);
+.admin-header__menu a:hover,
+.admin-header__menu button:hover {
+  color: var(--cb-color-coffee);
   background: var(--cb-bg-soft);
 }
 
-.admin-header__collapse {
-  display: none;
-}
-
-@media (min-width: 40rem) {
-  .admin-header {
-    padding-inline: var(--cb-space-6);
-  }
-
+@media (min-width: 48rem) {
   .admin-header__left > div,
   .admin-header__profile-copy {
     display: block;
   }
-}
 
-@media (min-width: 64rem) {
   .admin-header__mobile-menu {
     display: none;
-  }
-
-  .admin-header__collapse {
-    display: inline-grid;
   }
 }
 </style>
