@@ -1,4 +1,5 @@
-const baseURL = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const defaultBaseURL = import.meta.env.DEV ? 'http://127.0.0.1:4173/api' : ''
+const baseURL = String(import.meta.env.VITE_API_BASE_URL || defaultBaseURL).replace(/\/$/, '')
 const AUTH_STORAGE_KEY = 'coffee-book-auth'
 const DEFAULT_TIMEOUT_MS = 8000
 
