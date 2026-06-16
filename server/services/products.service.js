@@ -2,7 +2,8 @@ import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
 
 const columns = `
-  id, slug, name, category, price, original_price AS originalPrice, stock, status,
+  id, slug, name, category, product_type AS productType,
+  supports_brew_method AS supportsBrewMethod, price, original_price AS originalPrice, stock, status,
   sales, flavor, origin, roast, description, scene, storage, tone,
   created_at AS createdAt, updated_at AS updatedAt
 `
@@ -29,6 +30,10 @@ function buildFilters(query) {
     clauses.push('category = ?')
     params.push(query.category)
   }
+  if (query.productType && query.productType !== 'all') {
+    clauses.push('product_type = ?')
+    params.push(query.productType)
+  }
   if (query.status) {
     clauses.push('status = ?')
     params.push(query.status)
@@ -46,6 +51,8 @@ function normalizeProduct(product) {
     ...product,
     price: Number(product.price),
     originalPrice: product.originalPrice === null ? null : Number(product.originalPrice),
+    productType: product.productType || 'cultural',
+    supportsBrewMethod: Boolean(product.supportsBrewMethod),
     flavor: typeof product.flavor === 'string' ? JSON.parse(product.flavor) : product.flavor,
   }
 }
@@ -81,8 +88,14 @@ export async function findProductById(id) {
   return normalizeProduct(rows[0])
 }
 
+function normalizeProductType(payload) {
+  return payload.productType === 'coffee' ? 'coffee' : 'cultural'
+}
+
 function productParams(payload) {
-  return [payload.slug, payload.name, payload.category, Number(payload.price),
+  const productType = normalizeProductType(payload)
+  const supportsBrewMethod = productType === 'coffee' ? Number(payload.supportsBrewMethod !== false) : 0
+  return [payload.slug, payload.name, payload.category, productType, supportsBrewMethod, Number(payload.price),
     payload.originalPrice === '' || payload.originalPrice == null ? null : Number(payload.originalPrice),
     Number(payload.stock) || 0, payload.status || 'active', Number(payload.sales) || 0,
     JSON.stringify(Array.isArray(payload.flavor) ? payload.flavor : []), payload.origin || null,
@@ -92,16 +105,16 @@ function productParams(payload) {
 
 export async function createProduct(payload) {
   const [result] = await pool.execute(
-    `INSERT INTO products (slug, name, category, price, original_price, stock, status, sales,
+    `INSERT INTO products (slug, name, category, product_type, supports_brew_method, price, original_price, stock, status, sales,
       flavor, origin, roast, description, scene, storage, tone)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, productParams(payload),
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, productParams(payload),
   )
   return findProductById(result.insertId)
 }
 
 export async function updateProduct(id, payload) {
   await pool.execute(
-    `UPDATE products SET slug=?, name=?, category=?, price=?, original_price=?, stock=?, status=?,
+    `UPDATE products SET slug=?, name=?, category=?, product_type=?, supports_brew_method=?, price=?, original_price=?, stock=?, status=?,
       sales=?, flavor=?, origin=?, roast=?, description=?, scene=?, storage=?, tone=? WHERE id=?`,
     [...productParams(payload), id],
   )

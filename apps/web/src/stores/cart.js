@@ -4,6 +4,20 @@ import * as cartApi from '@/api/cart'
 import { useAuthStore } from '@/stores/auth'
 
 const STORAGE_KEY = 'coffee-book-cart'
+const defaultBrewMethod = 'barista'
+
+function isCoffeeProduct(product) {
+  return product?.productType === 'coffee' && product?.supportsBrewMethod !== false
+}
+
+function normalizeBrewMethod(product, brewMethod) {
+  if (!isCoffeeProduct(product)) return null
+  return brewMethod === 'self_grind' ? 'self_grind' : defaultBrewMethod
+}
+
+function cartLineId(productId, brewMethod) {
+  return `${productId}:${brewMethod || 'none'}`
+}
 
 function readStoredCart() {
   try {
@@ -60,12 +74,13 @@ export const useCartStore = defineStore('cart', {
   actions: {
     applyRemoteCart(cart) {
       this.items = cart.items.map((item) => ({
-        id: item.productId, cartItemId: item.id, slug: item.slug, name: item.name,
-        category: item.category, price: Number(item.price), originalPrice: item.originalPrice,
+        id: item.id, productId: item.productId, cartItemId: item.id, slug: item.slug, name: item.name,
+        category: item.category, productType: item.productType, supportsBrewMethod: item.supportsBrewMethod,
+        brewMethod: item.brewMethod || null, price: Number(item.price), originalPrice: item.originalPrice,
         stock: Number(item.stock), status: item.status, origin: item.origin,
         flavor: [...(item.flavor || [])], tone: item.tone, quantity: Number(item.quantity),
       }))
-      this.selectedIds = cart.items.filter((item) => item.selected).map((item) => item.productId)
+      this.selectedIds = cart.items.filter((item) => item.selected).map((item) => item.id)
       this.source = 'api'
     },
     async fetchCart() {
@@ -76,23 +91,30 @@ export const useCartStore = defineStore('cart', {
       finally { this.loading = false }
       return this.items
     },
-    async addItem(product, quantity = 1) {
+    async addItem(product, quantity = 1, options = {}) {
       if (!product || Number(product.stock) <= 0) return
+      const brewMethod = normalizeBrewMethod(product, options.brewMethod)
+      const productId = product.productId || product.id
       if (useAuthStore().isAuthenticated) {
-        try { this.applyRemoteCart((await cartApi.addCartItem(product.id, quantity)).data); this.error = ''; return }
+        try { this.applyRemoteCart((await cartApi.addCartItem(productId, quantity, { brewMethod })).data); this.error = ''; return }
         catch (error) { this.error = error.message; this.source = 'local' }
       }
       const amount = Math.max(1, Number(quantity) || 1)
-      const existing = this.items.find((item) => item.id === product.id)
+      const lineId = cartLineId(productId, brewMethod)
+      const existing = this.items.find((item) => item.id === lineId)
 
       if (existing) {
         existing.quantity = Math.min(Number(product.stock), existing.quantity + amount)
       } else {
         this.items.push({
-          id: product.id,
+          id: lineId,
+          productId,
           slug: product.slug,
           name: product.name,
           category: product.category,
+          productType: product.productType,
+          supportsBrewMethod: product.supportsBrewMethod,
+          brewMethod,
           price: Number(product.price),
           originalPrice: product.originalPrice ? Number(product.originalPrice) : null,
           stock: Number(product.stock),
@@ -104,7 +126,7 @@ export const useCartStore = defineStore('cart', {
         })
       }
 
-      if (!this.selectedIds.includes(product.id)) this.selectedIds.push(product.id)
+      if (!this.selectedIds.includes(lineId)) this.selectedIds.push(lineId)
       persistCart(this.$state)
     },
     async removeItem(productId) {

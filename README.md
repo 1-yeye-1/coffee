@@ -1,55 +1,124 @@
-# Coffee Book 部署说明
+# Coffee Book
 
-Coffee Book 是一个前后端分离的咖啡与阅读空间全栈项目。当前架构已完成 Phase 10-1/10-2 整理，分为前台主站、后台管理和后端 API 三端。
+Coffee Book 是一个集咖啡、阅读、社区、商城、空间预约和后台管理于一体的全栈平台。项目包含用户端 Web、后台管理端 Admin 和 Express 后端 API，适合用于咖啡书屋、复合文化空间或生活方式门店的业务演示与二次开发。
+
+## 技术栈
+
+- 前端：Vue 3、Vite、Pinia、Vue Router
+- 后端：Node.js、Express、MySQL
+- 上传：Multer、本地静态资源目录
+- 鉴权：JWT、前后台权限隔离
+- 其他：mysql2、统一响应格式、Smoke API 测试脚本
+
+## 功能模块
+
+### 用户端
+
+- 首页
+- 咖啡 / 文创商城
+- 商品详情
+- 购物车
+- 下单与订单详情
+- 空间预约
+- 社区内容浏览与发帖
+- 通知中心
+- 用户中心
+- 头像上传
+- 服务条款、隐私政策、关于我们、联系我们、帮助中心
+
+### 后台管理端
+
+- 仪表盘
+- 商品管理
+- 订单管理
+- 预约管理
+- 社区内容管理
+- 上传文件管理
+- 操作日志
+- 系统通知创建接口
 
 ## 目录结构
 
 ```text
 coffee-book/
-├── apps/
-│   ├── web/              前台主站 Vue/Vite 项目
-│   └── admin/            后台管理 Vue/Vite 项目
-├── server/               Node.js API、路由、服务、MySQL 脚本
-├── scripts/              smoke test 与辅助脚本
-├── package.json          根目录统一脚本
-├── package-lock.json
-├── .env.example          后端环境变量示例
-└── DELIVERY.md           最终交付说明
+├─ apps/
+│  ├─ web/              用户端 Vue/Vite 项目
+│  └─ admin/            后台管理 Vue/Vite 项目
+├─ server/              Express API、路由、服务、数据库脚本
+├─ scripts/             smoke test 与辅助脚本
+├─ package.json         根目录统一脚本
+├─ package-lock.json
+├─ .env.example         后端环境变量示例
+└─ README.md
 ```
 
-## 技术栈
+## 环境准备
 
-- 前端：Vue 3、Vue Router、Pinia、Vite
-- 后端：Node.js HTTP Server、自定义轻量路由
-- 数据库：MySQL 8、`mysql2`
-- 鉴权：JWT，密钥来自环境变量 `JWT_SECRET`
-- 样式：项目内 Design System CSS tokens 与基础组件
+请先安装：
 
-## 本地启动
+- Node.js
+- MySQL
+- npm
 
-先复制根目录 `.env.example` 为 `.env`，并配置本地 MySQL 账号、密码和 JWT 密钥。不要提交 `.env`。
+复制根目录 `.env.example` 为 `.env`，并配置本地 MySQL 账号、密码和 JWT 密钥。不要提交真实 `.env`。
+
+关键环境变量：
+
+```text
+SERVER_PORT=4173
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=coffee
+DB_USER=your_user
+DB_PASSWORD=your_password
+JWT_SECRET=replace_with_a_long_random_secret
+CORS_ORIGIN=http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174
+```
+
+## 安装依赖
 
 ```bash
 npm install
+```
+
+## 数据库初始化 / 安全迁移
+
+```bash
 npm run db:init
+```
+
+当前 `npm run db:init` 执行的是 `server/db/migrate.js`，会基于 `server/sql/schema.sql` 创建缺失表，并通过 `ensureColumn`、`ensureIndex` 等逻辑补充缺失字段和索引。它是非破坏性迁移，不会默认清空已有业务数据。
+
+如需写入演示数据，可执行：
+
+```bash
 npm run db:seed
+```
+
+生产或正式数据环境不建议直接执行任何破坏性数据库重置。执行迁移前建议先备份数据库。
+
+## 启动命令
+
+分别启动三端：
+
+```bash
 npm run dev:server
 npm run dev:web
 npm run dev:admin
 ```
 
-也可以同时启动三端：
+也可以使用：
 
 ```bash
 npm run dev:all
 ```
 
-默认端口：
+默认地址：
 
 ```text
 后端 API: http://127.0.0.1:4173/api
-前台 web: http://127.0.0.1:5173
-后台 admin: http://127.0.0.1:5174
+用户端 Web: http://127.0.0.1:5173
+后台 Admin: http://127.0.0.1:5174
 ```
 
 ## 构建命令
@@ -63,150 +132,11 @@ npm run build
 构建产物：
 
 ```text
-dist/web      前台静态资源
-dist/admin    后台静态资源
+dist/web
+dist/admin
 ```
 
-`dist/` 不提交到 Git，部署时由构建流程生成。
-
-## 前台 web 部署
-
-- 项目目录：`apps/web`
-- 构建命令：`npm run build:web`
-- 构建产物：`dist/web`
-- 推荐部署：Nginx、Vercel、Netlify 或任意静态服务器
-- 生产环境变量：`VITE_API_BASE_URL=https://your-api-domain.com/api`
-
-生产构建前，将 `apps/web/.env.example` 中的 API 地址替换为真实后端 API 域名。
-
-## 后台 admin 部署
-
-- 项目目录：`apps/admin`
-- 构建命令：`npm run build:admin`
-- 构建产物：`dist/admin`
-- 推荐部署：Nginx 或静态服务器
-- 生产环境变量：`VITE_API_BASE_URL=https://your-api-domain.com/api`
-- 建议使用独立域名或子域名，例如 `https://admin.example.com`
-
-后台只包含管理路由，不显示前台 Header/Footer。后台页面需要 admin 权限。
-
-## 后端 server 部署
-
-- 项目目录：`server`
-- 启动命令：`npm run start`
-- 运行端口：由 `SERVER_PORT` 控制，默认 `4173`
-- 必需依赖：Node.js、MySQL
-- 必需配置：根目录 `.env`
-- 推荐部署：Node 服务器；PM2 可用于进程守护；Docker 可作为后续增强
-- 生产环境建议通过 Nginx 反向代理 `/api` 到 Node 服务
-
-## MySQL 部署
-
-- 数据库名：`coffee`
-- 字符集：`utf8mb4`
-- 初始化命令：`npm run db:init`
-- 种子命令：`npm run db:seed`
-- 生产环境不要使用弱密码
-- 生产环境应定期备份数据库
-
-## 生产环境变量
-
-根目录 `.env.example` 用于后端：
-
-```text
-NODE_ENV=production
-SERVER_PORT=4173
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_NAME=coffee
-DB_USER=your_user
-DB_PASSWORD=your_password
-JWT_SECRET=replace_with_a_long_random_secret
-CORS_ORIGIN=https://your-web-domain.com,https://your-admin-domain.com
-SMOKE_ADMIN_USERNAME=admin
-SMOKE_ADMIN_PASSWORD=admin123456
-```
-
-前台与后台都需要在构建时配置：
-
-```text
-VITE_API_BASE_URL=https://your-api-domain.com/api
-```
-
-注意：
-
-- 不要提交真实数据库密码
-- 不要提交真实 `JWT_SECRET`
-- `DB_NAME` 必须保持为 `coffee`
-- `CORS_ORIGIN` 需要同时包含前台和后台真实来源
-
-## Nginx 示例
-
-以下示例仅说明部署方式，不包含真实域名、IP 或密码。
-
-```nginx
-server {
-  listen 80;
-  server_name your-web-domain.com;
-
-  root /var/www/coffee-book/web;
-  index index.html;
-
-  location / {
-    try_files $uri $uri/ /index.html;
-  }
-}
-
-server {
-  listen 80;
-  server_name your-admin-domain.com;
-
-  root /var/www/coffee-book/admin;
-  index index.html;
-
-  location / {
-    try_files $uri $uri/ /index.html;
-  }
-}
-
-server {
-  listen 80;
-  server_name your-api-domain.com;
-
-  location /api/ {
-    proxy_pass http://127.0.0.1:4173/api/;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
-}
-```
-
-说明：
-
-- `dist/web` 指向前台静态资源目录
-- `dist/admin` 指向后台静态资源目录
-- `/api` 反向代理到 Node 后端服务
-- Vue history 路由必须 fallback 到 `index.html`
-- 前台和后台建议使用不同域名或子域名
-
-## PM2 建议
-
-PM2 不是项目必需依赖，只作为生产进程守护建议。
-
-```bash
-npm install -g pm2
-pm2 start npm --name coffee-book-api -- run start
-pm2 logs coffee-book-api
-pm2 status
-pm2 save
-pm2 startup
-```
-
-部署前确认服务器已经配置 `.env`、MySQL 可连接，并完成 `npm run db:init`。
-
-## Smoke Test
+## 测试命令
 
 启动后端后执行：
 
@@ -214,29 +144,102 @@ pm2 startup
 npm run smoke:api
 ```
 
-Smoke Test 覆盖健康检查、管理员登录、`/auth/me`、前台列表、后台权限、普通用户 403、购物车、订单、活动、社区和预约空间接口。
+Smoke 测试覆盖健康检查、前后台登录、权限隔离、通知列表、商品列表、购物车、订单、立即购买支付审核、社区、活动、空间、404 和统一错误格式。
 
-## 默认管理员账号
+## 默认账号
+
+默认管理员由 seed 脚本写入：
 
 ```text
 username: admin
 password: admin123456
 ```
 
-生产环境请不要长期使用默认弱口令。
+测试用户可执行 `npm run db:seed` 后查看 `server/db/seed.js` 中的手机号账号；也可以直接在前台注册新用户。
 
-## 安全说明
+## 重要功能说明
 
-- `.env` 不提交到 Git
-- `node_modules/` 不提交到 Git
-- `dist/` 不提交到 Git
-- JWT 密钥从 `JWT_SECRET` 读取
-- CORS 通过 `CORS_ORIGIN` 配置
-- 后台 API 使用 `requireAdmin`
-- 普通用户订单按 `user_id` 隔离
-- SQL 写入与查询使用参数化执行
-- 后台写操作保留 `audit_logs`
+### Express 后端
 
-## 未接入能力
+后端入口为 `server/index.js`，使用 Express 提供 API 服务，包含：
 
-项目暂未接入真实支付、文件上传、短信、邮件、WebSocket 实时通知、第三方推荐算法等外部服务。当前支付流程为演示用状态流转。
+- JSON 与 URL encoded 请求体解析
+- CORS 配置
+- `/api` 前缀
+- `/uploads` 静态资源访问
+- 统一 404
+- 统一错误处理
+
+### 文件上传
+
+上传使用 Multer，本地上传文件保存在：
+
+```text
+server/public/uploads/
+```
+
+当前已支持用户头像上传、社区图片/视频上传、上传记录与后台上传文件管理。生产环境建议迁移到对象存储，并增加更严格的内容安全策略。
+
+### 通知机制
+
+通知数据存储在 `user_notifications`，用户端支持通知列表、未读数量、单条已读、全部已读、删除、类型筛选和导航角标。
+
+已接入的触发场景包括注册欢迎通知、订单状态通知、预约通知、社区审核通知，以及后台创建系统通知接口。
+
+### 操作日志
+
+后台操作日志复用并扩展 `audit_logs`。管理员登录、商品操作、订单状态、预约状态、社区审核、通知创建、上传文件删除等关键操作会写入日志。后台提供操作日志列表、筛选、搜索、分页、详情弹窗和导出预留提示。
+
+### 商品分类
+
+商城只保留两个一级分类：
+
+- 咖啡商品：能直接饮用的咖啡，例如咖啡、咖啡豆、挂耳咖啡、现磨咖啡、冷萃咖啡、拿铁、美式、卡布奇诺等
+- 文创商品：不能直接饮用的周边、器具和礼盒，例如咖啡杯、杯子、帆布袋、笔记本、书签、明信片、咖啡器具、手冲壶、滤纸、磨豆机、周边礼盒、文创礼盒等
+
+数据库字段：
+
+```text
+products.product_type
+products.supports_brew_method
+```
+
+无法识别的旧商品默认迁移为文创商品，不会默认归入咖啡商品。
+
+### 咖啡制作方式
+
+咖啡商品支持制作方式：
+
+- `self_grind`：自己手磨
+- `barista`：咖啡师制作
+
+用户在咖啡商品详情页选择制作方式后，购物车、结算、订单明细和后台订单详情都会保留并展示该字段。文创商品不显示制作方式。
+
+数据库字段：
+
+```text
+cart_items.brew_method
+order_items.brew_method
+```
+
+同一咖啡商品如果制作方式不同，会在购物车中拆分为不同条目。
+
+## 本地联调建议
+
+1. 执行 `npm run db:init`
+2. 启动 `npm run dev:server`
+3. 启动 `npm run dev:web`
+4. 启动 `npm run dev:admin`
+5. 前台注册用户并确认协议勾选、欢迎通知和通知角标
+6. 在商城按咖啡商品 / 文创商品筛选
+7. 对咖啡商品选择不同制作方式加入购物车
+8. 结算并查看用户订单详情
+9. 登录后台查看订单详情、社区内容管理、上传文件管理和操作日志
+
+## 已知风险
+
+- `npm audit` 中如仍存在 high severity vulnerabilities，需要后续评估依赖升级和兼容性。
+- 不建议直接执行破坏性数据库重置；正式环境迁移前请备份数据库。
+- 上传文件当前使用本地存储，生产环境建议改为对象存储。
+- 当前支付流程为演示状态流转，不接入真实支付网关。
+- 本地上传目录和数据库记录需要在生产环境设计备份、清理与访问控制策略。

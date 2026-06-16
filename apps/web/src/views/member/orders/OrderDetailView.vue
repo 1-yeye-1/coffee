@@ -47,6 +47,10 @@ function formatDate(value) {
   }).format(new Date(value))
 }
 
+function brewMethodText(value) {
+  return { self_grind: '自己手磨', barista: '咖啡师制作' }[value] || '-'
+}
+
 function notify(title, message) {
   toastVisible.value = false
   toastTitle.value = title
@@ -76,7 +80,7 @@ watch(() => route.params.id, loadOrder)
 onMounted(loadOrder)
 
 function buyAgain() {
-  order.value.items.forEach((item) => cartStore.addItem(item, item.quantity))
+  order.value.items.forEach((item) => cartStore.addItem(item, item.quantity, { brewMethod: item.brewMethod }))
   notify('已重新加入购物车', '订单商品已加入购物车。')
 }
 </script>
@@ -124,6 +128,7 @@ function buyAgain() {
               <div class="commerce-product__copy">
                 <h3>{{ item.name }}</h3>
                 <p>{{ item.category }}<template v-if="item.flavor?.length"> / {{ item.flavor.join(' / ') }}</template></p>
+                <p v-if="item.brewMethod">制作方式：{{ brewMethodText(item.brewMethod) }}</p>
                 <strong>¥{{ item.price }} × {{ item.quantity }}</strong>
               </div>
             </div>

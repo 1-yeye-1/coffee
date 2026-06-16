@@ -7,7 +7,11 @@ export function registerCartRoutes(router) {
 
   router.post('/api/cart/items', requireUser, async (req, res) => {
     if (!req.body.productId) return failure(res, 400, 'productId 必填')
-    return success(res, await addCartItem(req.user.id, req.body.productId, req.body.quantity), '已加入购物车')
+    return success(
+      res,
+      await addCartItem(req.user.id, req.body.productId, req.body.quantity, req.body.brewMethod),
+      '已加入购物车',
+    )
   })
 
   router.patch('/api/cart/items/:id', requireUser, async (req, res) => {

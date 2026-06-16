@@ -19,12 +19,18 @@ function totals(items) {
   }
 }
 
+function normalizeBrewMethod(product, brewMethod) {
+  if (!product || product.product_type !== 'coffee' || !Number(product.supports_brew_method)) return 'none'
+  return brewMethod === 'self_grind' ? 'self_grind' : 'barista'
+}
+
 export async function getCart(userId, connection = pool) {
   const cartId = await getOrCreateCart(userId, connection)
   const [rows] = await connection.execute(
     `SELECT ci.id, ci.product_id AS productId, ci.quantity, ci.selected,
-      p.slug, p.name, p.category, p.price, p.original_price AS originalPrice,
-      p.stock, p.status, p.flavor, p.origin, p.tone
+      ci.brew_method AS brewMethod, p.slug, p.name, p.category,
+      p.product_type AS productType, p.supports_brew_method AS supportsBrewMethod,
+      p.price, p.original_price AS originalPrice, p.stock, p.status, p.flavor, p.origin, p.tone
      FROM cart_items ci JOIN products p ON p.id = ci.product_id
      WHERE ci.cart_id = ? ORDER BY ci.created_at DESC`, [cartId],
   )
@@ -32,29 +38,40 @@ export async function getCart(userId, connection = pool) {
     ...item, id: Number(item.id), productId: Number(item.productId), price: Number(item.price),
     originalPrice: item.originalPrice == null ? null : Number(item.originalPrice),
     quantity: Number(item.quantity), stock: Number(item.stock), selected: Boolean(item.selected),
+    productType: item.productType || 'cultural',
+    supportsBrewMethod: Boolean(item.supportsBrewMethod),
+    brewMethod: item.brewMethod === 'none' ? null : item.brewMethod,
     flavor: typeof item.flavor === 'string' ? JSON.parse(item.flavor) : item.flavor,
   }))
   return { id: cartId, items, ...totals(items) }
 }
 
-export async function addCartItem(userId, productId, quantity) {
+export async function addCartItem(userId, productId, quantity, brewMethod = null) {
   const amount = Math.max(1, Number(quantity) || 1)
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
-    const [products] = await connection.execute('SELECT id, stock FROM products WHERE id = ? FOR UPDATE', [productId])
+    const [products] = await connection.execute(
+      'SELECT id, stock, product_type, supports_brew_method FROM products WHERE id = ? FOR UPDATE',
+      [productId],
+    )
     const product = products[0]
     if (!product) throw Object.assign(new Error('商品不存在'), { statusCode: 404 })
+    const normalizedBrewMethod = normalizeBrewMethod(product, brewMethod)
     const cartId = await getOrCreateCart(userId, connection)
     const [existing] = await connection.execute(
-      'SELECT id, quantity FROM cart_items WHERE cart_id = ? AND product_id = ? LIMIT 1', [cartId, productId],
+      'SELECT id, quantity FROM cart_items WHERE cart_id = ? AND product_id = ? AND brew_method = ? LIMIT 1',
+      [cartId, productId, normalizedBrewMethod],
     )
     const nextQuantity = Number(existing[0]?.quantity || 0) + amount
     if (nextQuantity > product.stock) throw Object.assign(new Error('商品库存不足'), { statusCode: 400 })
     if (existing[0]) {
       await connection.execute('UPDATE cart_items SET quantity = ?, selected = 1 WHERE id = ?', [nextQuantity, existing[0].id])
     } else {
-      await connection.execute('INSERT INTO cart_items (cart_id, product_id, quantity, selected) VALUES (?, ?, ?, 1)', [cartId, productId, amount])
+      await connection.execute(
+        'INSERT INTO cart_items (cart_id, product_id, brew_method, quantity, selected) VALUES (?, ?, ?, ?, 1)',
+        [cartId, productId, normalizedBrewMethod, amount],
+      )
     }
     await connection.commit()
     return getCart(userId)

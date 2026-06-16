@@ -17,10 +17,16 @@ const cartStore = useCartStore()
 const orderStore = useOrderStore()
 const productsStore = useProductsStore()
 const quantity = ref(1)
+const brewMethod = ref('barista')
 const toastVisible = ref(false)
 const toastTitle = ref('')
 const toastMessage = ref('')
 const product = computed(() => productsStore.currentProduct)
+const supportsBrewMethod = computed(() => product.value?.productType === 'coffee' && product.value?.supportsBrewMethod !== false)
+const brewMethodOptions = [
+  { label: '自己手磨', value: 'self_grind' },
+  { label: '咖啡师制作', value: 'barista' },
+]
 const recommendations = computed(() => {
   if (!product.value) return []
   const sameCategory = products.filter((item) => item.id !== product.value.id && item.category === product.value.category)
@@ -37,6 +43,7 @@ const services = [
 
 function loadProduct() {
   quantity.value = 1
+  brewMethod.value = 'barista'
   return productsStore.fetchProductDetail(route.params.slug)
 }
 
@@ -54,7 +61,7 @@ function notify(title, message) {
 
 function addToCart() {
   if (!product.value) return
-  cartStore.addItem(product.value, quantity.value)
+  cartStore.addItem(product.value, quantity.value, { brewMethod: supportsBrewMethod.value ? brewMethod.value : null })
   notify('已加入购物车', `已加入 ${quantity.value} 件商品。`)
 }
 
@@ -68,6 +75,7 @@ async function buyNow() {
     const order = await orderStore.buyNow({
       productId: product.value.id,
       quantity: quantity.value,
+      brewMethod: supportsBrewMethod.value ? brewMethod.value : null,
       deliveryType: 'pickup',
       pickupStore: 'city',
       paymentMethod: 'wechat',
@@ -110,6 +118,23 @@ async function buyNow() {
           <div class="cb-cluster">
             <BaseBadge v-for="item in product.flavor" :key="item" variant="premium">{{ item }}</BaseBadge>
           </div>
+          <section v-if="supportsBrewMethod" class="brew-method-picker" aria-labelledby="brew-method-title">
+            <div>
+              <strong id="brew-method-title">制作方式</strong>
+              <p>咖啡商品可选择自己手磨，或由咖啡师为你制作。</p>
+            </div>
+            <div class="brew-method-picker__options">
+              <label
+                v-for="option in brewMethodOptions"
+                :key="option.value"
+                class="brew-method-option"
+                :class="{ 'is-active': brewMethod === option.value }"
+              >
+                <input v-model="brewMethod" type="radio" name="brew-method" :value="option.value" />
+                <span>{{ option.label }}</span>
+              </label>
+            </div>
+          </section>
           <div class="quantity-control" aria-label="商品数量">
             <button type="button" aria-label="减少数量" :disabled="quantity <= 1" @click="quantity -= 1">-</button>
             <span aria-live="polite">{{ quantity }}</span>
@@ -185,3 +210,53 @@ async function buyNow() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.brew-method-picker {
+  display: grid;
+  gap: var(--cb-space-3);
+  padding: var(--cb-space-4);
+  border: 1px solid color-mix(in srgb, var(--cb-color-coffee) 12%, transparent);
+  border-radius: var(--cb-radius-lg);
+  background: color-mix(in srgb, var(--cb-color-cream) 86%, white);
+}
+
+.brew-method-picker strong {
+  color: var(--cb-color-coffee);
+}
+
+.brew-method-picker p {
+  margin: var(--cb-space-1) 0 0;
+  color: var(--cb-text-muted);
+  font-size: var(--cb-font-size-sm);
+}
+
+.brew-method-picker__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cb-space-2);
+}
+
+.brew-method-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cb-space-2);
+  min-height: 2.5rem;
+  padding: 0 var(--cb-space-4);
+  border: 1px solid color-mix(in srgb, var(--cb-color-coffee) 14%, transparent);
+  border-radius: var(--cb-radius-pill);
+  color: var(--cb-color-coffee);
+  cursor: pointer;
+  background: white;
+}
+
+.brew-method-option input {
+  accent-color: var(--cb-color-coffee);
+}
+
+.brew-method-option.is-active {
+  border-color: color-mix(in srgb, var(--cb-color-gold) 78%, var(--cb-color-coffee));
+  background: color-mix(in srgb, var(--cb-color-gold) 18%, white);
+  box-shadow: var(--cb-shadow-soft);
+}
+</style>

@@ -14,6 +14,10 @@ function toMysqlTimestamp(value) {
   return new Date(value).toISOString().slice(0, 19).replace('T', ' ')
 }
 
+function productTypeOf(product) {
+  return product.productType === 'coffee' ? 'coffee' : 'cultural'
+}
+
 async function seedAdmin(connection) {
   const passwordHash = await hashPassword('admin123456')
   await connection.execute(
@@ -180,12 +184,14 @@ async function seedBooks(connection) {
 
 async function seedProducts(connection) {
   const sql = `INSERT INTO products
-    (slug, name, category, price, original_price, stock, status, sales, flavor,
+    (slug, name, category, product_type, supports_brew_method, price, original_price, stock, status, sales, flavor,
      origin, roast, description, scene, storage, tone)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
       name = VALUES(name),
       category = VALUES(category),
+      product_type = VALUES(product_type),
+      supports_brew_method = VALUES(supports_brew_method),
       price = VALUES(price),
       original_price = VALUES(original_price),
       stock = VALUES(stock),
@@ -200,10 +206,13 @@ async function seedProducts(connection) {
       tone = VALUES(tone)`
 
   for (const product of products) {
+    const productType = productTypeOf(product)
     await connection.execute(sql, [
       product.slug,
       product.name,
       product.category,
+      productType,
+      productType === 'coffee' ? 1 : 0,
       product.price,
       product.originalPrice,
       product.stock,

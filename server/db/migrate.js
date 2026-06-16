@@ -21,6 +21,10 @@ async function migrate() {
   try {
     await connection.query(sql)
     await ensureColumn(connection, 'coffee', 'orders', 'source', "VARCHAR(30) NOT NULL DEFAULT 'cart' AFTER user_id")
+    await ensureColumn(connection, 'coffee', 'products', 'product_type', "VARCHAR(40) NOT NULL DEFAULT 'coffee' AFTER category")
+    await ensureColumn(connection, 'coffee', 'products', 'supports_brew_method', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER product_type')
+    await ensureColumn(connection, 'coffee', 'cart_items', 'brew_method', "VARCHAR(40) NOT NULL DEFAULT 'none' AFTER product_id")
+    await ensureColumn(connection, 'coffee', 'order_items', 'brew_method', 'VARCHAR(40) NULL AFTER product_category')
     await ensureColumn(connection, 'coffee', 'payments', 'expires_at', 'TIMESTAMP NULL AFTER paid_at')
     await ensureColumn(connection, 'coffee', 'payments', 'updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at')
     await ensureColumn(connection, 'coffee', 'audit_logs', 'operator_type', "VARCHAR(30) NOT NULL DEFAULT 'user' AFTER operator_id")
@@ -36,8 +40,12 @@ async function migrate() {
     await ensureColumn(connection, 'coffee', 'posts', 'media_url', 'VARCHAR(500) NULL AFTER content')
     await ensureColumn(connection, 'coffee', 'posts', 'media_type', 'VARCHAR(20) NULL AFTER media_url')
     await connection.query('UPDATE `coffee`.`user_notifications` SET is_read = 1 WHERE read_at IS NOT NULL')
+    await migrateProductTypes(connection)
     await dropForeignKeyIfExists(connection, 'coffee', 'audit_logs', 'fk_audit_logs_operator')
+    await dropIndexIfExists(connection, 'coffee', 'cart_items', 'uk_cart_items_cart_product')
     await ensureIndex(connection, 'coffee', 'users', 'uk_users_phone', 'UNIQUE KEY uk_users_phone (phone)')
+    await ensureIndex(connection, 'coffee', 'products', 'idx_products_product_type', 'KEY idx_products_product_type (product_type)')
+    await ensureIndex(connection, 'coffee', 'cart_items', 'uk_cart_items_cart_product_brew', 'UNIQUE KEY uk_cart_items_cart_product_brew (cart_id, product_id, brew_method)')
     await ensureIndex(connection, 'coffee', 'audit_logs', 'idx_audit_logs_operator', 'KEY idx_audit_logs_operator (operator_type, operator_id)')
     await ensureIndex(connection, 'coffee', 'audit_logs', 'idx_audit_logs_action', 'KEY idx_audit_logs_action (action)')
     await ensureIndex(connection, 'coffee', 'user_notifications', 'idx_user_notifications_type', 'KEY idx_user_notifications_type (type)')
@@ -67,6 +75,40 @@ async function removeLegacyAdminUsers(connection) {
   )
 }
 
+async function migrateProductTypes(connection) {
+  const coffeePattern = [
+    '%咖啡%', '%咖啡豆%', '%挂耳%', '%拿铁%', '%美式%', '%冷萃%', '%现磨%', '%卡布奇诺%', '%饮品%',
+    '%鍜栧暋%', '%鍐疯悆%', '%鎷块搧%',
+  ]
+  const culturalPattern = [
+    '%杯子%', '%杯具%', '%书签%', '%笔记本%', '%帆布袋%', '%器具%', '%礼盒%', '%周边%',
+    '%滤纸%', '%手冲壶%', '%磨豆机%', '%咖啡杯%', '%明信片%',
+    '%鏉叿%', '%绀肩洅%',
+  ]
+  const coffeeWhere = coffeePattern.map(() => '(category LIKE ? OR name LIKE ?)').join(' OR ')
+  const culturalWhere = culturalPattern.map(() => '(category LIKE ? OR name LIKE ?)').join(' OR ')
+  const coffeeParams = coffeePattern.flatMap((pattern) => [pattern, pattern])
+  const culturalParams = culturalPattern.flatMap((pattern) => [pattern, pattern])
+
+  await connection.query(
+    `UPDATE \`coffee\`.\`products\`
+     SET product_type = 'cultural', supports_brew_method = 0
+     WHERE ${culturalWhere}`,
+    culturalParams,
+  )
+  await connection.query(
+    `UPDATE \`coffee\`.\`products\`
+     SET product_type = 'coffee', supports_brew_method = 1
+     WHERE (${coffeeWhere}) AND NOT (${culturalWhere})`,
+    [...coffeeParams, ...culturalParams],
+  )
+  await connection.query(
+    "UPDATE `coffee`.`products` SET product_type = 'cultural', supports_brew_method = 0 WHERE product_type NOT IN ('coffee', 'cultural') OR product_type IS NULL",
+  )
+  await connection.query("UPDATE `coffee`.`products` SET supports_brew_method = 1 WHERE product_type = 'coffee'")
+  await connection.query("UPDATE `coffee`.`products` SET supports_brew_method = 0 WHERE product_type = 'cultural'")
+}
+
 async function ensureColumn(connection, schema, table, column, definition) {
   const [rows] = await connection.execute(
     `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
@@ -86,6 +128,17 @@ async function ensureIndex(connection, schema, table, indexName, definition) {
   )
   if (Number(rows[0].total) === 0) {
     await connection.query(`ALTER TABLE \`${schema}\`.\`${table}\` ADD ${definition}`)
+  }
+}
+
+async function dropIndexIfExists(connection, schema, table, indexName) {
+  const [rows] = await connection.execute(
+    `SELECT COUNT(*) AS total FROM information_schema.STATISTICS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?`,
+    [schema, table, indexName],
+  )
+  if (Number(rows[0].total) > 0) {
+    await connection.query(`ALTER TABLE \`${schema}\`.\`${table}\` DROP INDEX \`${indexName}\``)
   }
 }
 

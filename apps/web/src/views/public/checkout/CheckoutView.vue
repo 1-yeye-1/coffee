@@ -26,6 +26,10 @@ const couponOptions = [
 ]
 const snapshot = computed(() => checkoutStore.buildCheckoutSnapshot(cartStore.selectedItems))
 
+function brewMethodText(value) {
+  return { self_grind: '自己手磨', barista: '咖啡师制作' }[value] || '-'
+}
+
 function validate() {
   if (!cartStore.selectedItems.length) return false
   if (checkoutStore.deliveryType === 'delivery') {
@@ -165,7 +169,10 @@ async function submitOrder() {
           <h2 id="checkout-summary-title">订单摘要</h2>
           <div class="checkout-items">
             <div v-for="item in snapshot.items" :key="item.id" class="checkout-item">
-              <span>{{ item.name }} × {{ item.quantity }}</span>
+              <span>
+                {{ item.name }} × {{ item.quantity }}
+                <small v-if="item.brewMethod">制作方式：{{ brewMethodText(item.brewMethod) }}</small>
+              </span>
               <strong>¥{{ item.lineTotal }}</strong>
             </div>
           </div>
@@ -201,5 +208,14 @@ async function submitOrder() {
 .policy-hint a {
   color: var(--cb-color-coffee);
   font-weight: var(--cb-font-semibold);
+}
+
+.checkout-item span {
+  display: grid;
+  gap: var(--cb-space-1);
+}
+
+.checkout-item small {
+  color: var(--cb-text-muted);
 }
 </style>

@@ -22,13 +22,22 @@ const defaultSettings = {
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 
+function normalizeProducts(items) {
+  return clone(items).map((item) => ({
+    ...item,
+    productType: item.productType === 'coffee' ? 'coffee' : 'cultural',
+    supportsBrewMethod: item.productType === 'coffee' ? item.supportsBrewMethod !== false : false,
+    enabled: item.enabled ?? item.stock > 0,
+  }))
+}
+
 function initialState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
     return {
       navigationCollapsed: false,
       books: saved.books || clone(books).map((item) => ({ ...item, enabled: true })),
-      products: saved.products || clone(products).map((item) => ({ ...item, enabled: item.stock > 0 })),
+      products: normalizeProducts(saved.products || products),
       events: saved.events || clone(events),
       users: saved.users || clone(users),
       posts: saved.posts || clone(seedPosts).map((item, index) => ({
@@ -49,7 +58,7 @@ function initialState() {
     return {
       navigationCollapsed: false,
       books: clone(books).map((item) => ({ ...item, enabled: true })),
-      products: clone(products).map((item) => ({ ...item, enabled: item.stock > 0 })),
+      products: normalizeProducts(products),
       events: clone(events),
       users: clone(users),
       posts: clone(seedPosts).map((item) => ({ ...item, reviewStatus: 'published', featured: false })),

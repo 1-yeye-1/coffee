@@ -69,7 +69,8 @@ function normalizeOrder(row) {
 async function loadOrderItems(orderId, connection = pool) {
   const [rows] = await connection.execute(
     `SELECT oi.id, oi.product_id AS productId, oi.product_name AS name, oi.product_category AS category,
-      oi.product_image_tone AS tone, oi.price, oi.quantity, oi.subtotal AS lineTotal, oi.created_at AS createdAt,
+      oi.brew_method AS brewMethod, oi.product_image_tone AS tone, oi.price, oi.quantity,
+      oi.subtotal AS lineTotal, oi.created_at AS createdAt,
       p.slug, p.stock, p.status, p.flavor, p.origin
      FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id
      WHERE oi.order_id = ? ORDER BY oi.id`,
@@ -152,9 +153,9 @@ async function insertOrder(userId, payload, snapshots, source, connection) {
 
   for (const item of snapshots) {
     await connection.execute(
-      `INSERT INTO order_items (order_id, product_id, product_name, product_category, product_image_tone, price, quantity, subtotal)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [result.insertId, item.id, item.name, item.category, item.tone, item.price, item.quantity, item.lineTotal],
+      `INSERT INTO order_items (order_id, product_id, product_name, product_category, brew_method, product_image_tone, price, quantity, subtotal)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [result.insertId, item.id, item.name, item.category, item.brewMethod || null, item.tone, item.price, item.quantity, item.lineTotal],
     )
     await connection.execute('UPDATE products SET stock = stock - ? WHERE id = ?', [item.quantity, item.id])
   }
@@ -197,7 +198,7 @@ async function buildCartSnapshots(userId, connection) {
     if (Number(product.stock) < Number(item.quantity)) throw Object.assign(new Error(`${product.name} 库存不足`), { statusCode: 400 })
     const price = Number(product.price)
     const quantity = Number(item.quantity)
-    snapshots.push({ ...product, price, quantity, lineTotal: price * quantity })
+    snapshots.push({ ...product, brewMethod: item.brewMethod || null, price, quantity, lineTotal: price * quantity })
   }
   return { snapshots, cartItemIds: selectedItems.map((item) => item.id) }
 }
@@ -206,14 +207,17 @@ async function buildBuyNowSnapshots(payload, connection) {
   const productId = Number(payload.productId)
   const quantity = Math.max(1, Number(payload.quantity) || 1)
   const [rows] = await connection.execute(
-    "SELECT id, name, category, price, stock, tone FROM products WHERE id = ? AND status <> 'inactive' FOR UPDATE",
+    "SELECT id, name, category, product_type AS productType, supports_brew_method AS supportsBrewMethod, price, stock, tone FROM products WHERE id = ? AND status <> 'inactive' FOR UPDATE",
     [productId],
   )
   const product = rows[0]
   if (!product) throw Object.assign(new Error('商品不存在或已下架'), { statusCode: 404 })
   if (Number(product.stock) < quantity) throw Object.assign(new Error(`${product.name} 库存不足`), { statusCode: 400 })
   const price = Number(product.price)
-  return [{ ...product, price, quantity, lineTotal: price * quantity }]
+  const brewMethod = product.productType === 'coffee' && Number(product.supportsBrewMethod)
+    ? (payload.brewMethod === 'self_grind' ? 'self_grind' : 'barista')
+    : null
+  return [{ ...product, brewMethod, price, quantity, lineTotal: price * quantity }]
 }
 
 export async function createOrder(userId, payload) {

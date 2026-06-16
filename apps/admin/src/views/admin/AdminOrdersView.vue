@@ -79,6 +79,10 @@ async function updateStatus(nextStatus) {
   current.value = await adminStore.updateAdminOrderStatus(current.value.id, nextStatus)
 }
 
+function brewMethodText(value) {
+  return { self_grind: '自己手磨', barista: '咖啡师制作' }[value] || '-'
+}
+
 onMounted(() => adminStore.fetchAdminOrders())
 </script>
 
@@ -121,7 +125,10 @@ onMounted(() => adminStore.fetchAdminOrders())
           <h3>商品清单</h3>
           <div class="admin-ranking">
             <div v-for="item in current.items" :key="item.id" class="admin-ranking__item">
-              <span>{{ item.name }} × {{ item.quantity }}</span>
+              <span>
+                {{ item.name }} × {{ item.quantity }}
+                <small>制作方式：{{ brewMethodText(item.brewMethod) }}</small>
+              </span>
               <strong>¥{{ item.lineTotal || item.price * item.quantity }}</strong>
             </div>
           </div>

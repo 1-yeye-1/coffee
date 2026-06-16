@@ -229,7 +229,28 @@ export const products = [
   },
 ]
 
+const productCategoryMap = {
+  'ethiopia-yirgacheffe': { category: '现磨咖啡', productType: 'coffee' },
+  'colombia-cold-brew': { category: '冷萃咖啡', productType: 'coffee' },
+  'caramel-latte': { category: '咖啡', productType: 'coffee' },
+  'coffee-bean-gift-box': { category: '周边礼盒', productType: 'cultural' },
+  'guatemala-antigua': { category: '咖啡豆', productType: 'coffee' },
+  'signature-espresso-blend': { category: '咖啡豆', productType: 'coffee' },
+  'ceramic-pour-over': { category: '咖啡器具', productType: 'cultural' },
+  'city-travel-mug': { category: '咖啡杯', productType: 'cultural' },
+  'kenya-aa': { category: '现磨咖啡', productType: 'coffee' },
+  'oat-flat-white': { category: '咖啡', productType: 'coffee' },
+  'nitro-cold-brew': { category: '冷萃咖啡', productType: 'coffee' },
+  'reader-gift-set': { category: '文创礼盒', productType: 'cultural' },
+}
+
+products.forEach((product) => {
+  const normalized = productCategoryMap[product.slug] || { category: product.category, productType: 'cultural' }
+  product.category = normalized.category
+  product.productType = normalized.productType
+  product.supportsBrewMethod = normalized.productType === 'coffee'
+})
+
 export function getProductBySlug(slug) {
   return products.find((product) => product.slug === slug)
 }
-

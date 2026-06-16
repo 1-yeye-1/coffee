@@ -10,11 +10,15 @@ import '@/assets/styles/pages/commerce.css'
 const router = useRouter()
 const cartStore = useCartStore()
 const recommendations = computed(() =>
-  products.filter((product) => product.stock > 0 && !cartStore.items.some((item) => item.id === product.id)).slice(0, 3),
+  products.filter((product) => product.stock > 0 && !cartStore.items.some((item) => (item.productId || item.id) === product.id)).slice(0, 3),
 )
 
 function addRecommendation(product) {
   cartStore.addItem(product, 1)
+}
+
+function brewMethodText(value) {
+  return { self_grind: '自己手磨', barista: '咖啡师制作' }[value] || '-'
 }
 
 onMounted(() => cartStore.fetchCart())
@@ -72,6 +76,7 @@ onMounted(() => cartStore.fetchCart())
                     <div class="commerce-product__copy">
                       <h3>{{ item.name }}</h3>
                       <p>{{ item.category }} · {{ item.flavor.join(' · ') }}</p>
+                      <p v-if="item.brewMethod">制作方式：{{ brewMethodText(item.brewMethod) }}</p>
                       <div class="cb-cluster">
                         <BaseBadge :variant="item.stock > 0 ? 'success' : 'danger'">{{ item.status }}</BaseBadge>
                         <strong>¥{{ item.price }}</strong>

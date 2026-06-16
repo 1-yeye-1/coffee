@@ -10,6 +10,8 @@ function normalizeProduct(product) {
     ...product,
     price: Number(product.price),
     originalPrice: product.originalPrice === null ? null : Number(product.originalPrice),
+    productType: product.productType === 'coffee' ? 'coffee' : 'cultural',
+    supportsBrewMethod: product.productType === 'coffee' ? product.supportsBrewMethod !== false : false,
     flavor: Array.isArray(product.flavor) ? product.flavor : [],
   }
 }
@@ -21,8 +23,9 @@ function localProducts(params = {}) {
   let items = products.filter((product) => {
     const matchesKeyword = !keyword || [product.name, product.origin, product.description, product.flavor.join(' ')].join(' ').toLowerCase().includes(keyword)
     const matchesCategory = !params.category || params.category === 'all' || product.category === params.category
+    const matchesProductType = !params.productType || params.productType === 'all' || product.productType === params.productType
     const matchesStatus = !params.status || product.status === params.status
-    return matchesKeyword && matchesCategory && matchesStatus
+    return matchesKeyword && matchesCategory && matchesProductType && matchesStatus
   })
   const sorters = {
     price_asc: (a, b) => a.price - b.price,

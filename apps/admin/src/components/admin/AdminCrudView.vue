@@ -64,7 +64,8 @@ const filteredItems = computed(() => {
 function resetForm(item = {}) {
   props.fields.forEach((field) => {
     const fallback = field.type === 'number' ? 0 : field.default ?? ''
-    form[field.key] = Array.isArray(item[field.key]) ? item[field.key].join('、') : item[field.key] ?? fallback
+    if (field.type === 'checkbox') form[field.key] = Boolean(item[field.key] ?? fallback)
+    else form[field.key] = Array.isArray(item[field.key]) ? item[field.key].join('、') : item[field.key] ?? fallback
   })
 }
 
@@ -85,6 +86,7 @@ async function save() {
   props.fields.forEach((field) => {
     let value = form[field.key]
     if (field.type === 'number') value = Number(value)
+    if (field.type === 'checkbox') value = Boolean(value)
     if (field.array) value = String(value).split(/[、,]/).map((item) => item.trim()).filter(Boolean)
     payload[field.key] = value
   })
@@ -163,6 +165,7 @@ onMounted(async () => {
       <BaseTable :columns="columns" :items="filteredItems" :loading="loading" :empty-text="`暂无匹配${singular}`">
         <template #cell-visual="{ item }"><span class="admin-table-visual">{{ (item.title || item.name).slice(0, 1) }}</span></template>
         <template #cell-primary="{ item }"><div class="admin-cell-primary"><strong>{{ item.title || item.name }}</strong><small>{{ item.author || item.origin || item.location }}</small></div></template>
+        <template #cell-productType="{ item }"><BaseBadge :variant="item.productType === 'coffee' ? 'premium' : 'neutral'">{{ item.productType === 'coffee' ? '咖啡商品' : '文创商品' }}</BaseBadge></template>
         <template #cell-category="{ item }"><BaseBadge variant="neutral">{{ item.category }}</BaseBadge></template>
         <template #cell-status="{ item }"><BaseBadge :variant="item.enabled === false ? 'neutral' : item.stock === 0 ? 'danger' : 'success'">{{ item.enabled === false ? '已停用' : item.status || '启用' }}</BaseBadge></template>
         <template #cell-actions="{ item }"><div class="admin-row-actions"><BaseButton size="sm" variant="ghost" @click="openEdit(item)">编辑</BaseButton><BaseButton v-if="type === 'events'" size="sm" variant="ghost" @click="viewRegistrations(item)">查看报名</BaseButton><BaseButton size="sm" variant="ghost" @click="toggleItem(item)">{{ item.enabled === false ? '启用' : '停用' }}</BaseButton><BaseButton size="sm" variant="danger" @click="askDelete(item)">删除</BaseButton></div></template>
@@ -174,6 +177,10 @@ onMounted(async () => {
         <template v-for="field in fields" :key="field.key">
           <BaseTextarea v-if="field.type === 'textarea'" v-model="form[field.key]" :label="field.label" :rows="4" />
           <BaseSelect v-else-if="field.type === 'select'" v-model="form[field.key]" :label="field.label" :options="field.options" />
+          <label v-else-if="field.type === 'checkbox'" class="admin-checkbox-field">
+            <input v-model="form[field.key]" type="checkbox" />
+            <span>{{ field.label }}</span>
+          </label>
           <BaseInput v-else v-model="form[field.key]" :type="field.type || 'text'" :label="field.label" />
         </template>
         <div class="admin-actions"><BaseButton variant="ghost" type="button" @click="editorOpen = false">取消</BaseButton><BaseButton type="submit">保存</BaseButton></div>

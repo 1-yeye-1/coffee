@@ -23,17 +23,18 @@ const router = useRouter()
 const cartStore = useCartStore()
 const productsStore = useProductsStore()
 const keyword = ref('')
-const category = ref('全部')
+const productType = ref('all')
 const sort = ref('recommended')
 const page = ref(1)
 const toastVisible = ref(false)
 const pageSize = 8
 let requestTimer
 
-const categories = ['全部', '手冲咖啡', '冷萃', '拿铁', '咖啡豆', '杯具', '礼盒'].map((item) => ({
-  label: item,
-  value: item,
-}))
+const productTypes = [
+  { label: '全部', value: 'all' },
+  { label: '咖啡商品', value: 'coffee' },
+  { label: '文创商品', value: 'cultural' },
+]
 
 const sortOptions = [
   { label: '默认推荐', value: 'recommended' },
@@ -58,12 +59,12 @@ function loadProducts() {
     page: page.value,
     pageSize,
     keyword: keyword.value.trim(),
-    category: category.value === '全部' ? 'all' : category.value,
+    productType: productType.value,
     sort: sortMap[sort.value],
   })
 }
 
-watch([keyword, category, sort], () => {
+watch([keyword, productType, sort], () => {
   page.value = 1
   clearTimeout(requestTimer)
   requestTimer = setTimeout(loadProducts, 250)
@@ -73,7 +74,7 @@ onMounted(loadProducts)
 
 function clearFilters() {
   keyword.value = ''
-  category.value = '全部'
+  productType.value = 'all'
   sort.value = 'recommended'
 }
 
@@ -95,7 +96,7 @@ function addToCart(product) {
           <h1>咖啡商城</h1>
           <p>从手冲豆到城市随行杯，把咖啡馆带回你的日常。</p>
           <div class="catalog-hero__actions">
-            <BaseButton @click="category = '全部'">查看全部商品</BaseButton>
+            <BaseButton @click="productType = 'all'">查看全部商品</BaseButton>
             <BaseButton variant="outline" @click="sort = 'recommended'">今日推荐</BaseButton>
           </div>
         </div>
@@ -117,7 +118,7 @@ function addToCart(product) {
           </BaseInput>
           <BaseSelect v-model="sort" aria-label="商品排序" :options="sortOptions" />
         </div>
-        <BaseTabs v-model="category" class="catalog-tabs" :tabs="categories" />
+        <BaseTabs v-model="productType" class="catalog-tabs" :tabs="productTypes" />
       </div>
     </div>
 
