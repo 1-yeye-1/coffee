@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { resolveUploadUrl } from '@/api/upload'
 import { BaseBadge, BaseButton, BaseTextarea, BaseToast, EmptyState } from '@/components/base'
 import { useCommunityStore } from '@/stores/community'
 import '@/assets/styles/pages/engagement.css'
@@ -37,6 +38,10 @@ onMounted(() => {
           <article class="detail-panel post-article">
             <div class="post-card__author"><span class="avatar">{{ post.avatar }}</span><div><strong>{{ post.author }}</strong><small>{{ formatDate(post.createdAt) }}</small></div></div>
             <div><BaseBadge variant="neutral">{{ post.topic }}</BaseBadge><h1 class="page-title">{{ post.title }}</h1></div>
+            <div v-if="post.mediaUrl" class="post-media">
+              <img v-if="post.mediaType === 'image'" :src="resolveUploadUrl(post.mediaUrl)" alt="帖子图片" />
+              <video v-else controls :src="resolveUploadUrl(post.mediaUrl)">当前浏览器不支持视频预览。</video>
+            </div>
             <p class="post-article__body">{{ post.content }}</p>
             <div class="post-actions">
               <BaseButton size="sm" :variant="communityStore.likedIds.includes(post.id) ? 'primary' : 'outline'" @click="communityStore.toggleLike(post.id)">点赞 {{ post.likes }}</BaseButton>
@@ -58,3 +63,20 @@ onMounted(() => {
     <div class="page-toast"><BaseToast v-model="toastVisible" variant="success" title="评论成功">你的评论已保存到本地社区。</BaseToast></div>
   </div>
 </template>
+
+<style scoped>
+.post-media {
+  overflow: hidden;
+  border: 0.0625rem solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-xl);
+  background: var(--cb-bg-soft);
+}
+
+.post-media img,
+.post-media video {
+  display: block;
+  width: 100%;
+  max-height: 28rem;
+  object-fit: cover;
+}
+</style>

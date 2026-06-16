@@ -44,12 +44,18 @@ async function verifyAccount(req, res, expectedType) {
   return true
 }
 
-export function requireUser(req, res) {
-  return verifyAccount(req, res, 'user')
+export async function requireUser(req, res, next) {
+  const verified = await verifyAccount(req, res, 'user')
+  if (!verified) return false
+  if (typeof next === 'function') return next()
+  return true
 }
 
-export function requireAdmin(req, res) {
-  return verifyAccount(req, res, 'admin')
+export async function requireAdmin(req, res, next) {
+  const verified = await verifyAccount(req, res, 'admin')
+  if (!verified) return false
+  if (typeof next === 'function') return next()
+  return true
 }
 
 export async function optionalUser(req, _res) {

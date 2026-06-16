@@ -62,10 +62,10 @@ export const useCommunityStore = defineStore('community', {
         return this.getPostBySlug(id)
       }
     },
-    async createPost({ title, content, topic }) {
+    async createPost({ title, content, topic, mediaUrl = '', mediaType = '' }) {
       if (this.dataSource === 'api') {
         try {
-          const post = (await communityApi.createPost({ title, content, topic })).data
+          const post = (await communityApi.createPost({ title, content, topic, mediaUrl, mediaType })).data
           this.posts.unshift(post)
           return post
         } catch (error) {
@@ -83,6 +83,8 @@ export const useCommunityStore = defineStore('community', {
         createdAt: new Date().toISOString(),
         excerpt: content.trim().slice(0, 72),
         content: content.trim(),
+        mediaUrl,
+        mediaType,
         likes: 0,
         comments: [],
         isLocal: true,

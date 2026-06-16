@@ -24,9 +24,11 @@ import LayoutShell from './LayoutShell.vue'
       <nav aria-label="服务支持">
         <h2>服务支持</h2>
         <RouterLink to="/booking">空间预约</RouterLink>
+        <RouterLink to="/help">帮助中心</RouterLink>
+        <RouterLink to="/about">关于我们</RouterLink>
+        <RouterLink to="/contact">联系我们</RouterLink>
         <RouterLink to="/privacy">隐私政策</RouterLink>
         <RouterLink to="/terms">服务条款</RouterLink>
-        <a href="mailto:hello@coffeebook.example">联系我们</a>
       </nav>
 
       <section class="app-footer__newsletter">

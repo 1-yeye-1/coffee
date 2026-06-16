@@ -15,6 +15,11 @@ import CreatePostView from '@/views/public/community/CreatePostView.vue'
 import PostDetailView from '@/views/public/community/PostDetailView.vue'
 import EventDetailView from '@/views/public/events/EventDetailView.vue'
 import EventsView from '@/views/public/events/EventsView.vue'
+import AboutView from '@/views/public/info/AboutView.vue'
+import ContactView from '@/views/public/info/ContactView.vue'
+import HelpView from '@/views/public/info/HelpView.vue'
+import PrivacyView from '@/views/public/info/PrivacyView.vue'
+import TermsView from '@/views/public/info/TermsView.vue'
 
 import { ROUTE_NAMES } from '../route-names'
 
@@ -115,14 +120,32 @@ export const publicRoutes = [
       {
         path: 'terms',
         name: ROUTE_NAMES.TERMS,
-        component: PlaceholderView,
+        component: TermsView,
         meta: { title: '服务条款' },
       },
       {
         path: 'privacy',
         name: ROUTE_NAMES.PRIVACY,
-        component: PlaceholderView,
+        component: PrivacyView,
         meta: { title: '隐私政策' },
+      },
+      {
+        path: 'about',
+        name: ROUTE_NAMES.ABOUT,
+        component: AboutView,
+        meta: { title: '关于我们' },
+      },
+      {
+        path: 'contact',
+        name: ROUTE_NAMES.CONTACT,
+        component: ContactView,
+        meta: { title: '联系我们' },
+      },
+      {
+        path: 'help',
+        name: ROUTE_NAMES.HELP,
+        component: HelpView,
+        meta: { title: '帮助中心' },
       },
       {
         path: 'components',

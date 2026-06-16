@@ -40,6 +40,8 @@ export const ROUTE_NAMES = Object.freeze({
   ADMIN_EVENTS: 'admin-events',
   ADMIN_COMMUNITY: 'admin-community',
   ADMIN_BOOKINGS: 'admin-bookings',
+  ADMIN_UPLOAD_FILES: 'admin-upload-files',
+  ADMIN_LOGS: 'admin-logs',
   ADMIN_USERS: 'admin-users',
   ADMIN_FINANCE: 'admin-finance',
   ADMIN_SETTINGS: 'admin-settings',

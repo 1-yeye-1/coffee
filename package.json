@@ -20,7 +20,10 @@
     "smoke:api": "node scripts/smoke-api.js"
   },
   "dependencies": {
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "multer": "^2.2.0",
     "mysql2": "^3.22.5",
     "pinia": "^3.0.3",
     "vue": "^3.5.16",

@@ -73,6 +73,13 @@ async function submit() {
         <BaseTextarea v-model="note" label="备注" placeholder="选填，例如靠窗、需要插座等。" :maxlength="120" show-count />
         <p v-if="error" class="is-error" role="alert">{{ error }}</p>
         <BaseButton size="lg" @click="submit">确认预约</BaseButton>
+        <p class="policy-hint">
+          提交预约即表示你同意 Coffee Book 的
+          <RouterLink to="/terms">服务条款</RouterLink>
+          和
+          <RouterLink to="/privacy">隐私政策</RouterLink>
+          。
+        </p>
         <BaseButton variant="ghost" @click="router.push('/account/bookings')">查看我的预约</BaseButton>
       </section>
 
@@ -86,3 +93,17 @@ async function submit() {
     <div class="page-toast"><BaseToast v-model="toastVisible" variant="success" title="预约成功">预约记录已保存，可在会员中心查看。</BaseToast></div>
   </div>
 </template>
+
+<style scoped>
+.policy-hint {
+  margin: calc(var(--cb-space-2) * -1) 0 0;
+  color: var(--cb-text-muted);
+  font-size: var(--cb-font-size-sm);
+  line-height: var(--cb-line-relaxed);
+}
+
+.policy-hint a {
+  color: var(--cb-color-coffee);
+  font-weight: var(--cb-font-semibold);
+}
+</style>

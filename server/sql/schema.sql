@@ -76,10 +76,15 @@ CREATE TABLE IF NOT EXISTS user_notifications (
   title VARCHAR(255) NOT NULL,
   content VARCHAR(500) NULL,
   type VARCHAR(50) NOT NULL DEFAULT 'system',
+  is_read TINYINT(1) NOT NULL DEFAULT 0,
+  related_id BIGINT UNSIGNED NULL,
+  related_type VARCHAR(50) NULL,
   read_at TIMESTAMP NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_user_notifications_user (user_id),
+  KEY idx_user_notifications_type (type),
+  KEY idx_user_notifications_is_read (is_read),
   KEY idx_user_notifications_read (read_at),
   CONSTRAINT fk_user_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
@@ -110,6 +115,26 @@ CREATE TABLE IF NOT EXISTS user_favorites (
   KEY idx_user_favorites_user (user_id),
   KEY idx_user_favorites_target (target_type, target_id),
   CONSTRAINT fk_user_favorites_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS upload_files (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  scene VARCHAR(40) NOT NULL,
+  file_type VARCHAR(20) NOT NULL,
+  original_name VARCHAR(255) NULL,
+  stored_name VARCHAR(255) NOT NULL,
+  mime_type VARCHAR(100) NOT NULL,
+  size BIGINT UNSIGNED NOT NULL,
+  url VARCHAR(500) NOT NULL,
+  storage_path VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_upload_files_user_id (user_id),
+  KEY idx_upload_files_scene (scene),
+  KEY idx_upload_files_file_type (file_type),
+  KEY idx_upload_files_created_at (created_at),
+  CONSTRAINT fk_upload_files_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS books (
@@ -181,9 +206,16 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   payload JSON NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   operator_type VARCHAR(30) NOT NULL DEFAULT 'user',
+  admin_name VARCHAR(120) NULL,
+  target_type VARCHAR(80) NULL,
+  target_id VARCHAR(80) NULL,
+  description VARCHAR(500) NULL,
+  ip VARCHAR(80) NULL,
+  user_agent VARCHAR(500) NULL,
   PRIMARY KEY (id),
   KEY idx_audit_logs_operator (operator_type, operator_id),
   KEY idx_audit_logs_module (module),
+  KEY idx_audit_logs_action (action),
   KEY idx_audit_logs_created_at (created_at)
 ) ENGINE=InnoDB;
 
@@ -337,6 +369,8 @@ CREATE TABLE IF NOT EXISTS posts (
   topic VARCHAR(100) NOT NULL,
   excerpt VARCHAR(500) NULL,
   content TEXT NOT NULL,
+  media_url VARCHAR(500) NULL,
+  media_type VARCHAR(20) NULL,
   status VARCHAR(30) NOT NULL DEFAULT 'pending',
   featured TINYINT(1) NOT NULL DEFAULT 0,
   likes_count INT NOT NULL DEFAULT 0,

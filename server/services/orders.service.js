@@ -4,11 +4,20 @@ import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
 import { writeAudit } from './admin.service.js'
 import { getCart } from './cart.service.js'
+import { createNotification } from './notifications.service.js'
 
 const paymentTtlMinutes = 15
 const validStatuses = new Set(['pending_payment', 'pending_review', 'paid', 'completed', 'cancelled', 'payment_expired'])
 const orderNo = () => `CB${Date.now()}${randomBytes(3).toString('hex').toUpperCase()}`
 const paymentNo = () => `PAY${Date.now()}${randomBytes(3).toString('hex').toUpperCase()}`
+const statusText = {
+  pending_payment: '待支付',
+  pending_review: '待审核',
+  paid: '已支付',
+  completed: '已完成',
+  cancelled: '已取消',
+  payment_expired: '支付已超时',
+}
 
 const orderColumns = `id, order_no AS orderNo, user_id AS userId, source,
  receiver_name AS receiverName, receiver_phone AS receiverPhone, delivery_type AS deliveryType,
@@ -150,7 +159,26 @@ async function insertOrder(userId, payload, snapshots, source, connection) {
     await connection.execute('UPDATE products SET stock = stock - ? WHERE id = ?', [item.quantity, item.id])
   }
   await createPayment(result.insertId, userId, amounts.total, payload.paymentMethod || 'wechat', connection)
+  await createNotification({
+    userId,
+    title: '订单创建成功',
+    content: `你的订单 ${source === 'buy_now' ? '已直接购买' : '已提交'}，请留意支付和处理状态。`,
+    type: 'order',
+    relatedId: result.insertId,
+    relatedType: 'order',
+  }, connection)
   return result.insertId
+}
+
+async function notifyOrderStatus(userId, orderId, status, connection) {
+  await createNotification({
+    userId,
+    title: '订单状态已更新',
+    content: `你的订单状态已更新为：${statusText[status] || status}。`,
+    type: 'order',
+    relatedId: orderId,
+    relatedType: 'order',
+  }, connection)
 }
 
 async function buildCartSnapshots(userId, connection) {
@@ -316,6 +344,7 @@ export async function payOrder(id, userId) {
     await connection.execute("UPDATE orders SET status = 'pending_review' WHERE id = ?", [id])
     await connection.execute("UPDATE payments SET status = 'reviewing', paid_at = CURRENT_TIMESTAMP WHERE id = ?", [payment.id])
     await writeAudit(userId, 'order.pay.submit', 'orders', { id }, connection)
+    await notifyOrderStatus(userId, id, 'pending_review', connection)
     await connection.commit()
     return getOrderDetail(id, userId)
   } catch (error) {
@@ -353,6 +382,7 @@ async function reviewPayment(id, operatorId, decision) {
       await connection.execute("UPDATE payments SET status = 'rejected' WHERE order_id = ? AND status = 'reviewing'", [id])
     }
     await writeAudit(operatorId, `order.payment.${decision}`, 'orders', { id }, connection)
+    await notifyOrderStatus(order.user_id, id, decision === 'confirmed' ? 'paid' : 'cancelled', connection)
     await connection.commit()
     return getOrderDetail(id, null, true)
   } catch (error) {
@@ -375,6 +405,7 @@ export async function expireOrderPayment(id, operatorId) {
     await connection.execute("UPDATE orders SET status = 'payment_expired', cancelled_at = CURRENT_TIMESTAMP WHERE id = ?", [id])
     await connection.execute("UPDATE payments SET status = 'expired' WHERE order_id = ? AND status = 'created'", [id])
     await writeAudit(operatorId, 'order.payment.expire', 'orders', { id }, connection)
+    await notifyOrderStatus(order.user_id, id, 'payment_expired', connection)
     await connection.commit()
     return getOrderDetail(id, null, true)
   } catch (error) {
@@ -410,6 +441,7 @@ export async function changeOrderStatus(id, target, userId, isAdmin = false, ope
     const timeColumn = target === 'paid' ? 'paid_at' : target === 'completed' ? 'completed_at' : target === 'cancelled' ? 'cancelled_at' : null
     await connection.execute(`UPDATE orders SET status = ?${timeColumn ? `, ${timeColumn} = CURRENT_TIMESTAMP` : ''} WHERE id = ?`, [target, id])
     if (isAdmin) await writeAudit(operatorId, 'order.status.update', 'orders', { id, from: order.status, to: target }, connection)
+    await notifyOrderStatus(order.user_id, id, target, connection)
     await connection.commit()
     return getOrderDetail(id, userId, isAdmin)
   } catch (error) {

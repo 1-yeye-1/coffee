@@ -79,6 +79,12 @@ async function submit() {
     </form>
     <div class="auth-form-card__footer">
       <p>还没有账号？<RouterLink to="/register">立即注册</RouterLink></p>
+      <p class="auth-policy-links">
+        登录即表示你了解 Coffee Book 的
+        <RouterLink to="/terms">服务条款</RouterLink>
+        和
+        <RouterLink to="/privacy">隐私政策</RouterLink>
+      </p>
     </div>
   </BaseCard>
 </template>
@@ -94,5 +100,6 @@ async function submit() {
 .auth-form__success { color: var(--cb-success); background: color-mix(in srgb, var(--cb-success) 10%, transparent); }
 .auth-form-card__footer { display: grid; gap: var(--cb-space-2); padding-top: var(--cb-space-4); color: var(--cb-text-muted); font-size: var(--cb-font-size-sm); border-top: 0.0625rem solid var(--cb-border-soft); }
 .auth-form-card__footer a { color: var(--cb-color-coffee); font-weight: var(--cb-font-semibold); }
+.auth-policy-links { line-height: var(--cb-line-relaxed); }
 @media (max-width: 35rem) { .auth-code-row { grid-template-columns: 1fr; } }
 </style>

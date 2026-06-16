@@ -37,3 +37,8 @@ export const fetchAdminPosts = (params = {}) => request(`/admin/posts${toQuery(p
 export const updateAdminPostStatus = (id, status) => request(`/admin/posts/${id}/status`, { method: 'PATCH', body: { status } })
 export const fetchAdminBookings = (params = {}) => request(`/admin/bookings${toQuery(params)}`)
 export const updateAdminBookingStatus = (id, status) => request(`/admin/bookings/${id}/status`, { method: 'PATCH', body: { status } })
+export const fetchUploadFiles = (params = {}) => request(`/upload/files${toQuery(params)}`)
+export const deleteUploadFile = (id) => request(`/upload/files/${id}`, { method: 'DELETE' })
+export const getAdminLogs = (params = {}) => request(`/admin/logs${toQuery(params)}`)
+export const getAdminLogDetail = (id) => request(`/admin/logs/${id}`)
+export const exportAdminLogs = (params = {}) => request(`/admin/logs/export${toQuery(params)}`)

@@ -3,6 +3,7 @@ import { randomInt } from 'node:crypto'
 import { env } from '../config/env.js'
 import { pool } from '../db/mysql.js'
 import { hashPassword, verifyPassword } from '../utils/crypto.js'
+import { createNotification } from './notifications.service.js'
 
 const userColumns = `
   id, username, nickname, email, phone, avatar, role, status, points, level,
@@ -76,11 +77,12 @@ export async function createUser(payload, connection = pool) {
      VALUES (?, 100, 'earn', 'register', '注册欢迎积分')`,
     [userId],
   )
-  await connection.execute(
-    `INSERT INTO user_notifications (user_id, title, content, type)
-     VALUES (?, '欢迎加入 Coffee Book', '你的 Coffee Book 账号已创建成功，欢迎浏览图书、咖啡商品和活动。', 'system')`,
-    [userId],
-  )
+  await createNotification({
+    userId,
+    title: '欢迎加入 Coffee Book',
+    content: '欢迎来到 Coffee Book，在这里探索咖啡、阅读与生活方式。',
+    type: 'system',
+  }, connection)
   const [rows] = await connection.execute(`SELECT ${userColumns} FROM users WHERE id = ?`, [userId])
   return rows[0]
 }

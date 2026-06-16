@@ -11,7 +11,14 @@ const authStore = useAuthStore()
 const error = ref('')
 const success = ref('')
 const sending = ref(false)
-const form = reactive({ nickname: '', phone: '', code: '', password: '', confirmPassword: '' })
+const form = reactive({
+  nickname: '',
+  phone: '',
+  code: '',
+  password: '',
+  confirmPassword: '',
+  agreed: false,
+})
 
 function isPhone(value) {
   return /^1\d{10}$/.test(String(value || '').trim())
@@ -22,6 +29,7 @@ function validate() {
   if (!form.code.trim()) return '请输入短信验证码。'
   if (form.password.length < 6) return '密码至少需要 6 位。'
   if (form.password !== form.confirmPassword) return '两次输入的密码不一致。'
+  if (!form.agreed) return '请先阅读并同意服务条款和隐私政策。'
   return ''
 }
 
@@ -80,6 +88,15 @@ async function submit() {
       </div>
       <BaseInput v-model="form.password" label="密码" password autocomplete="new-password" hint="至少 6 位" />
       <BaseInput v-model="form.confirmPassword" label="确认密码" password autocomplete="new-password" />
+      <label class="auth-agreement">
+        <input v-model="form.agreed" type="checkbox" />
+        <span>
+          我已阅读并同意
+          <RouterLink to="/terms" target="_blank">《服务条款》</RouterLink>
+          和
+          <RouterLink to="/privacy" target="_blank">《隐私政策》</RouterLink>
+        </span>
+      </label>
       <p v-if="success" class="auth-form__success" role="status">{{ success }}</p>
       <p v-if="error" class="auth-form__error" role="alert">{{ error }}</p>
       <BaseButton type="submit" size="lg" :loading="authStore.loading">注册并登录</BaseButton>
@@ -94,10 +111,14 @@ async function submit() {
 .auth-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cb-space-4); }
 .auth-code-row,
 .auth-form > :first-child,
+.auth-agreement,
 .auth-form__error,
 .auth-form__success,
 .auth-form .base-button[type="submit"] { grid-column: 1 / -1; }
 .auth-code-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--cb-space-3); align-items: end; }
+.auth-agreement { display: flex; gap: var(--cb-space-2); align-items: flex-start; color: var(--cb-text-secondary); font-size: var(--cb-font-size-sm); line-height: var(--cb-line-relaxed); }
+.auth-agreement input { margin-top: 0.3rem; accent-color: var(--cb-color-coffee); }
+.auth-agreement a { color: var(--cb-color-coffee); font-weight: var(--cb-font-semibold); }
 .auth-form__error,
 .auth-form__success { padding: var(--cb-space-3) var(--cb-space-4); border-radius: var(--cb-radius-lg); }
 .auth-form__error { color: var(--cb-danger); background: color-mix(in srgb, var(--cb-danger) 10%, transparent); }

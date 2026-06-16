@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
 import { writeAudit } from './admin.service.js'
+import { createNotification } from './notifications.service.js'
 
 const spaceColumns = `
   id, slug, name, location, description, capacity, status,
@@ -128,6 +129,14 @@ export async function createBooking(payload, userId) {
       ],
     )
     await writeAudit(userId, 'booking.create', 'bookings', { id: result.insertId, bookingNo }, connection)
+    await createNotification({
+      userId,
+      title: '预约成功',
+      content: `你已成功预约 ${payload.date} ${payload.time} 的 Coffee Book 空间。`,
+      type: 'booking',
+      relatedId: result.insertId,
+      relatedType: 'booking',
+    }, connection)
     await connection.commit()
     const [rows] = await pool.execute(
       `SELECT ${bookingColumns} FROM bookings b INNER JOIN spaces s ON s.id = b.space_id WHERE b.id = ? LIMIT 1`,
@@ -164,8 +173,19 @@ export async function cancelBooking(id, userId, admin = false) {
 }
 
 export async function updateBookingStatus(id, status, operatorId) {
+  const [[before]] = await pool.execute('SELECT user_id AS userId FROM bookings WHERE id = ? LIMIT 1', [id])
   await pool.execute('UPDATE bookings SET status = ? WHERE id = ?', [status, id])
   await writeAudit(operatorId, 'booking.status.update', 'bookings', { id, status })
+  if (before?.userId) {
+    await createNotification({
+      userId: before.userId,
+      title: '预约状态已更新',
+      content: `你的预约状态已更新为：${status === 'confirmed' ? '已确认' : status === 'cancelled' ? '已取消' : status === 'arrived' ? '已到店' : status}。`,
+      type: 'booking',
+      relatedId: id,
+      relatedType: 'booking',
+    })
+  }
   const [rows] = await pool.execute(
     `SELECT ${bookingColumns} FROM bookings b INNER JOIN spaces s ON s.id = b.space_id WHERE b.id = ? LIMIT 1`,
     [id],

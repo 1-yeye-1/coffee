@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from 'vue'
 
 import { getAccountOverview, updateProfile } from '@/api/account'
+import { resolveUploadUrl, uploadAvatar } from '@/api/upload'
 import { BaseBadge, BaseButton, BaseInput, BaseToast } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/pages/engagement.css'
@@ -11,7 +12,11 @@ const form = reactive({ nickname: '', phone: '', email: '' })
 const user = ref(null)
 const toastVisible = ref(false)
 const loading = ref(false)
+const avatarUploading = ref(false)
 const error = ref('')
+const avatarPreview = ref('')
+const avatarFile = ref(null)
+const avatarInput = ref(null)
 
 async function load() {
   loading.value = true
@@ -42,6 +47,52 @@ async function save() {
   }
 }
 
+function validateAvatar(file) {
+  if (!file) return '请选择头像图片。'
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return '头像仅支持 jpg、jpeg、png、webp 格式。'
+  if (file.size > 2 * 1024 * 1024) return '头像文件不能超过 2MB。'
+  return ''
+}
+
+function selectAvatar(event) {
+  const file = event.target.files?.[0]
+  const message = validateAvatar(file)
+  if (message) {
+    error.value = message
+    avatarFile.value = null
+    avatarPreview.value = ''
+    return
+  }
+  error.value = ''
+  avatarFile.value = file
+  avatarPreview.value = URL.createObjectURL(file)
+}
+
+async function submitAvatar() {
+  const message = validateAvatar(avatarFile.value)
+  if (message) {
+    error.value = message
+    return
+  }
+  avatarUploading.value = true
+  error.value = ''
+  try {
+    const response = await uploadAvatar(avatarFile.value)
+    const avatar = response.data.url
+    user.value = { ...user.value, avatar }
+    authStore.user = { ...authStore.user, avatar }
+    authStore.persist()
+    avatarPreview.value = ''
+    avatarFile.value = null
+    if (avatarInput.value) avatarInput.value.value = ''
+    toastVisible.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    avatarUploading.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -55,11 +106,22 @@ onMounted(load)
 
     <p v-if="error" class="form-error">{{ error }}</p>
     <section v-if="user" class="member-panel profile-card">
-      <span class="avatar">{{ (user.nickname || user.username || '用').slice(0, 1) }}</span>
+      <img
+        v-if="avatarPreview || user.avatar"
+        class="profile-avatar"
+        :src="avatarPreview || resolveUploadUrl(user.avatar)"
+        alt="用户头像"
+      />
+      <span v-else class="avatar">{{ (user.nickname || user.username || '用').slice(0, 1) }}</span>
       <div>
         <h3>{{ user.nickname }}</h3>
         <BaseBadge variant="premium">{{ user.level }}</BaseBadge>
         <p>{{ user.points }} 积分</p>
+      </div>
+      <div class="avatar-actions">
+        <input ref="avatarInput" class="avatar-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" @change="selectAvatar" />
+        <BaseButton size="sm" variant="outline" type="button" @click="avatarInput?.click()">选择头像</BaseButton>
+        <BaseButton size="sm" :loading="avatarUploading" :disabled="!avatarFile" type="button" @click="submitAvatar">上传头像</BaseButton>
       </div>
     </section>
 
@@ -78,3 +140,37 @@ onMounted(load)
     </div>
   </div>
 </template>
+
+<style scoped>
+.profile-card {
+  align-items: center;
+}
+
+.profile-avatar {
+  width: 4.5rem;
+  height: 4.5rem;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border: 0.1875rem solid color-mix(in srgb, var(--cb-color-gold) 34%, var(--cb-bg-surface));
+  border-radius: var(--cb-radius-2xl);
+  box-shadow: var(--cb-shadow-sm);
+}
+
+.avatar-actions {
+  display: flex;
+  margin-left: auto;
+  flex-wrap: wrap;
+  gap: var(--cb-space-2);
+}
+
+.avatar-input {
+  display: none;
+}
+
+@media (max-width: 42rem) {
+  .avatar-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+</style>

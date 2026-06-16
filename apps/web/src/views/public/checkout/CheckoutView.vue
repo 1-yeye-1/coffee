@@ -177,9 +177,29 @@ async function submitOrder() {
           </div>
           <div class="summary-row summary-row--total"><span>实付金额</span><strong>¥{{ snapshot.amounts.total }}</strong></div>
           <BaseButton size="lg" @click="submitOrder">提交订单</BaseButton>
+          <small class="policy-hint">
+            提交订单即表示你同意 Coffee Book 的
+            <RouterLink to="/terms">服务条款</RouterLink>
+            和
+            <RouterLink to="/privacy">隐私政策</RouterLink>
+            。
+          </small>
           <small class="text-muted">本阶段创建本地订单，不会发起真实支付。</small>
         </aside>
       </div>
     </main>
   </div>
 </template>
+
+<style scoped>
+.policy-hint {
+  color: var(--cb-text-muted);
+  font-size: var(--cb-font-size-sm);
+  line-height: var(--cb-line-relaxed);
+}
+
+.policy-hint a {
+  color: var(--cb-color-coffee);
+  font-weight: var(--cb-font-semibold);
+}
+</style>

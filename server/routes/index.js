@@ -1,58 +1,68 @@
-import { registerAdminRoutes } from './admin.routes.js'
+import express from 'express'
+
 import { registerAccountRoutes } from './account.routes.js'
+import { registerAdminLogRoutes } from './admin-log.routes.js'
+import { registerAdminRoutes } from './admin.routes.js'
 import { registerAuthRoutes } from './auth.routes.js'
 import { registerBooksRoutes } from './books.routes.js'
 import { registerBookingRoutes } from './booking.routes.js'
+import { registerCartRoutes } from './cart.routes.js'
 import { registerCommunityRoutes } from './community.routes.js'
 import { registerEventsRoutes } from './events.routes.js'
-import { registerProductsRoutes } from './products.routes.js'
-import { registerCartRoutes } from './cart.routes.js'
+import { registerNotificationsRoutes } from './notifications.routes.js'
 import { registerOrdersRoutes } from './orders.routes.js'
+import { registerProductsRoutes } from './products.routes.js'
+import { registerUploadRoutes } from './upload.routes.js'
 
-function compilePath(path) {
-  const keys = []
-  const pattern = path
-    .split('/')
-    .map((segment) => {
-      if (!segment.startsWith(':')) return segment
-      keys.push(segment.slice(1))
-      return '([^/]+)'
-    })
-    .join('/')
-  return { keys, regex: new RegExp(`^${pattern}/?$`) }
+function wrapHandlers(handlers) {
+  return async (req, res, next) => {
+    try {
+      for (const handler of handlers) {
+        const result = handler.length >= 3
+          ? await new Promise((resolve, reject) => {
+            let settled = false
+            const done = (error) => {
+              if (settled) return
+              settled = true
+              if (error) reject(error)
+              else resolve(true)
+            }
+            Promise.resolve(handler(req, res, done))
+              .then((value) => {
+                if (settled) return
+                if (value === false || res.headersSent) {
+                  settled = true
+                  resolve(false)
+                }
+              })
+              .catch(done)
+          })
+          : await handler(req, res)
+        if (result === false || res.headersSent) return
+      }
+    } catch (error) {
+      next(error)
+    }
+  }
+}
+
+function createRouteRegistrar(expressRouter) {
+  const register = (method, path, handlers) => {
+    expressRouter[method](path, wrapHandlers(handlers))
+  }
+
+  return {
+    get: (path, ...handlers) => register('get', path, handlers),
+    post: (path, ...handlers) => register('post', path, handlers),
+    put: (path, ...handlers) => register('put', path, handlers),
+    patch: (path, ...handlers) => register('patch', path, handlers),
+    delete: (path, ...handlers) => register('delete', path, handlers),
+  }
 }
 
 export function createRouter() {
-  const routes = []
-
-  function add(method, path, handlers) {
-    routes.push({ method, ...compilePath(path), handlers })
-  }
-
-  const router = {
-    get: (path, ...handlers) => add('GET', path, handlers),
-    post: (path, ...handlers) => add('POST', path, handlers),
-    put: (path, ...handlers) => add('PUT', path, handlers),
-    patch: (path, ...handlers) => add('PATCH', path, handlers),
-    delete: (path, ...handlers) => add('DELETE', path, handlers),
-    async handle(req, res) {
-      const route = routes.find((candidate) => (
-        candidate.method === req.method && candidate.regex.test(req.pathname)
-      ))
-      if (!route) return false
-
-      const match = req.pathname.match(route.regex)
-      req.params = Object.fromEntries(
-        route.keys.map((key, index) => [key, decodeURIComponent(match[index + 1])]),
-      )
-
-      for (const handler of route.handlers) {
-        const result = await handler(req, res)
-        if (result === false || res.writableEnded) break
-      }
-      return true
-    },
-  }
+  const expressRouter = express.Router()
+  const router = createRouteRegistrar(expressRouter)
 
   registerAuthRoutes(router)
   registerBooksRoutes(router)
@@ -63,6 +73,10 @@ export function createRouter() {
   registerCartRoutes(router)
   registerOrdersRoutes(router)
   registerAccountRoutes(router)
+  registerNotificationsRoutes(router)
+  registerUploadRoutes(router)
+  registerAdminLogRoutes(router)
   registerAdminRoutes(router)
-  return router
+
+  return expressRouter
 }

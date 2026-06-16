@@ -4,9 +4,7 @@ import {
   getSecuritySettings,
   listAddresses,
   listMyPosts,
-  listNotifications,
   listPointRecords,
-  markNotificationRead,
   saveAddress,
   updateProfile,
 } from '../services/account.service.js'
@@ -27,14 +25,6 @@ export function registerAccountRoutes(router) {
 
   router.get('/api/account/points', requireUser, async (req, res) => {
     return success(res, await listPointRecords(req.user.id))
-  })
-
-  router.get('/api/account/notifications', requireUser, async (req, res) => {
-    return success(res, await listNotifications(req.user.id))
-  })
-
-  router.patch('/api/account/notifications/:id/read', requireUser, async (req, res) => {
-    return success(res, await markNotificationRead(req.user.id, req.params.id), '通知已标记为已读')
   })
 
   router.get('/api/account/addresses', requireUser, async (req, res) => {

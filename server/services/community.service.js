@@ -1,9 +1,11 @@
 import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
 import { writeAudit } from './admin.service.js'
+import { createNotification } from './notifications.service.js'
 
 const postColumns = `
   id, slug, user_id AS userId, title, author, avatar, topic, excerpt, content,
+  media_url AS mediaUrl, media_type AS mediaType,
   status AS reviewStatus, featured, likes_count AS likes, comments_count AS commentsCount,
   created_at AS createdAt, updated_at AS updatedAt
 `
@@ -77,9 +79,14 @@ export async function createPost(payload, user) {
   const slug = `${slugify(payload.slug || title)}-${Date.now()}`
   const author = user?.username || 'Coffee Reader'
   const avatar = author.slice(0, 1).toUpperCase()
+  const mediaUrl = String(payload.mediaUrl || payload.media_url || '').trim() || null
+  const mediaType = String(payload.mediaType || payload.media_type || '').trim() || null
+  if (mediaType && !['image', 'video'].includes(mediaType)) {
+    throw Object.assign(new Error('媒体类型不正确'), { statusCode: 400 })
+  }
   const [result] = await pool.execute(
-    `INSERT INTO posts (slug, user_id, title, author, avatar, topic, excerpt, content, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO posts (slug, user_id, title, author, avatar, topic, excerpt, content, media_url, media_type, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       slug,
       user?.id || null,
@@ -89,6 +96,8 @@ export async function createPost(payload, user) {
       payload.topic || '生活分享',
       content.slice(0, 72),
       content,
+      mediaUrl,
+      mediaType,
       'pending',
     ],
   )
@@ -157,7 +166,20 @@ export async function togglePostLike(postId, userId) {
 }
 
 export async function updatePostStatus(id, status, operatorId) {
+  const [[post]] = await pool.execute('SELECT user_id AS userId, title FROM posts WHERE id = ? LIMIT 1', [id])
   await pool.execute('UPDATE posts SET status = ? WHERE id = ?', [status, id])
   await writeAudit(operatorId, 'post.status.update', 'community', { id, status })
+  if (post?.userId) {
+    await createNotification({
+      userId: post.userId,
+      title: status === 'published' ? '帖子审核通过' : '帖子审核未通过',
+      content: status === 'published'
+        ? `你的帖子《${post.title}》已审核通过并发布。`
+        : `你的帖子《${post.title}》未通过审核，请调整内容后再试。`,
+      type: 'audit',
+      relatedId: id,
+      relatedType: 'post',
+    })
+  }
   return findPost(id, true)
 }

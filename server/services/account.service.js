@@ -1,4 +1,5 @@
 import { pool } from '../db/mysql.js'
+import { listNotifications as listUserNotifications, markAsRead } from './notifications.service.js'
 import { writeAudit } from './admin.service.js'
 
 const userSelect = `
@@ -15,7 +16,7 @@ export async function getAccountOverview(userId) {
     pool.execute('SELECT COUNT(*) AS total FROM orders WHERE user_id = ?', [userId]),
     pool.execute('SELECT COUNT(*) AS total FROM bookings WHERE user_id = ?', [userId]),
     pool.execute('SELECT COUNT(*) AS total FROM posts WHERE user_id = ?', [userId]),
-    pool.execute('SELECT COUNT(*) AS total FROM user_notifications WHERE user_id = ? AND read_at IS NULL', [userId]),
+    pool.execute('SELECT COUNT(*) AS total FROM user_notifications WHERE user_id = ? AND is_read = 0', [userId]),
     pool.execute('SELECT COUNT(*) AS total FROM user_addresses WHERE user_id = ?', [userId]),
   ])
   return {
@@ -53,16 +54,11 @@ export async function listPointRecords(userId) {
 }
 
 export async function listNotifications(userId) {
-  const [rows] = await pool.execute(
-    `SELECT id, title, content, type, read_at AS readAt, created_at AS createdAt
-     FROM user_notifications WHERE user_id = ? ORDER BY created_at DESC, id DESC`,
-    [userId],
-  )
-  return rows
+  return (await listUserNotifications(userId, { page: 1, pageSize: 100 })).items
 }
 
 export async function markNotificationRead(userId, id) {
-  await pool.execute('UPDATE user_notifications SET read_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?', [id, userId])
+  await markAsRead(userId, id)
   return listNotifications(userId)
 }
 

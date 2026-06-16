@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { resolveUploadUrl } from '@/api/upload'
 import { BaseBadge, BaseButton, BaseCard, BaseTabs } from '@/components/base'
 import { useCommunityStore } from '@/stores/community'
 import '@/assets/styles/pages/engagement.css'
@@ -45,6 +46,10 @@ onMounted(() => {
         <div class="post-grid">
           <BaseCard v-for="post in visiblePosts" :key="post.id" class="post-card" variant="hover">
             <div class="post-card__author"><span class="avatar">{{ post.avatar }}</span><div><strong>{{ post.author }}</strong><small>{{ formatDate(post.createdAt) }} · {{ post.topic }}</small></div></div>
+            <div v-if="post.mediaUrl" class="post-media">
+              <img v-if="post.mediaType === 'image'" :src="resolveUploadUrl(post.mediaUrl)" alt="帖子图片" />
+              <video v-else controls :src="resolveUploadUrl(post.mediaUrl)">当前浏览器不支持视频预览。</video>
+            </div>
             <div><BaseBadge variant="neutral">{{ post.topic }}</BaseBadge><h2>{{ post.title }}</h2><p>{{ post.excerpt }}</p></div>
             <div class="post-actions">
               <BaseButton size="sm" :variant="communityStore.likedIds.includes(post.id) ? 'primary' : 'ghost'" @click="communityStore.toggleLike(post.id)">赞 {{ post.likes }}</BaseButton>
@@ -64,3 +69,19 @@ onMounted(() => {
     </main>
   </div>
 </template>
+
+<style scoped>
+.post-media {
+  overflow: hidden;
+  border-radius: var(--cb-radius-lg);
+  background: var(--cb-bg-soft);
+}
+
+.post-media img,
+.post-media video {
+  display: block;
+  width: 100%;
+  max-height: 14rem;
+  object-fit: cover;
+}
+</style>

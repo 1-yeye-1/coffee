@@ -1,4 +1,5 @@
 import { requireAdmin } from '../middlewares/auth.js'
+import { logAdminAction } from '../services/admin-log.service.js'
 import { authenticateAdmin, findAdminById } from '../services/auth.service.js'
 import {
   getDashboardStats,
@@ -36,6 +37,7 @@ function requireFields(res, payload, fields) {
 export function registerAdminRoutes(router) {
   router.post('/api/admin/auth/login', async (req, res) => {
     const admin = await authenticateAdmin(req.body)
+    await logAdminAction({ admin, action: 'login', module: 'auth', targetType: 'admin', targetId: admin.id, description: `管理员 ${admin.username} 登录后台`, req })
     return success(res, { token: signAdminToken(admin), admin }, '后台登录成功')
   })
 
@@ -114,6 +116,7 @@ export function registerAdminRoutes(router) {
     if (!requireFields(res, req.body, ['name', 'slug', 'category', 'price'])) return false
     const product = await createProduct(req.body)
     await writeAudit(req.user.id, 'product.create', 'products', { id: product.id, slug: product.slug })
+    await logAdminAction({ admin: req.user, action: 'create', module: 'product', targetType: 'product', targetId: product.id, description: `新增商品：${product.name}`, req })
     return success(res, product, '商品创建成功', 201)
   })
 
@@ -122,6 +125,7 @@ export function registerAdminRoutes(router) {
     if (!await findProductById(req.params.id)) return failure(res, 404, '商品不存在', 404)
     const product = await updateProduct(req.params.id, req.body)
     await writeAudit(req.user.id, 'product.update', 'products', { id: product.id })
+    await logAdminAction({ admin: req.user, action: 'update', module: 'product', targetType: 'product', targetId: product.id, description: `修改商品：${product.name}`, req })
     return success(res, product)
   })
 
@@ -130,12 +134,14 @@ export function registerAdminRoutes(router) {
     const product = await updateProductStatus(req.params.id, req.body.status)
     if (!product) return failure(res, 404, '商品不存在', 404)
     await writeAudit(req.user.id, 'product.status.update', 'products', { id: product.id, status: req.body.status })
+    await logAdminAction({ admin: req.user, action: 'change_status', module: 'product', targetType: 'product', targetId: product.id, description: `修改商品状态为 ${req.body.status}`, req })
     return success(res, product)
   })
 
   router.delete('/api/admin/products/:id', requireAdmin, async (req, res) => {
     if (!await deleteProduct(req.params.id)) return failure(res, 404, '商品不存在', 404)
     await writeAudit(req.user.id, 'product.delete', 'products', { id: req.params.id })
+    await logAdminAction({ admin: req.user, action: 'delete', module: 'product', targetType: 'product', targetId: req.params.id, description: '删除商品', req })
     return success(res)
   })
 
@@ -151,19 +157,27 @@ export function registerAdminRoutes(router) {
   })
 
   router.patch('/api/admin/orders/:id/status', requireAdmin, async (req, res) => {
-    return success(res, await changeOrderStatus(req.params.id, req.body.status, null, true, req.user.id))
+    const order = await changeOrderStatus(req.params.id, req.body.status, null, true, req.user.id)
+    await logAdminAction({ admin: req.user, action: 'change_status', module: 'order', targetType: 'order', targetId: req.params.id, description: `修改订单状态为 ${req.body.status}`, req })
+    return success(res, order)
   })
 
   router.patch('/api/admin/orders/:id/confirm-payment', requireAdmin, async (req, res) => {
-    return success(res, await confirmOrderPayment(req.params.id, req.user.id), '支付已确认')
+    const order = await confirmOrderPayment(req.params.id, req.user.id)
+    await logAdminAction({ admin: req.user, action: 'approve', module: 'order', targetType: 'order', targetId: req.params.id, description: '确认订单支付', req })
+    return success(res, order, '支付已确认')
   })
 
   router.patch('/api/admin/orders/:id/reject-payment', requireAdmin, async (req, res) => {
-    return success(res, await rejectOrderPayment(req.params.id, req.user.id), '支付已驳回')
+    const order = await rejectOrderPayment(req.params.id, req.user.id)
+    await logAdminAction({ admin: req.user, action: 'reject', module: 'order', targetType: 'order', targetId: req.params.id, description: '驳回订单支付', req })
+    return success(res, order, '支付已驳回')
   })
 
   router.patch('/api/admin/orders/:id/expire', requireAdmin, async (req, res) => {
-    return success(res, await expireOrderPayment(req.params.id, req.user.id), '订单已标记过期')
+    const order = await expireOrderPayment(req.params.id, req.user.id)
+    await logAdminAction({ admin: req.user, action: 'change_status', module: 'order', targetType: 'order', targetId: req.params.id, description: '标记订单支付过期', req })
+    return success(res, order, '订单已标记过期')
   })
 
   router.get('/api/admin/events', requireAdmin, async (req, res) => {
@@ -200,7 +214,17 @@ export function registerAdminRoutes(router) {
   router.patch('/api/admin/posts/:id/status', requireAdmin, async (req, res) => {
     if (!['pending', 'published', 'rejected'].includes(req.body.status)) return failure(res, 400, '无效帖子状态')
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
-    return success(res, await updatePostStatus(req.params.id, req.body.status, req.user.id))
+    const post = await updatePostStatus(req.params.id, req.body.status, req.user.id)
+    await logAdminAction({
+      admin: req.user,
+      action: req.body.status === 'published' ? 'approve' : req.body.status === 'rejected' ? 'reject' : 'change_status',
+      module: 'community',
+      targetType: 'post',
+      targetId: req.params.id,
+      description: `审核社区帖子为 ${req.body.status}`,
+      req,
+    })
+    return success(res, post)
   })
 
   router.get('/api/admin/bookings', requireAdmin, async (req, res) => {
@@ -212,6 +236,7 @@ export function registerAdminRoutes(router) {
     if (!['confirmed', 'cancelled', 'arrived'].includes(req.body.status)) return failure(res, 400, '无效预约状态')
     const booking = await updateBookingStatus(req.params.id, req.body.status, req.user.id)
     if (!booking) return failure(res, 404, '预约不存在', 404)
+    await logAdminAction({ admin: req.user, action: 'change_status', module: 'booking', targetType: 'booking', targetId: req.params.id, description: `修改预约状态为 ${req.body.status}`, req })
     return success(res, booking)
   })
 }

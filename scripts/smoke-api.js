@@ -130,6 +130,10 @@ async function main() {
   assert(me.payload.data.phone === smokePhone, 'auth/me should return normal user')
   logPass('auth/me')
 
+  const notifications = await request('GET', '/account/notifications', { token: userToken })
+  assert(Array.isArray(notifications.payload.data), 'notifications should return list')
+  logPass('notifications list')
+
   const books = await request('GET', '/books?page=1&pageSize=3')
   assert(books.payload.data.length > 0, 'books list empty')
   logPass('books list')
@@ -182,6 +186,19 @@ async function main() {
   const spaces = await request('GET', '/spaces')
   assert(spaces.payload.data.length > 0, 'spaces list empty')
   logPass('spaces list')
+
+  const notFound = await request('GET', '/does-not-exist', { expectedStatus: 404 })
+  assert(notFound.payload.code === 404 && notFound.payload.data === null, '404 payload should keep unified format')
+  logPass('404 response')
+
+  const badJsonResponse = await fetch(`${baseURL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{"phone":',
+  })
+  const badJson = await badJsonResponse.json()
+  assert(badJsonResponse.status === 400 && badJson.code === 400 && badJson.data === null, 'bad JSON should keep unified error format')
+  logPass('error response format')
 }
 
 main()

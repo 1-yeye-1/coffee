@@ -4,8 +4,10 @@ import { useRouter } from 'vue-router'
 
 import { BaseButton } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationsStore } from '@/stores/notifications'
 
 const authStore = useAuthStore()
+const notificationsStore = useNotificationsStore()
 const router = useRouter()
 const open = ref(false)
 const menuRef = ref(null)
@@ -24,18 +26,28 @@ function handleKeydown(event) {
 
 async function logout() {
   await authStore.logout()
+  notificationsStore.reset()
   close()
   router.push('/')
+}
+
+function refreshUnread() {
+  if (authStore.isAuthenticated) notificationsStore.fetchUnreadCount()
 }
 
 onMounted(() => {
   document.addEventListener('click', handleDocumentClick)
   document.addEventListener('keydown', handleKeydown)
+  refreshUnread()
+  window.addEventListener('coffee-book:auth-login', refreshUnread)
+  window.addEventListener('coffee-book:notifications-updated', refreshUnread)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleDocumentClick)
   document.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('coffee-book:auth-login', refreshUnread)
+  window.removeEventListener('coffee-book:notifications-updated', refreshUnread)
 })
 </script>
 
@@ -62,6 +74,10 @@ onBeforeUnmount(() => {
     <Transition name="user-menu">
       <div v-if="open" class="user-menu__dropdown" role="menu">
         <RouterLink to="/account" role="menuitem" @click="close">会员中心</RouterLink>
+        <RouterLink class="user-menu__notice-link" to="/account/notifications" role="menuitem" @click="close">
+          通知中心
+          <span v-if="notificationsStore.unreadCount > 0" class="user-menu__badge">{{ notificationsStore.unreadCount > 99 ? '99+' : notificationsStore.unreadCount }}</span>
+        </RouterLink>
         <RouterLink to="/account/orders" role="menuitem" @click="close">我的订单</RouterLink>
         <RouterLink to="/account/bookings" role="menuitem" @click="close">我的预约</RouterLink>
         <button type="button" role="menuitem" @click="logout">退出登录</button>
@@ -124,6 +140,7 @@ onBeforeUnmount(() => {
 
 .user-menu__dropdown a,
 .user-menu__dropdown button {
+  position: relative;
   padding: var(--cb-space-3);
   color: var(--cb-text-secondary);
   text-align: start;
@@ -136,6 +153,26 @@ onBeforeUnmount(() => {
 .user-menu__dropdown button:hover {
   color: var(--cb-text-primary);
   background: var(--cb-bg-soft);
+}
+
+.user-menu__notice-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cb-space-2);
+}
+
+.user-menu__badge {
+  display: inline-grid;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding-inline: var(--cb-space-1);
+  place-items: center;
+  color: var(--cb-text-inverse);
+  font-size: var(--cb-font-size-xs);
+  font-weight: var(--cb-font-bold);
+  background: var(--cb-danger);
+  border-radius: var(--cb-radius-pill);
 }
 
 .user-menu-enter-active,
