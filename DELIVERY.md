@@ -42,7 +42,6 @@ password: admin123456
 npm install
 cp .env.example .env
 npm run db:init
-npm run db:seed
 npm run dev:server
 npm run dev:web
 npm run dev:admin
@@ -68,7 +67,7 @@ npm run dev:all
 2. 创建后端 `.env`，配置 `DB_HOST`、`DB_USER`、`DB_PASSWORD`、`JWT_SECRET`、`CORS_ORIGIN`。
 3. 执行 `npm install`。
 4. 配置 `DB_NAME` 后执行 `npm run db:init`，完成建表、幂等 seed 和数据库一致性检查。
-5. 按需要执行 `npm run db:seed` 写入演示数据。
+5. `db:init` 已包含幂等 seed；仅需单独补数据时执行 `npm run db:seed`。
 6. 配置 `apps/web/.env` 和 `apps/admin/.env` 的 `VITE_API_BASE_URL`。
 7. 执行 `npm run build` 生成 `dist/web` 和 `dist/admin`。
 8. 使用 Nginx 或静态服务器托管前台、后台静态资源。

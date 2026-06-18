@@ -10,10 +10,7 @@ const databaseName = env.db.name
 const databaseSql = `\`${databaseName}\``
 
 async function migrate() {
-  const sourceSql = await readFile(schemaPath, 'utf8')
-  const sql = sourceSql
-    .replace('CREATE DATABASE IF NOT EXISTS coffee', `CREATE DATABASE IF NOT EXISTS \`${databaseName}\``)
-    .replace('USE coffee;', `USE \`${databaseName}\`;`)
+  const sql = await readFile(schemaPath, 'utf8')
   const connection = await mysql.createConnection({
     host: env.db.host,
     port: env.db.port,
@@ -24,6 +21,9 @@ async function migrate() {
   })
 
   try {
+    await connection.query(`CREATE DATABASE IF NOT EXISTS ${databaseSql}
+      DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`)
+    await connection.query(`USE ${databaseSql}`)
     await connection.query(sql)
     await ensureColumn(connection, databaseName, 'orders', 'source', "VARCHAR(30) NOT NULL DEFAULT 'cart' AFTER user_id")
     await ensureColumn(connection, databaseName, 'products', 'product_type', "VARCHAR(40) NOT NULL DEFAULT 'coffee' AFTER category")
