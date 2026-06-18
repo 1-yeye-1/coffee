@@ -23,15 +23,17 @@ export function assertBookingDateAndTime(date, timeSlot) {
 }
 
 export async function listSeats() {
-  const [rows] = await pool.execute(`SELECT id, code, name, area, capacity, x, y, status,
-    created_at AS createdAt, updated_at AS updatedAt FROM seats ORDER BY code ASC`)
+  const [rows] = await pool.execute(`SELECT id, code, name, area, capacity, x, y, width, height, status,
+    sort_order AS sortOrder, created_at AS createdAt, updated_at AS updatedAt
+    FROM seats ORDER BY sort_order ASC, code ASC`)
   return rows
 }
 
 export async function getSeatAvailability(date, timeSlot, admin = false) {
   const normalized = assertBookingDateAndTime(date, timeSlot)
   const [rows] = await pool.execute(
-    `SELECT s.id, s.code, s.name, s.area, s.capacity, s.x, s.y, s.status AS baseStatus,
+    `SELECT s.id, s.code, s.name, s.area, s.capacity, s.x, s.y, s.width, s.height,
+      s.sort_order AS sortOrder, s.status AS baseStatus,
       b.id AS bookingId, b.booking_no AS bookingNo, b.contact_name AS contactName,
       b.phone, b.people_count AS peopleCount, b.status AS bookingStatus,
       COALESCE(u.nickname, u.username) AS nickname
@@ -40,12 +42,12 @@ export async function getSeatAvailability(date, timeSlot, admin = false) {
        AND COALESCE(b.time_slot, REPLACE(b.booking_time, ' ', '')) = ?
        AND b.status IN ('pending', 'confirmed')
      LEFT JOIN users u ON u.id = b.user_id
-     ORDER BY s.code ASC`,
+     ORDER BY s.sort_order ASC, s.code ASC`,
     [date, normalized],
   )
   return rows.map((row) => {
     const status = row.baseStatus === 'disabled' ? 'disabled' : row.bookingId ? 'reserved' : 'available'
-    const seat = { seatId: row.id, code: row.code, name: row.name, area: row.area, capacity: row.capacity, x: row.x, y: row.y, status }
+    const seat = { seatId: row.id, code: row.code, name: row.name, area: row.area, capacity: row.capacity, x: row.x, y: row.y, width: row.width, height: row.height, sortOrder: row.sortOrder, status }
     if (admin && row.bookingId) seat.bookingInfo = {
       id: row.bookingId, bookingNo: row.bookingNo, nickname: row.nickname || row.contactName,
       phoneMasked: maskPhone(row.phone), peopleCount: row.peopleCount, status: row.bookingStatus,
@@ -54,11 +56,56 @@ export async function getSeatAvailability(date, timeSlot, admin = false) {
   })
 }
 
+function normalizeSeat(payload) {
+  const seat = {
+    code: String(payload.code || '').trim().toUpperCase(),
+    name: String(payload.name || '').trim(),
+    area: String(payload.area || '').trim() || null,
+    capacity: Number(payload.capacity), x: Number(payload.x), y: Number(payload.y),
+    width: Number(payload.width || 64), height: Number(payload.height || 52),
+    sortOrder: Number(payload.sortOrder || 0), status: payload.status || 'available',
+  }
+  if (!seat.code || !seat.name) throw Object.assign(new Error('座位编号和名称必填'), { statusCode: 400 })
+  if (!Number.isInteger(seat.capacity) || seat.capacity < 1) throw Object.assign(new Error('座位容量无效'), { statusCode: 400 })
+  if (![seat.x, seat.y].every((value) => Number.isFinite(value) && value >= 0 && value <= 100)) throw Object.assign(new Error('座位坐标必须在 0 到 100 之间'), { statusCode: 400 })
+  if (!['available', 'disabled'].includes(seat.status)) throw Object.assign(new Error('座位状态无效'), { statusCode: 400 })
+  return seat
+}
+
+export async function createSeat(payload, operatorId) {
+  const seat = normalizeSeat(payload)
+  const [result] = await pool.execute(`INSERT INTO seats
+    (code, name, area, capacity, x, y, width, height, status, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  [seat.code, seat.name, seat.area, seat.capacity, seat.x, seat.y, seat.width, seat.height, seat.status, seat.sortOrder])
+  await writeAudit(operatorId, 'seat.create', 'seats', { id: result.insertId, operatorType: 'admin' })
+  return (await listSeats()).find((item) => Number(item.id) === Number(result.insertId))
+}
+
+export async function updateSeat(id, payload, operatorId) {
+  const seat = normalizeSeat(payload)
+  const [result] = await pool.execute(`UPDATE seats SET code=?, name=?, area=?, capacity=?, x=?, y=?, width=?, height=?, status=?, sort_order=? WHERE id=?`,
+    [seat.code, seat.name, seat.area, seat.capacity, seat.x, seat.y, seat.width, seat.height, seat.status, seat.sortOrder, id])
+  if (!result.affectedRows) return null
+  await writeAudit(operatorId, 'seat.update', 'seats', { id, operatorType: 'admin' })
+  return (await listSeats()).find((item) => Number(item.id) === Number(id))
+}
+
+export async function deleteSeat(id, operatorId) {
+  const [[future]] = await pool.execute(`SELECT COUNT(*) AS total FROM bookings
+    WHERE seat_id = ? AND booking_date >= CURRENT_DATE AND status IN ('pending', 'confirmed')`, [id])
+  if (Number(future.total)) throw Object.assign(new Error('该座位存在未来预约，请改为停用'), { statusCode: 409 })
+  const [result] = await pool.execute('DELETE FROM seats WHERE id = ?', [id])
+  if (!result.affectedRows) return false
+  await writeAudit(operatorId, 'seat.delete', 'seats', { id, operatorType: 'admin' })
+  return true
+}
+
 export async function updateSeatStatus(id, status, operatorId) {
   if (!['available', 'disabled'].includes(status)) throw Object.assign(new Error('座位状态无效'), { statusCode: 400 })
   const [result] = await pool.execute('UPDATE seats SET status = ? WHERE id = ?', [status, id])
   if (!result.affectedRows) return null
   await writeAudit(operatorId, 'seat.status.update', 'seats', { id, status, operatorType: 'admin' })
-  const [[seat]] = await pool.execute('SELECT id, code, name, area, capacity, x, y, status FROM seats WHERE id = ?', [id])
+  const [[seat]] = await pool.execute('SELECT id, code, name, area, capacity, x, y, width, height, status, sort_order AS sortOrder FROM seats WHERE id = ?', [id])
   return seat
 }

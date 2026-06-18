@@ -47,6 +47,8 @@ onMounted(load)
         ['我的订单', overview.stats.orders || 0],
         ['我的预约', overview.stats.bookings || 0],
         ['我的帖子', overview.stats.posts || 0],
+        ['活动报名', overview.stats.eventRegistrations || 0],
+        ['我的收藏', overview.stats.favorites || 0],
         ['未读通知', overview.stats.unreadNotifications || 0],
       ]" :key="item[0]" class="member-stat">
         <span>{{ item[0] }}</span>

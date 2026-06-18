@@ -5,6 +5,7 @@ import {
   findProductBySlug,
   listProductReviews,
   listProducts,
+  listProductRecommendations,
 } from '../services/products.service.js'
 import { failure, paginated, success } from '../utils/response.js'
 
@@ -12,6 +13,10 @@ export function registerProductsRoutes(router) {
   router.get('/api/products', async (req, res) => {
     const result = await listProducts(req.query)
     return paginated(res, result.items, result.meta)
+  })
+
+  router.get('/api/products/recommendations', async (req, res) => {
+    return success(res, await listProductRecommendations(req.query))
   })
 
   router.get('/api/products/:slug', async (req, res) => {

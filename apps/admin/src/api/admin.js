@@ -3,6 +3,10 @@ import { request, toQuery } from './request'
 export function fetchDashboard() {
   return request('/admin/dashboard')
 }
+export const fetchDashboardSummary = () => request('/admin/dashboard/summary')
+export const fetchDashboardTrends = () => request('/admin/dashboard/trends')
+export const fetchDashboardRecent = () => request('/admin/dashboard/recent')
+export const fetchFinanceDashboard = () => request('/admin/dashboard/finance')
 
 export const searchAdmin = (keyword) => request(`/admin/search${toQuery({ keyword })}`)
 
@@ -54,6 +58,10 @@ export const uploadContentImage = (file, scene) => {
 }
 export const getAdminLogs = (params = {}) => request(`/admin/logs${toQuery(params)}`)
 export const fetchSeatUsage = (params = {}) => request(`/admin/seats/usage${toQuery(params)}`)
+export const fetchAdminSeats = () => request('/admin/seats')
+export const createSeat = (payload) => request('/admin/seats', { method: 'POST', body: payload })
+export const updateSeat = (id, payload) => request(`/admin/seats/${id}`, { method: 'PATCH', body: payload })
+export const deleteSeat = (id) => request(`/admin/seats/${id}`, { method: 'DELETE' })
 export const updateSeatStatus = (id, status) => request(`/admin/seats/${id}/status`, { method: 'PATCH', body: { status } })
 export const getAdminLogDetail = (id) => request(`/admin/logs/${id}`)
 export const exportAdminLogs = (params = {}) => request(`/admin/logs/export${toQuery(params)}`)

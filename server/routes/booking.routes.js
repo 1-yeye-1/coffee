@@ -6,6 +6,7 @@ import {
   findSpaceBySlug,
   listSpaceSlots,
   listSpaces,
+  listBookings,
 } from '../services/booking.service.js'
 import { failure, success } from '../utils/response.js'
 
@@ -34,8 +35,13 @@ export function registerBookingRoutes(router) {
   })
 
   router.post('/api/bookings', requireUser, async (req, res) => {
-    if (!requireBodyFields(res, req.body, ['date', 'timeSlot', 'seatId', 'peopleCount', 'contactName', 'phone'])) return false
+    if (!requireBodyFields(res, req.body, ['date', 'timeSlot', 'seatId', 'peopleCount'])) return false
     return success(res, await createBooking(req.body, req.user.id), '预约成功', 201)
+  })
+
+  router.get('/api/bookings/my', requireUser, async (req, res) => {
+    const result = await listBookings({ ...req.query, pageSize: req.query.pageSize || 100 }, false, req.user.id)
+    return success(res, result.items)
   })
 
   router.post('/api/bookings/guest', async (req, res) => {

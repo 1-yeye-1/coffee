@@ -113,10 +113,11 @@ export async function sendVerificationCode(phone, scene = 'login') {
 
   const code = String(randomInt(100000, 1000000))
   const codeHash = await hashPassword(code)
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
   await pool.execute(
     `INSERT INTO verification_codes (phone, scene, code_hash, expires_at)
-     VALUES (?, ?, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 5 MINUTE))`,
-    [normalizedPhone, scene, codeHash],
+     VALUES (?, ?, ?, ?)`,
+    [normalizedPhone, scene, codeHash, expiresAt],
   )
 
   if (env.nodeEnv !== 'production') {

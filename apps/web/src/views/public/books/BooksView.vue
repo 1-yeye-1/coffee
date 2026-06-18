@@ -14,18 +14,20 @@ import {
   BaseTabs,
   EmptyState,
 } from '@/components/base'
-import { books as localBooks } from '@/data/books'
 import { useBooksStore } from '@/stores/books'
+import { useAuthStore } from '@/stores/auth'
+import { useMembershipStore } from '@/stores/membership'
 import '@/assets/styles/pages/catalog.css'
 
 const router = useRouter()
 const booksStore = useBooksStore()
+const authStore = useAuthStore()
+const membershipStore = useMembershipStore()
 const keyword = ref('')
 const category = ref('全部')
 const sort = ref('recommended')
 const page = ref(1)
 const pageSize = 8
-const favorites = ref(new Set())
 let requestTimer
 
 const categories = ['全部', '文学', '商业', '艺术', '生活', '心理', '设计'].map((item) => ({
@@ -44,7 +46,7 @@ const visibleBooks = computed(() => booksStore.items)
 const totalBooks = computed(() => booksStore.meta?.total ?? visibleBooks.value.length)
 const totalPages = computed(() => Math.max(1, Math.ceil(totalBooks.value / pageSize)))
 const borrowableCount = computed(() => visibleBooks.value.filter((book) => book.stock > 0).length)
-const favoriteCount = computed(() => localBooks.reduce((total, book) => total + (book.favorites || 0), 0))
+const favoriteCount = computed(() => visibleBooks.value.reduce((total, book) => total + Number(book.favorites || 0), 0))
 
 const sortMap = { recommended: 'default', rating: 'rating_desc', latest: 'newest', stock: 'stock_desc' }
 
@@ -64,7 +66,7 @@ watch([keyword, category, sort], () => {
   requestTimer = setTimeout(loadBooks, 250)
 })
 watch(page, loadBooks)
-onMounted(loadBooks)
+onMounted(async () => { await loadBooks(); if (authStore.isAuthenticated) await membershipStore.fetchFavorites() })
 
 function clearFilters() {
   keyword.value = ''
@@ -72,11 +74,9 @@ function clearFilters() {
   sort.value = 'recommended'
 }
 
-function toggleFavorite(id) {
-  const next = new Set(favorites.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  favorites.value = next
+async function toggleFavorite(id) {
+  if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: '/books' } })
+  await membershipStore.toggleFavorite('book', id)
 }
 </script>
 
@@ -127,13 +127,13 @@ function toggleFavorite(id) {
           <div class="catalog-card__visual">
             <button
               class="catalog-card__favorite"
-              :class="{ 'is-active': favorites.has(book.id) }"
+              :class="{ 'is-active': membershipStore.isFavorite('book', book.id) }"
               type="button"
-              :aria-label="favorites.has(book.id) ? `取消收藏《${book.title}》` : `收藏《${book.title}》`"
-              :aria-pressed="favorites.has(book.id)"
+              :aria-label="membershipStore.isFavorite('book', book.id) ? `取消收藏《${book.title}》` : `收藏《${book.title}》`"
+              :aria-pressed="membershipStore.isFavorite('book', book.id)"
               @click="toggleFavorite(book.id)"
             >
-              {{ favorites.has(book.id) ? '♥' : '♡' }}
+              {{ membershipStore.isFavorite('book', book.id) ? '♥' : '♡' }}
             </button>
             <img v-if="book.coverUrl" class="catalog-content-image" :src="resolveUploadUrl(book.coverUrl)" :alt="book.title" />
             <div v-else class="book-cover catalog-card__visual-inner" :class="`tone-${book.coverTone}`">

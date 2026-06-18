@@ -6,12 +6,15 @@ import { getPublicProfile } from '@/api/account'
 import { resolveUploadUrl } from '@/api/upload'
 import { BaseBadge, BaseButton, BaseModal, BaseTextarea, BaseToast, EmptyState } from '@/components/base'
 import { useCommunityStore } from '@/stores/community'
+import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/pages/engagement.css'
 
 const route = useRoute()
 const router = useRouter()
 const communityStore = useCommunityStore()
+const authStore = useAuthStore()
 const comment = ref('')
+const isAnonymous = ref(false)
 const toastVisible = ref(false)
 const toastTitle = ref('评论成功')
 const toastMessage = ref('你的评论已发布。')
@@ -33,7 +36,8 @@ function showToast(title, message) {
 
 async function submitComment() {
   if (!comment.value.trim()) return
-  await communityStore.addComment(post.value.id, comment.value)
+  if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
+  await communityStore.addComment(post.value.id, comment.value, isAnonymous.value)
   comment.value = ''
   showToast('评论成功', '你的评论已发布。')
 }
@@ -49,8 +53,14 @@ async function openLikes() {
 }
 
 async function toggleLike() {
+  if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
   await communityStore.toggleLike(post.value.id)
   if (likesOpen.value) await openLikes()
+}
+
+async function toggleFavorite() {
+  if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
+  await communityStore.toggleFavorite(post.value.id)
 }
 
 async function visitUser(userId) {
@@ -98,7 +108,7 @@ watch(postParam, (value) => {
             <div class="post-actions">
               <BaseButton size="sm" :variant="communityStore.likedIds.includes(post.id) ? 'primary' : 'outline'" @click="toggleLike">点赞 {{ post.likes }}</BaseButton>
               <BaseButton size="sm" variant="ghost" @click="openLikes">查看点赞用户</BaseButton>
-              <BaseButton size="sm" :variant="communityStore.favoriteIds.includes(post.id) ? 'secondary' : 'outline'" @click="communityStore.toggleFavorite(post.id)">收藏</BaseButton>
+              <BaseButton size="sm" :variant="communityStore.favoriteIds.includes(post.id) ? 'secondary' : 'outline'" @click="toggleFavorite">收藏</BaseButton>
             </div>
           </article>
           <aside class="side-panel">
@@ -110,6 +120,7 @@ watch(postParam, (value) => {
         </div>
 
         <section class="detail-panel section-block">
+          <label class="anonymous-toggle"><input v-model="isAnonymous" type="checkbox" /> 匿名评论</label>
           <h2 class="section-title">评论 {{ post.comments.length }}</h2>
           <div class="comment-list">
             <div v-for="item in post.comments" :key="item.id" class="comment">

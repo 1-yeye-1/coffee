@@ -2,6 +2,7 @@
 import {
   createComment,
   createPost,
+  deleteComment,
   findPost,
   listPostLikes,
   listPosts,
@@ -39,6 +40,11 @@ export function registerCommunityRoutes(router) {
     if (!requireBodyFields(res, req.body, ['content'])) return false
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
     return success(res, await createComment(req.params.id, req.body, req.user), '评论成功', 201)
+  })
+
+  router.delete('/api/posts/:id/comments/:commentId', requireUser, async (req, res) => {
+    if (!await deleteComment(req.params.id, req.params.commentId, req.user.id)) return failure(res, 404, '评论不存在或无权删除', 404)
+    return success(res, {}, '评论已删除')
   })
 
   router.post('/api/posts/:id/like', requireUser, async (req, res) => {

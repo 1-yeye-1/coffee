@@ -87,7 +87,13 @@ npm install
 npm run db:init
 ```
 
-当前 `npm run db:init` 执行的是 `server/db/migrate.js`，会基于 `server/sql/schema.sql` 创建缺失表，并通过 `ensureColumn`、`ensureIndex` 等逻辑补充缺失字段和索引。它是非破坏性迁移，不会默认清空已有业务数据。
+当前 `npm run db:init` 会依次执行迁移、幂等 seed 和 `npm run db:check` 等价的结构一致性检查。迁移基于 `server/sql/schema.sql` 创建缺失表，并通过增量逻辑补充缺失字段和索引；不会默认清空已有业务数据。`DB_NAME` 可配置为 `coffee` 或其他只含字母、数字、下划线的数据库名，便于使用空库验证初始化。
+
+可单独检查关键表、字段、索引、`expires_at` 类型和 seed 基线数据：
+
+```bash
+npm run db:check
+```
 
 如需写入演示数据，可执行：
 

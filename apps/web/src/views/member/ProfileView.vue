@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 
-import { getAccountOverview, updatePrivacy, updateProfile } from '@/api/account'
+import { getAccountOverview, getAvatarHistory, reuseAvatar, selectPresetAvatar, updatePrivacy, updateProfile } from '@/api/account'
 import { resolveUploadUrl, uploadAvatar } from '@/api/upload'
 import { BaseBadge, BaseButton, BaseInput, BaseToast } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
@@ -20,12 +20,15 @@ const error = ref('')
 const avatarPreview = ref('')
 const avatarFile = ref(null)
 const avatarInput = ref(null)
+const avatarHistory = ref([])
+const presetAvatars = ['#6f4e37', '#a66a3f', '#486b57'].map((color, index) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" rx="36" fill="${color}"/><text x="80" y="102" text-anchor="middle" font-size="72" fill="white">${index + 1}</text></svg>`)}`)
 
 async function load() {
   loading.value = true
   error.value = ''
   try {
     user.value = (await getAccountOverview()).data.user
+    avatarHistory.value = (await getAvatarHistory()).data
     Object.assign(form, {
       nickname: user.value.nickname || '',
       phone: user.value.phoneMasked || user.value.phone || '',
@@ -106,6 +109,7 @@ async function submitAvatar() {
   try {
     const avatar = (await uploadAvatar(avatarFile.value)).data.url
     syncUser({ ...user.value, avatar })
+    avatarHistory.value = (await getAvatarHistory()).data
     avatarPreview.value = ''
     avatarFile.value = null
     if (avatarInput.value) avatarInput.value.value = ''
@@ -117,6 +121,16 @@ async function submitAvatar() {
   } finally {
     avatarUploading.value = false
   }
+}
+
+async function chooseAvatar(avatarUrl) {
+  avatarHistory.value = (await selectPresetAvatar(avatarUrl)).data
+  syncUser({ ...user.value, avatar: avatarUrl })
+}
+
+async function chooseHistory(item) {
+  avatarHistory.value = (await reuseAvatar(item.id)).data
+  syncUser({ ...user.value, avatar: item.avatarUrl })
 }
 
 onMounted(load)
@@ -161,6 +175,13 @@ onMounted(load)
       <BaseButton :loading="loading" @click="save">保存资料</BaseButton>
     </section>
 
+    <section class="member-panel avatar-manager">
+      <h3 class="section-title">系统头像</h3>
+      <div class="avatar-list"><button v-for="avatar in presetAvatars" :key="avatar" type="button" @click="chooseAvatar(avatar)"><img :src="avatar" alt="系统头像" /></button></div>
+      <h3 class="section-title">历史头像</h3>
+      <div class="avatar-list"><button v-for="item in avatarHistory" :key="item.id" type="button" :class="{ 'is-current': item.isCurrent }" @click="chooseHistory(item)"><img :src="resolveUploadUrl(item.avatarUrl)" alt="历史头像" /><small v-if="item.isCurrent">当前</small></button></div>
+    </section>
+
     <section class="member-panel privacy-panel">
       <div>
         <h3 class="section-title">个人主页可见性</h3>
@@ -197,6 +218,12 @@ onMounted(load)
   gap: var(--cb-space-2);
 }
 .avatar-input { display: none; }
+.avatar-manager { display:grid; gap:var(--cb-space-4); }
+.avatar-list { display:flex; flex-wrap:wrap; gap:var(--cb-space-3); }
+.avatar-list button { position:relative; padding:.2rem; background:transparent; border:.125rem solid transparent; border-radius:var(--cb-radius-lg); }
+.avatar-list button.is-current { border-color:var(--cb-color-coffee); }
+.avatar-list img { display:block; width:4rem; height:4rem; object-fit:cover; border-radius:var(--cb-radius-md); }
+.avatar-list small { position:absolute; right:.2rem; bottom:.2rem; padding:.1rem .25rem; color:white; background:var(--cb-color-coffee); border-radius:.25rem; }
 .privacy-panel {
   display: grid;
   gap: var(--cb-space-4);

@@ -3,6 +3,10 @@ import { logAdminAction } from '../services/admin-log.service.js'
 import { authenticateAdmin, findAdminById } from '../services/auth.service.js'
 import {
   getDashboardStats,
+  getDashboardSummary,
+  getDashboardTrends,
+  getDashboardRecent,
+  getFinanceDashboard,
   listAdminBooks,
   listAdminProducts,
   listAdminUsers,
@@ -55,6 +59,14 @@ export function registerAdminRoutes(router) {
   router.get('/api/admin/dashboard', requireAdmin, async (_req, res) => {
     return success(res, await getDashboardStats())
   })
+
+  router.get('/api/admin/dashboard/summary', requireAdmin, async (_req, res) => success(res, await getDashboardSummary()))
+  router.get('/api/admin/dashboard/trends', requireAdmin, async (_req, res) => success(res, await getDashboardTrends()))
+  router.get('/api/admin/dashboard/recent', requireAdmin, async (_req, res) => success(res, await getDashboardRecent()))
+  router.get('/api/admin/dashboard/finance', requireAdmin, async (_req, res) => success(res, await getFinanceDashboard()))
+  router.get('/api/admin/finance/summary', requireAdmin, async (_req, res) => success(res, (await getFinanceDashboard()).summary))
+  router.get('/api/admin/finance/trends', requireAdmin, async (_req, res) => success(res, (await getFinanceDashboard()).trends))
+  router.get('/api/admin/finance/orders', requireAdmin, async (_req, res) => success(res, (await getFinanceDashboard()).orders))
 
   router.get('/api/admin/search', requireAdmin, async (req, res) => {
     return success(res, await searchAdmin(req.query.keyword))

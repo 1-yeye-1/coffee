@@ -1,17 +1,25 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseBadge, BaseButton, BaseCard, EmptyState } from '@/components/base'
-import { products } from '@/data/products'
+import { fetchProductRecommendations } from '@/api/products'
 import { useCartStore } from '@/stores/cart'
 import '@/assets/styles/pages/commerce.css'
 
 const router = useRouter()
 const cartStore = useCartStore()
-const recommendations = computed(() =>
-  products.filter((product) => product.stock > 0 && !cartStore.items.some((item) => (item.productId || item.id) === product.id)).slice(0, 3),
-)
+const recommendations = ref([])
+const recommendationsLoading = ref(false)
+
+async function loadRecommendations() {
+  recommendationsLoading.value = true
+  try {
+    const exclude = cartStore.items.map((item) => item.productId || item.id).join(',')
+    recommendations.value = (await fetchProductRecommendations({ limit: 3, exclude })).data
+  } catch { recommendations.value = [] }
+  finally { recommendationsLoading.value = false }
+}
 
 function addRecommendation(product) {
   cartStore.addItem(product, 1)
@@ -21,7 +29,7 @@ function brewMethodText(value) {
   return { self_grind: '自己手磨', barista: '咖啡师制作' }[value] || '-'
 }
 
-onMounted(() => cartStore.fetchCart())
+onMounted(async () => { await cartStore.fetchCart(); await loadRecommendations() })
 </script>
 
 <template>
@@ -162,6 +170,7 @@ onMounted(() => cartStore.fetchCart())
               </div>
             </BaseCard>
           </div>
+          <EmptyState v-if="!recommendations.length && !recommendationsLoading" title="暂无推荐商品" description="当前没有符合条件的在售商品。" />
         </section>
       </template>
     </main>

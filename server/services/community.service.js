@@ -12,7 +12,7 @@ const postColumns = `
 `
 
 const commentColumns = `
-  id, post_id AS postId, user_id AS userId, author, content, status,
+  id, post_id AS postId, user_id AS userId, author, content, status, is_anonymous AS isAnonymous,
   created_at AS createdAt, updated_at AS updatedAt
 `
 
@@ -28,6 +28,7 @@ function slugify(value) {
 async function getComments(postId, publishedOnly = true) {
   const [rows] = await pool.execute(
     `SELECT c.id, c.post_id AS postId, c.user_id AS userId, c.author, c.content, c.status,
+      c.is_anonymous AS isAnonymous,
       c.created_at AS createdAt, c.updated_at AS updatedAt,
       u.nickname, u.username, u.avatar AS userAvatar, u.phone, u.profile_public AS profilePublic
      FROM comments c
@@ -40,12 +41,13 @@ async function getComments(postId, publishedOnly = true) {
     id: row.id,
     postId: row.postId,
     userId: row.userId,
-    author: row.author,
+    author: row.isAnonymous && publishedOnly ? '匿名用户' : row.author,
+    isAnonymous: Boolean(row.isAnonymous),
     content: row.content,
     status: row.status,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    user: row.userId ? {
+    user: row.userId && !(row.isAnonymous && publishedOnly) ? {
       id: row.userId,
       nickname: row.nickname || row.username || row.author,
       avatar: row.userAvatar,
@@ -133,9 +135,9 @@ export async function createComment(postId, payload, user) {
     await connection.beginTransaction()
     const author = user?.username || 'Coffee Reader'
     const [result] = await connection.execute(
-      `INSERT INTO comments (post_id, user_id, author, content, status)
-       VALUES (?, ?, ?, ?, 'published')`,
-      [postId, user?.id || null, author, String(payload.content || '').trim()],
+      `INSERT INTO comments (post_id, user_id, author, content, status, is_anonymous)
+       VALUES (?, ?, ?, ?, 'published', ?)`,
+      [postId, user?.id || null, author, String(payload.content || '').trim(), payload.isAnonymous || payload.is_anonymous ? 1 : 0],
     )
     await connection.execute(
       `UPDATE posts SET comments_count = (
@@ -146,6 +148,29 @@ export async function createComment(postId, payload, user) {
     await writeAudit(user?.id, 'comment.create', 'community', { postId, commentId: result.insertId }, connection)
     await connection.commit()
     return findPost(postId, true)
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export async function deleteComment(postId, commentId, userId) {
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [result] = await connection.execute('DELETE FROM comments WHERE id = ? AND post_id = ? AND user_id = ?', [commentId, postId, userId])
+    if (!result.affectedRows) {
+      await connection.rollback()
+      return false
+    }
+    await connection.execute(`UPDATE posts SET comments_count = (
+      SELECT COUNT(*) FROM comments WHERE post_id = ? AND status = 'published'
+    ) WHERE id = ?`, [postId, postId])
+    await writeAudit(userId, 'comment.delete', 'community', { postId, commentId }, connection)
+    await connection.commit()
+    return true
   } catch (error) {
     await connection.rollback()
     throw error

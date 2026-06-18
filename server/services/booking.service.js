@@ -148,7 +148,9 @@ export async function createBooking(payload, userId) {
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
-    const booking = await insertBooking(payload, userId, connection)
+    const [[user]] = await connection.execute('SELECT phone, COALESCE(nickname, username) AS name FROM users WHERE id = ? AND status = ? LIMIT 1', [userId, 'active'])
+    if (!user) throw Object.assign(new Error('当前用户不存在'), { statusCode: 404 })
+    const booking = await insertBooking({ ...payload, phone: user.phone, contactName: user.name }, userId, connection)
     await connection.commit()
     return booking
   } catch (error) {

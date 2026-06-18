@@ -50,6 +50,9 @@ export async function saveAvatarUpload(userId, meta) {
   try {
     await connection.beginTransaction()
     const file = await createUploadFile(userId, meta, connection)
+    await connection.execute('UPDATE user_avatars SET is_current = 0 WHERE user_id = ?', [userId])
+    await connection.execute(`INSERT INTO user_avatars (user_id, avatar_url, source, is_current)
+      VALUES (?, ?, 'upload', 1) ON DUPLICATE KEY UPDATE source = 'upload', is_current = 1`, [userId, meta.url])
     await connection.execute('UPDATE users SET avatar = ? WHERE id = ?', [meta.url, userId])
     await connection.commit()
     return { url: meta.url, file }

@@ -1,4 +1,5 @@
 <script setup>
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseBadge, BaseButton, EmptyState } from '@/components/base'
@@ -7,6 +8,7 @@ import '@/assets/styles/pages/engagement.css'
 
 const router = useRouter()
 const bookingStore = useBookingStore()
+onMounted(() => bookingStore.fetchMyBookings())
 </script>
 
 <template>
@@ -19,12 +21,12 @@ const bookingStore = useBookingStore()
       <article v-for="booking in bookingStore.bookings" :key="booking.id" class="record-row">
         <div>
           <div class="record-row__header">
-            <strong>{{ booking.date }} · {{ booking.time }}</strong>
+            <strong>{{ booking.date }} · {{ booking.timeSlot || booking.time }}</strong>
             <BaseBadge :variant="booking.status === 'confirmed' ? 'success' : 'neutral'">
               {{ booking.status === 'confirmed' ? '已确认' : '已取消' }}
             </BaseBadge>
           </div>
-          <p>{{ booking.space }} · 座位 {{ booking.seat }}</p>
+          <p>{{ booking.space }} · {{ booking.seatName || `座位 ${booking.seatCode || booking.seat}` }}</p>
           <small>{{ booking.contactName }} · {{ booking.phone }}</small>
         </div>
         <div class="cb-cluster">

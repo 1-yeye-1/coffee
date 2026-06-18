@@ -1,6 +1,7 @@
 import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
 import { writeAudit } from './admin.service.js'
+import { createNotification } from './notifications.service.js'
 
 const validEventStatuses = new Set(['draft', 'published', 'ongoing', 'ended', 'cancelled'])
 
@@ -43,7 +44,12 @@ export async function listEvents(query = {}, admin = false) {
   const { where, params } = buildFilters(query, admin)
   const [countRows] = await pool.execute(`SELECT COUNT(*) AS total FROM events ${where}`, params)
   const [rows] = await pool.query(
-    `SELECT ${columns} FROM events ${where} ORDER BY event_date ASC, id ASC LIMIT ? OFFSET ?`,
+    `SELECT ${columns} FROM events ${where}
+     ORDER BY CASE
+       WHEN status IN ('published','ongoing','open','active') AND event_date >= CURRENT_DATE AND attendees < capacity THEN 0
+       ELSE 1 END ASC,
+       CASE WHEN event_date >= CURRENT_DATE THEN event_date END ASC,
+       event_date DESC, id ASC LIMIT ? OFFSET ?`,
     [...params, pageSize, offset],
   )
   return { items: rows.map(normalize), meta: { page, pageSize, total: Number(countRows[0].total) } }
@@ -124,12 +130,17 @@ export async function registerEvent(eventId, userId) {
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
-    const [events] = await connection.execute('SELECT id, capacity, attendees FROM events WHERE id = ? FOR UPDATE', [eventId])
+    const [events] = await connection.execute('SELECT id, title, event_date AS eventDate, capacity, attendees, status FROM events WHERE id = ? FOR UPDATE', [eventId])
     const event = events[0]
     if (!event) {
       await connection.rollback()
       return null
     }
+    if (!['published', 'ongoing', 'open', 'active'].includes(event.status) || new Date(event.eventDate) < new Date(new Date().toDateString())) {
+      throw Object.assign(new Error('活动当前不可报名'), { statusCode: 409 })
+    }
+    const [[registration]] = await connection.execute('SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ? LIMIT 1', [eventId, userId])
+    if (registration?.status === 'registered') throw Object.assign(new Error('你已报名该活动'), { statusCode: 409 })
     if (Number(event.attendees) >= Number(event.capacity)) {
       const error = new Error('活动名额已满')
       error.statusCode = 409
@@ -148,6 +159,7 @@ export async function registerEvent(eventId, userId) {
       [eventId, eventId],
     )
     await writeAudit(userId, 'event.register', 'events', { eventId }, connection)
+    await createNotification({ userId, title: registration ? '重新报名成功' : '活动报名成功', content: `你已报名活动《${event.title}》。`, type: 'event', relatedId: eventId, relatedType: 'event' }, connection)
     await connection.commit()
     return findEventById(eventId)
   } catch (error) {
@@ -174,6 +186,7 @@ export async function cancelEventRegistration(eventId, userId) {
       [eventId, eventId],
     )
     await writeAudit(userId, 'event.unregister', 'events', { eventId }, connection)
+    if (result.affectedRows) await createNotification({ userId, title: '活动报名已取消', content: '活动名额已释放，你仍可在报名开放期间重新报名。', type: 'event', relatedId: eventId, relatedType: 'event' }, connection)
     await connection.commit()
     return result.affectedRows > 0
   } catch (error) {
@@ -182,4 +195,15 @@ export async function cancelEventRegistration(eventId, userId) {
   } finally {
     connection.release()
   }
+}
+
+export async function listMyEventRegistrations(userId) {
+  const [rows] = await pool.execute(`SELECT er.id AS registrationId, er.event_id AS eventId,
+    er.status AS registrationStatus, er.created_at AS registeredAt, er.updated_at AS registrationUpdatedAt,
+    e.id, e.slug, e.title, e.category, DATE_FORMAT(e.event_date, '%Y-%m-%d') AS date,
+    e.event_time AS time, e.location, e.capacity, e.attendees, e.status, e.tone,
+    e.summary, e.cover_url AS coverUrl, e.description, e.speaker, e.agenda
+    FROM event_registrations er INNER JOIN events e ON e.id = er.event_id
+    WHERE er.user_id = ? ORDER BY er.updated_at DESC, er.id DESC`, [userId])
+  return rows.map(normalize)
 }

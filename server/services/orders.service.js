@@ -100,10 +100,11 @@ async function loadPayments(orderId, connection = pool) {
 }
 
 async function createPayment(orderId, userId, amount, method, connection) {
+  const expiresAt = new Date(Date.now() + paymentTtlMinutes * 60 * 1000)
   await connection.execute(
     `INSERT INTO payments (payment_no, order_id, user_id, amount, method, status, expires_at)
-     VALUES (?, ?, ?, ?, ?, 'created', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${paymentTtlMinutes} MINUTE))`,
-    [paymentNo(), orderId, userId, amount, method],
+     VALUES (?, ?, ?, ?, ?, 'created', ?)`,
+    [paymentNo(), orderId, userId, amount, method, expiresAt],
   )
 }
 

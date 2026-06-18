@@ -10,8 +10,8 @@ function required(name) {
 
 const databaseName = process.env.DB_NAME || 'coffee'
 
-if (databaseName !== 'coffee') {
-  throw new Error('DB_NAME must be coffee')
+if (!/^[A-Za-z0-9_]+$/.test(databaseName)) {
+  throw new Error('DB_NAME may only contain letters, numbers, and underscores')
 }
 
 export const env = Object.freeze({

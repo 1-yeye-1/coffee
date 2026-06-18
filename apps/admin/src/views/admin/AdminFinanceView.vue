@@ -1,27 +1,36 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 
-import { BaseBadge, BaseTable } from '@/components/base'
-import { paymentRecords, revenueTrend } from '@/data/admin'
-import { useOrderStore } from '@/stores/orders'
+import { BaseBadge, BaseTable, EmptyState } from '@/components/base'
+import { useAdminStore } from '@/stores/admin'
 import '@/assets/styles/pages/admin-management.css'
 
-const orderStore=useOrderStore()
-const maxRevenue=Math.max(...revenueTrend)
-const total=computed(()=>orderStore.orders.filter(i=>['paid','completed'].includes(i.status)).reduce((sum,i)=>sum+i.amounts.total,0))
-const stats=computed(()=>[
-  ['总收入',`¥${total.value||36520}`],['今日收入',`¥${revenueTrend.at(-1)}`],['订单收入',`¥${total.value||28760}`],['活动收入','¥7,760'],['退款金额','¥320'],
+const adminStore = useAdminStore()
+const finance = computed(() => adminStore.financeDashboard || { summary: {}, trends: [], statusDistribution: [], topProducts: [], orders: [] })
+const stats = computed(() => [
+  ['总销售额', finance.value.summary.totalSales], ['今日销售额', finance.value.summary.todaySales],
+  ['待支付金额', finance.value.summary.pendingAmount], ['已退款金额', finance.value.summary.refundedAmount],
 ])
-const columns=[{key:'id',label:'支付编号'},{key:'orderId',label:'订单号'},{key:'user',label:'用户'},{key:'amount',label:'金额'},{key:'method',label:'方式'},{key:'status',label:'状态'},{key:'time',label:'时间'}]
+const maxRevenue = computed(() => Math.max(1, ...finance.value.trends.map((item) => item.value)))
+const orders = computed(() => finance.value.orders.map((item) => ({ ...item, amountText: `¥${item.amount}`, createdText: new Date(item.createdAt).toLocaleString('zh-CN') })))
+const columns = [
+  { key: 'orderNo', label: '订单号' }, { key: 'userName', label: '用户' }, { key: 'amountText', label: '金额' },
+  { key: 'method', label: '支付方式' }, { key: 'status', label: '状态' }, { key: 'createdText', label: '时间' },
+]
+
+onMounted(() => adminStore.fetchFinanceDashboard())
 </script>
+
 <template>
   <div class="admin-page">
-    <header class="admin-page__header"><div class="admin-page__title"><span class="section-eyebrow">Finance</span><h1>财务统计</h1><p>查看收入趋势、支付方式与近期支付记录。</p></div></header>
-    <section class="admin-stat-grid"><div v-for="item in stats" :key="item[0]" class="admin-stat"><span>{{ item[0] }}</span><strong>{{ item[1] }}</strong></div></section>
+    <header class="admin-page__header"><div class="admin-page__title"><span class="section-eyebrow">Finance</span><h1>财务统计</h1><p>金额与排行由订单和订单项实时聚合。</p></div></header>
+    <p v-if="adminStore.apiError" class="form-error">{{ adminStore.apiError }}</p>
+    <section class="admin-stat-grid"><div v-for="item in stats" :key="item[0]" class="admin-stat"><span>{{ item[0] }}</span><strong>¥{{ item[1] || 0 }}</strong></div></section>
     <section class="admin-dashboard-grid">
-      <div class="admin-chart"><div class="admin-panel__header"><h2>近 7 日收入趋势</h2><BaseBadge variant="premium">Revenue</BaseBadge></div><div class="admin-bars"><div v-for="(value,index) in revenueTrend" :key="value" class="admin-bar"><span :style="{height:`${value/maxRevenue*100}%`}" /><small>{{ index+1 }}日</small></div></div></div>
-      <div class="admin-chart"><div class="admin-panel__header"><h2>支付方式占比</h2></div><div class="admin-ranking"><div class="admin-ranking__item"><span>微信支付</span><strong>58%</strong></div><div class="admin-ranking__item"><span>支付宝</span><strong>34%</strong></div><div class="admin-ranking__item"><span>到店支付</span><strong>8%</strong></div></div></div>
+      <div class="admin-chart"><div class="admin-panel__header"><h2>最近 7 天销售趋势</h2><BaseBadge variant="premium">Revenue</BaseBadge></div><div v-if="finance.trends.some(item => item.value)" class="admin-bars"><div v-for="item in finance.trends" :key="item.date" class="admin-bar"><span :style="{height:`${item.value / maxRevenue * 100}%`}" /><small>{{ item.date.slice(5) }}</small></div></div><EmptyState v-else title="暂无销售趋势数据" /></div>
+      <div class="admin-chart"><div class="admin-panel__header"><h2>订单状态分布</h2></div><div v-if="finance.statusDistribution.length" class="admin-ranking"><div v-for="item in finance.statusDistribution" :key="item.label" class="admin-ranking__item"><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div></div><EmptyState v-else title="暂无订单数据" /></div>
     </section>
-    <section class="admin-panel"><div class="admin-panel__header"><h2>支付记录</h2></div><BaseTable :columns="columns" :items="paymentRecords"><template #cell-amount="{value}">¥{{ value }}</template><template #cell-status="{value}"><BaseBadge :variant="value==='成功'?'success':'warning'">{{ value }}</BaseBadge></template></BaseTable></section>
+    <section class="admin-panel"><div class="admin-panel__header"><h2>热销商品</h2></div><div v-if="finance.topProducts.length" class="admin-ranking"><div v-for="item in finance.topProducts" :key="item.name" class="admin-ranking__item"><span>{{ item.name }}</span><strong>{{ item.quantity }} 件 / ¥{{ item.revenue }}</strong></div></div><EmptyState v-else title="暂无热销商品" /></section>
+    <section class="admin-panel"><div class="admin-panel__header"><h2>订单记录</h2></div><BaseTable :columns="columns" :items="orders" empty-text="暂无订单记录" /></section>
   </div>
 </template>

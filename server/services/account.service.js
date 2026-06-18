@@ -30,12 +30,17 @@ export async function getAccountOverview(userId) {
     `SELECT ${userSelect} FROM users WHERE id = ? AND role = 'user' LIMIT 1`,
     [userId],
   )
-  const [[orders], [bookings], [posts], [unread], [addresses]] = await Promise.all([
+  const [[orders], [bookings], [posts], [unread], [addresses], [registrations], [favorites], [recentNotifications], [recentOrders], [recentBookings]] = await Promise.all([
     pool.execute('SELECT COUNT(*) AS total FROM orders WHERE user_id = ?', [userId]),
     pool.execute('SELECT COUNT(*) AS total FROM bookings WHERE user_id = ?', [userId]),
     pool.execute('SELECT COUNT(*) AS total FROM posts WHERE user_id = ?', [userId]),
     pool.execute('SELECT COUNT(*) AS total FROM user_notifications WHERE user_id = ? AND is_read = 0', [userId]),
     pool.execute('SELECT COUNT(*) AS total FROM user_addresses WHERE user_id = ?', [userId]),
+    pool.execute("SELECT COUNT(*) AS total FROM event_registrations WHERE user_id = ? AND status = 'registered'", [userId]),
+    pool.execute('SELECT COUNT(*) AS total FROM user_favorites WHERE user_id = ?', [userId]),
+    pool.execute('SELECT id, title, content, type, is_read AS isRead, created_at AS createdAt FROM user_notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5', [userId]),
+    pool.execute('SELECT id, order_no AS orderNo, total_amount AS amount, status, created_at AS createdAt FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 5', [userId]),
+    pool.execute('SELECT id, booking_no AS bookingNo, booking_date AS bookingDate, time_slot AS timeSlot, status, created_at AS createdAt FROM bookings WHERE user_id = ? ORDER BY created_at DESC LIMIT 5', [userId]),
   ])
   return {
     user: mapUser(user),
@@ -45,8 +50,61 @@ export async function getAccountOverview(userId) {
       posts: Number(posts[0].total),
       unreadNotifications: Number(unread[0].total),
       addresses: Number(addresses[0].total),
+      eventRegistrations: Number(registrations[0].total),
+      favorites: Number(favorites[0].total),
+      points: Number(user?.points || 0),
     },
+    recentNotifications: recentNotifications.map((item) => ({ ...item, isRead: Boolean(item.isRead) })),
+    recentOrders: recentOrders.map((item) => ({ ...item, amount: Number(item.amount) })),
+    recentBookings,
   }
+}
+
+const favoriteTypes = new Set(['book', 'product', 'post', 'event'])
+
+function assertFavoriteType(type) {
+  if (!favoriteTypes.has(type)) throw Object.assign(new Error('Invalid favorite type'), { statusCode: 400 })
+}
+
+export async function listFavorites(userId) {
+  const [rows] = await pool.execute(
+    `SELECT f.id, f.target_type AS targetType, f.target_id AS targetId, f.created_at AS createdAt,
+      COALESCE(b.title, p.name, po.title, e.title) AS title,
+      COALESCE(b.slug, p.slug, po.slug, e.slug) AS slug,
+      COALESCE(b.category, p.category, po.topic, e.category) AS category,
+      CASE f.target_type WHEN 'book' THEN b.author WHEN 'product' THEN p.origin
+        WHEN 'post' THEN po.author WHEN 'event' THEN CONCAT(e.event_date, ' ', e.event_time) END AS meta
+     FROM user_favorites f
+     LEFT JOIN books b ON f.target_type = 'book' AND b.id = f.target_id
+     LEFT JOIN products p ON f.target_type = 'product' AND p.id = f.target_id
+     LEFT JOIN posts po ON f.target_type = 'post' AND po.id = f.target_id
+     LEFT JOIN events e ON f.target_type = 'event' AND e.id = f.target_id
+     WHERE f.user_id = ? ORDER BY f.created_at DESC, f.id DESC`,
+    [userId],
+  )
+  return rows.filter((row) => row.title)
+}
+
+export async function addFavorite(userId, payload) {
+  const targetType = String(payload.targetType || '').trim()
+  const targetId = Number(payload.targetId)
+  assertFavoriteType(targetType)
+  if (!Number.isInteger(targetId) || targetId < 1) throw Object.assign(new Error('Invalid favorite target'), { statusCode: 400 })
+  const table = { book: 'books', product: 'products', post: 'posts', event: 'events' }[targetType]
+  const [[target]] = await pool.query(`SELECT id FROM ${table} WHERE id = ? LIMIT 1`, [targetId])
+  if (!target) throw Object.assign(new Error('Favorite target not found'), { statusCode: 404 })
+  await pool.execute(
+    `INSERT INTO user_favorites (user_id, target_type, target_id) VALUES (?, ?, ?)
+     ON DUPLICATE KEY UPDATE created_at = created_at`,
+    [userId, targetType, targetId],
+  )
+  const [rows] = await pool.execute('SELECT id, target_type AS targetType, target_id AS targetId, created_at AS createdAt FROM user_favorites WHERE user_id = ? AND target_type = ? AND target_id = ? LIMIT 1', [userId, targetType, targetId])
+  return rows[0]
+}
+
+export async function removeFavorite(userId, favoriteId) {
+  const [result] = await pool.execute('DELETE FROM user_favorites WHERE id = ? AND user_id = ?', [favoriteId, userId])
+  return Number(result.affectedRows || 0) > 0
 }
 
 export async function updateProfile(userId, payload) {
@@ -60,6 +118,40 @@ export async function updateProfile(userId, payload) {
     [userId],
   )
   return mapUser(user)
+}
+
+export async function listAvatars(userId) {
+  const [rows] = await pool.execute(`SELECT id, avatar_url AS avatarUrl, source,
+    is_current AS isCurrent, created_at AS createdAt FROM user_avatars
+    WHERE user_id = ? ORDER BY is_current DESC, created_at DESC, id DESC`, [userId])
+  return rows.map((row) => ({ ...row, isCurrent: Boolean(row.isCurrent) }))
+}
+
+export async function selectAvatar(userId, avatarUrl, source = 'preset') {
+  const url = String(avatarUrl || '').trim()
+  if (!url) throw Object.assign(new Error('头像地址必填'), { statusCode: 400 })
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    await connection.execute('UPDATE user_avatars SET is_current = 0 WHERE user_id = ?', [userId])
+    await connection.execute(`INSERT INTO user_avatars (user_id, avatar_url, source, is_current)
+      VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE source = VALUES(source), is_current = 1`, [userId, url, source])
+    await connection.execute('UPDATE users SET avatar = ? WHERE id = ? AND role = "user"', [url, userId])
+    await writeAudit(userId, 'user.avatar.select', 'account', { source }, connection)
+    await connection.commit()
+    return listAvatars(userId)
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export async function useAvatarHistory(userId, avatarId) {
+  const [[avatar]] = await pool.execute('SELECT avatar_url AS avatarUrl FROM user_avatars WHERE id = ? AND user_id = ? LIMIT 1', [avatarId, userId])
+  if (!avatar) throw Object.assign(new Error('历史头像不存在'), { statusCode: 404 })
+  return selectAvatar(userId, avatar.avatarUrl, 'history')
 }
 
 export async function listPointRecords(userId) {

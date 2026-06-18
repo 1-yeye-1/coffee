@@ -1,11 +1,6 @@
 import { defineStore } from 'pinia'
 
 import * as adminApi from '@/api/admin'
-import { books } from '@/data/books'
-import { events } from '@/data/events'
-import { seedPosts } from '@/data/posts'
-import { products } from '@/data/products'
-import { users } from '@/data/users'
 
 const STORAGE_KEY = 'coffee-book-admin'
 const defaultSettings = {
@@ -36,38 +31,32 @@ function initialState() {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
     return {
       navigationCollapsed: false,
-      books: saved.books || clone(books).map((item) => ({ ...item, enabled: true })),
-      products: normalizeProducts(saved.products || products),
-      events: saved.events || clone(events),
-      users: saved.users || clone(users),
-      posts: saved.posts || clone(seedPosts).map((item, index) => ({
-        ...item,
-        reviewStatus: index === 3 ? 'pending' : 'published',
-        featured: index === 0,
-      })),
+      books: [], products: [], events: [], users: [], posts: [],
       settings: { ...defaultSettings, ...(saved.settings || {}) },
       auditItems: saved.auditItems || [],
       remoteDashboard: null,
+      dashboardTrends: null,
+      dashboardRecent: null,
+      financeDashboard: null,
       apiLoading: false,
       apiError: '',
-      dataSource: 'local',
+      dataSource: 'api',
       orders: [],
       bookings: [],
     }
   } catch {
     return {
       navigationCollapsed: false,
-      books: clone(books).map((item) => ({ ...item, enabled: true })),
-      products: normalizeProducts(products),
-      events: clone(events),
-      users: clone(users),
-      posts: clone(seedPosts).map((item) => ({ ...item, reviewStatus: 'published', featured: false })),
+      books: [], products: [], events: [], users: [], posts: [],
       settings: defaultSettings,
       auditItems: [],
       remoteDashboard: null,
+      dashboardTrends: null,
+      dashboardRecent: null,
+      financeDashboard: null,
       apiLoading: false,
       apiError: '',
-      dataSource: 'local',
+      dataSource: 'api',
       orders: [],
       bookings: [],
     }
@@ -90,14 +79,7 @@ export const useAdminStore = defineStore('admin', {
   state: () => initialState(),
   getters: {
     dashboardStats(state) {
-      return state.remoteDashboard || {
-        books: state.books.length,
-        products: state.products.length,
-        users: state.users.length,
-        orders: 0,
-        todayRevenue: 0,
-        pendingPosts: state.posts.filter((post) => post.reviewStatus === 'pending').length,
-      }
+      return state.remoteDashboard || {}
     },
     adminUsers: (state) => state.users,
     adminSettings: (state) => state.settings,
@@ -107,16 +89,33 @@ export const useAdminStore = defineStore('admin', {
       this.apiLoading = true
       this.apiError = ''
       try {
-        this.remoteDashboard = (await adminApi.fetchDashboard()).data
+        const [summary, trends, recent] = await Promise.all([
+          adminApi.fetchDashboardSummary(), adminApi.fetchDashboardTrends(), adminApi.fetchDashboardRecent(),
+        ])
+        this.remoteDashboard = summary.data
+        this.dashboardTrends = trends.data
+        this.dashboardRecent = recent.data
         this.dataSource = 'api'
       } catch (error) {
         this.remoteDashboard = null
         this.apiError = error.message
-        this.dataSource = 'local'
+        this.dashboardTrends = null
+        this.dashboardRecent = null
       } finally {
         this.apiLoading = false
       }
       return this.dashboardStats
+    },
+    async fetchFinanceDashboard() {
+      this.apiLoading = true
+      try {
+        this.financeDashboard = (await adminApi.fetchFinanceDashboard()).data
+        this.apiError = ''
+      } catch (error) {
+        this.financeDashboard = null
+        this.apiError = error.message
+      } finally { this.apiLoading = false }
+      return this.financeDashboard
     },
     async fetchAdminCollection(collection, params = {}) {
       if (!['books', 'products', 'events', 'posts', 'bookings', 'users'].includes(collection)) return this[collection]
@@ -140,7 +139,7 @@ export const useAdminStore = defineStore('admin', {
         this.dataSource = 'api'
       } catch (error) {
         this.apiError = error.message
-        this.dataSource = 'local'
+        this[collection] = []
       } finally {
         this.apiLoading = false
       }

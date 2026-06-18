@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { resolveUploadUrl, uploadReviewMedia } from '@/api/upload'
 import { BaseBadge, BaseButton, BaseCard, BaseTextarea, BaseToast, EmptyState } from '@/components/base'
-import { products } from '@/data/products'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { useOrderStore } from '@/stores/orders'
@@ -38,8 +37,8 @@ const brewMethodOptions = [
 ]
 const recommendations = computed(() => {
   if (!product.value) return []
-  const sameCategory = products.filter((item) => item.id !== product.value.id && item.category === product.value.category)
-  const others = products.filter((item) => item.id !== product.value.id && item.category !== product.value.category)
+  const sameCategory = productsStore.items.filter((item) => item.id !== product.value.id && item.category === product.value.category)
+  const others = productsStore.items.filter((item) => item.id !== product.value.id && item.category !== product.value.category)
   return [...sameCategory, ...others].slice(0, 4)
 })
 const services = [
@@ -72,6 +71,7 @@ async function loadReviews() {
 async function loadProduct() {
   quantity.value = 1
   brewMethod.value = 'barista'
+  await productsStore.fetchProducts({ page: 1, pageSize: 100 })
   await productsStore.fetchProductDetail(route.params.slug)
   await loadReviews()
 }

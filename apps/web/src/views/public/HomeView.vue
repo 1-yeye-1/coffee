@@ -1,10 +1,19 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseBadge, BaseButton, BaseCard, BaseToast } from '@/components/base'
+import { useCommunityStore } from '@/stores/community'
+import { useBooksStore } from '@/stores/books'
+import { useEventsStore } from '@/stores/events'
+import { useProductsStore } from '@/stores/products'
 
 const router = useRouter()
+const communityStore = useCommunityStore()
+const booksStore = useBooksStore()
+const eventsStore = useEventsStore()
+const productsStore = useProductsStore()
+const databasePosts = computed(() => communityStore.posts.slice(0, 3))
 const homeRef = ref(null)
 const toastVisible = ref(false)
 const animatedStats = ref([0, 0, 0, 0])
@@ -12,38 +21,15 @@ let revealObserver
 let statsObserver
 let animationFrame
 
-const stats = [
-  { label: '精选图书', value: 1280 },
-  { label: '咖啡商品', value: 86 },
-  { label: '文化活动', value: 42 },
-  { label: '社区用户', value: 9800 },
-]
-
-const books = [
-  { title: '小王子', author: '安托万·德·圣-埃克苏佩里', category: '文学', rating: '4.9', description: '献给每一个曾经是孩子的大人，在纯真与成长之间重新看见重要的事。', tone: 'sunset' },
-  { title: '原则', author: '瑞·达利欧', category: '商业', rating: '4.7', description: '以清晰、系统的方法理解现实，在持续反思中建立自己的工作与生活原则。', tone: 'forest' },
-  { title: '活着', author: '余华', category: '小说', rating: '4.8', description: '在命运的沉浮中凝视生命本身，以克制的文字书写坚韧与温度。', tone: 'earth' },
-  { title: '深度工作', author: '卡尔·纽波特', category: '效率', rating: '4.6', description: '在分心时代重新获得专注力，让真正重要的创造拥有完整时间。', tone: 'night' },
-]
-
-const coffees = [
-  { name: '埃塞俄比亚手冲', flavor: '茉莉、柑橘与红茶尾韵，明亮而轻盈。', price: '¥38', stock: '现货', badge: 'success', tone: 'floral' },
-  { name: '哥伦比亚冷萃', flavor: '黑巧克力、焦糖与橙皮，醇厚而清爽。', price: '¥32', stock: '现货', badge: 'success', tone: 'cold' },
-  { name: '焦糖拿铁', flavor: '丝滑牛奶融合温暖焦糖，柔和甜感。', price: '¥30', stock: '今日限定', badge: 'warning', tone: 'latte' },
-  { name: '咖啡豆礼盒', flavor: '三款精品产区豆，适合分享与收藏。', price: '¥168', stock: '少量库存', badge: 'premium', tone: 'gift' },
-]
-
-const events = [
-  { date: '06.14', weekday: '周日', title: '周末读书会', location: '二层阅读厅', attendees: '18 / 24 人', status: '报名中', badge: 'success' },
-  { date: '06.20', weekday: '周六', title: '手冲咖啡体验课', location: '咖啡实验室', attendees: '10 / 12 人', status: '即将满员', badge: 'warning' },
-  { date: '06.27', weekday: '周六', title: '城市夜读沙龙', location: '露台空间', attendees: '32 / 40 人', status: '报名中', badge: 'info' },
-]
-
-const posts = [
-  { title: '今天读完一本改变我的书', nickname: '林间页', time: '12 分钟前', likes: 128, comments: 24, avatar: '林' },
-  { title: '你最喜欢的咖啡风味是什么？', nickname: '浅烘时刻', time: '1 小时前', likes: 86, comments: 41, avatar: '浅' },
-  { title: '适合独处阅读的角落推荐', nickname: '城市漫读', time: '昨天', likes: 203, comments: 37, avatar: '城' },
-]
+const books = computed(() => booksStore.items.slice(0, 4).map((book) => ({ ...book, description: book.summary || book.description, tone: book.coverTone || 'forest' })))
+const coffees = computed(() => productsStore.items.slice(0, 4).map((product) => ({ ...product, flavor: Array.isArray(product.flavor) ? product.flavor.join('、') : product.flavor, price: `¥${product.price}`, stock: product.stock > 0 ? '现货' : '售罄', badge: product.stock > 0 ? 'success' : 'neutral', tone: product.tone || 'floral' })))
+const events = computed(() => eventsStore.items.slice(0, 3).map((event) => ({ ...event, date: event.date.slice(5).replace('-', '.'), weekday: new Intl.DateTimeFormat('zh-CN', { weekday: 'short' }).format(new Date(`${event.date}T00:00:00`)), attendees: `${event.attendees} / ${event.capacity} 人`, badge: event.attendees >= event.capacity ? 'warning' : 'success' })))
+const stats = computed(() => [
+  { label: '精选图书', value: booksStore.meta?.total || booksStore.items.length },
+  { label: '咖啡商品', value: productsStore.meta?.total || productsStore.items.length },
+  { label: '文化活动', value: eventsStore.items.length },
+  { label: '社区帖子', value: communityStore.posts.length },
+])
 
 const benefits = [
   { index: '01', title: '积分返利', description: '每一次阅读、消费与活动参与都能积累积分，兑换更多生活灵感。' },
@@ -61,7 +47,7 @@ function formatNumber(value) {
 
 function animateStats() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    animatedStats.value = stats.map((item) => item.value)
+    animatedStats.value = stats.value.map((item) => item.value)
     return
   }
   const start = performance.now()
@@ -69,13 +55,17 @@ function animateStats() {
   const update = (now) => {
     const progress = Math.min((now - start) / duration, 1)
     const eased = 1 - Math.pow(1 - progress, 3)
-    animatedStats.value = stats.map((item) => item.value * eased)
+    animatedStats.value = stats.value.map((item) => item.value * eased)
     if (progress < 1) animationFrame = requestAnimationFrame(update)
   }
   animationFrame = requestAnimationFrame(update)
 }
 
 onMounted(() => {
+  booksStore.fetchBooks({ page: 1, pageSize: 4 })
+  productsStore.fetchProducts({ page: 1, pageSize: 4 })
+  eventsStore.fetchEvents({ page: 1, pageSize: 3 })
+  communityStore.fetchPosts({ status: 'published', pageSize: 3, sort: 'hot' })
   const revealElements = homeRef.value?.querySelectorAll('[data-reveal]') ?? []
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   if (reduced || !('IntersectionObserver' in window)) {
@@ -241,9 +231,9 @@ onBeforeUnmount(() => {
           <BaseButton @click="navigate('/community')">进入社区</BaseButton>
         </BaseCard>
         <div class="post-list" data-reveal>
-          <article v-for="post in posts" :key="post.title" class="post-item">
+          <article v-for="post in databasePosts" :key="post.id" class="post-item" role="link" tabindex="0" @click="navigate(`/community/${post.id}`)" @keydown.enter="navigate(`/community/${post.id}`)">
             <span class="post-item__avatar">{{ post.avatar }}</span>
-            <div><h3>{{ post.title }}</h3><div class="post-item__meta"><span>{{ post.nickname }} · {{ post.time }}</span><span>♡ {{ post.likes }}　☵ {{ post.comments }}</span></div></div>
+            <div><h3>{{ post.title }}</h3><div class="post-item__meta"><span>{{ post.author }} · {{ new Date(post.createdAt).toLocaleDateString('zh-CN') }}</span><span>♡ {{ post.likes }}　☵ {{ post.commentsCount }}</span></div></div>
             <span class="post-item__arrow" aria-hidden="true">→</span>
           </article>
         </div>

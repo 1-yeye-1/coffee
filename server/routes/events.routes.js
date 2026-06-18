@@ -2,6 +2,7 @@
 import {
   cancelEventRegistration,
   findEventBySlug,
+  listMyEventRegistrations,
   listEvents,
   registerEvent,
 } from '../services/events.service.js'
@@ -17,6 +18,10 @@ export function registerEventsRoutes(router) {
     const event = await findEventBySlug(req.params.slug)
     if (!event) return failure(res, 404, '活动不存在', 404)
     return success(res, event)
+  })
+
+  router.get('/api/events/me/registrations', requireUser, async (req, res) => {
+    return success(res, await listMyEventRegistrations(req.user.id))
   })
 
   router.post('/api/events/:id/register', requireUser, async (req, res) => {

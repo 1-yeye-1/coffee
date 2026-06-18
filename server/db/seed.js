@@ -24,11 +24,7 @@ async function seedAdmin(connection) {
     `INSERT INTO admin_users
       (username, nickname, phone, password_hash, status)
      VALUES (?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-      nickname = VALUES(nickname),
-      phone = VALUES(phone),
-      password_hash = VALUES(password_hash),
-      status = VALUES(status)`,
+     ON DUPLICATE KEY UPDATE username = VALUES(username)`,
     ['admin', '系统管理员', '13800000000', passwordHash, 'active'],
   )
   await connection.execute(
@@ -59,13 +55,7 @@ async function seedUsers(connection) {
   const sql = `INSERT INTO users
     (username, nickname, phone, password_hash, role, status, points, level)
     VALUES (?, ?, ?, ?, 'user', 'active', ?, ?)
-    ON DUPLICATE KEY UPDATE
-      nickname = VALUES(nickname),
-      phone = VALUES(phone),
-      role = 'user',
-      status = 'active',
-      points = VALUES(points),
-      level = VALUES(level)`
+    ON DUPLICATE KEY UPDATE username = VALUES(username)`
 
   for (const user of users) {
     await connection.execute(sql, [
@@ -143,22 +133,7 @@ async function seedBooks(connection) {
     (slug, title, author, category, rating, stock, status, cover_tone, summary,
      description, isbn, publisher, year, pages, language, author_bio)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      title = VALUES(title),
-      author = VALUES(author),
-      category = VALUES(category),
-      rating = VALUES(rating),
-      stock = VALUES(stock),
-      status = VALUES(status),
-      cover_tone = VALUES(cover_tone),
-      summary = VALUES(summary),
-      description = VALUES(description),
-      isbn = VALUES(isbn),
-      publisher = VALUES(publisher),
-      year = VALUES(year),
-      pages = VALUES(pages),
-      language = VALUES(language),
-      author_bio = VALUES(author_bio)`
+    ON DUPLICATE KEY UPDATE slug = VALUES(slug)`
 
   for (const book of books) {
     await connection.execute(sql, [
@@ -187,23 +162,7 @@ async function seedProducts(connection) {
     (slug, name, category, product_type, supports_brew_method, price, original_price, stock, status, sales, flavor,
      origin, roast, description, scene, storage, tone)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      name = VALUES(name),
-      category = VALUES(category),
-      product_type = VALUES(product_type),
-      supports_brew_method = VALUES(supports_brew_method),
-      price = VALUES(price),
-      original_price = VALUES(original_price),
-      stock = VALUES(stock),
-      status = VALUES(status),
-      sales = VALUES(sales),
-      flavor = VALUES(flavor),
-      origin = VALUES(origin),
-      roast = VALUES(roast),
-      description = VALUES(description),
-      scene = VALUES(scene),
-      storage = VALUES(storage),
-      tone = VALUES(tone)`
+    ON DUPLICATE KEY UPDATE slug = VALUES(slug)`
 
   for (const product of products) {
     const productType = productTypeOf(product)
@@ -234,20 +193,7 @@ async function seedEvents(connection) {
     (slug, title, category, event_date, event_time, location, capacity, attendees, status,
      tone, summary, description, speaker, agenda)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      title = VALUES(title),
-      category = VALUES(category),
-      event_date = VALUES(event_date),
-      event_time = VALUES(event_time),
-      location = VALUES(location),
-      capacity = VALUES(capacity),
-      attendees = VALUES(attendees),
-      status = VALUES(status),
-      tone = VALUES(tone),
-      summary = VALUES(summary),
-      description = VALUES(description),
-      speaker = VALUES(speaker),
-      agenda = VALUES(agenda)`
+    ON DUPLICATE KEY UPDATE slug = VALUES(slug)`
 
   for (const event of events) {
     await connection.execute(sql, [
@@ -278,18 +224,7 @@ async function seedCommunityPosts(connection) {
   const postSql = `INSERT INTO posts
     (slug, user_id, title, author, avatar, topic, excerpt, content, status, featured, likes_count, comments_count, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      user_id = VALUES(user_id),
-      title = VALUES(title),
-      author = VALUES(author),
-      avatar = VALUES(avatar),
-      topic = VALUES(topic),
-      excerpt = VALUES(excerpt),
-      content = VALUES(content),
-      status = VALUES(status),
-      featured = VALUES(featured),
-      likes_count = VALUES(likes_count),
-      comments_count = VALUES(comments_count)`
+    ON DUPLICATE KEY UPDATE slug = VALUES(slug)`
   const commentSql = `INSERT INTO comments (post_id, author, content, status, created_at)
     SELECT ?, ?, ?, ?, ?
     FROM DUAL
@@ -349,15 +284,10 @@ async function seedSpaces(connection) {
   ]
   const spaceSql = `INSERT INTO spaces (slug, name, location, description, capacity, status)
     VALUES (?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      name = VALUES(name),
-      location = VALUES(location),
-      description = VALUES(description),
-      capacity = VALUES(capacity),
-      status = VALUES(status)`
+    ON DUPLICATE KEY UPDATE slug = VALUES(slug)`
   const slotSql = `INSERT INTO booking_slots (space_id, slot_date, slot_time, capacity, status)
     VALUES (?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE capacity = VALUES(capacity), status = VALUES(status)`
+    ON DUPLICATE KEY UPDATE space_id = VALUES(space_id)`
   const times = ['10:00 - 12:00', '13:00 - 15:00', '15:30 - 17:30', '18:00 - 20:00']
 
   for (const space of spaces) {
@@ -382,6 +312,74 @@ async function seedSpaces(connection) {
   }
 }
 
+async function seedOperationalData(connection) {
+  const [[user]] = await connection.execute("SELECT id FROM users WHERE phone = '13900000001' LIMIT 1")
+  const [[otherUser]] = await connection.execute("SELECT id FROM users WHERE phone = '13900000002' LIMIT 1")
+  const [products] = await connection.execute("SELECT id, name, category, price FROM products WHERE status = 'active' ORDER BY id LIMIT 3")
+  const [[book]] = await connection.execute('SELECT id FROM books ORDER BY id LIMIT 1')
+  const [[post]] = await connection.execute("SELECT id FROM posts WHERE status = 'published' ORDER BY id LIMIT 1")
+  const [[event]] = await connection.execute("SELECT id FROM events WHERE status IN ('published','ongoing') ORDER BY id LIMIT 1")
+  const [[space]] = await connection.execute("SELECT id FROM spaces WHERE status = 'active' ORDER BY id LIMIT 1")
+  const [[seat]] = await connection.execute("SELECT id FROM seats WHERE status = 'available' ORDER BY id LIMIT 1")
+  if (!user || !products.length) return
+
+  for (let index = 0; index < 7; index += 1) {
+    const product = products[index % products.length]
+    const day = new Date()
+    day.setDate(day.getDate() - index)
+    day.setHours(10 + index, 0, 0, 0)
+    const createdAt = toMysqlTimestamp(day)
+    const orderNo = `SEED-P13-${String(index + 1).padStart(2, '0')}`
+    const total = Number(product.price) * (index % 2 + 1)
+    await connection.execute(
+      `INSERT INTO orders (order_no, user_id, source, delivery_type, pickup_store, payment_method,
+        subtotal_amount, total_amount, status, created_at, paid_at)
+       VALUES (?, ?, 'cart', 'pickup', 'Coffee Book Seed Store', 'wechat', ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE order_no = order_no`,
+      [orderNo, index % 2 === 0 || !otherUser ? user.id : otherUser.id, total, total, index === 6 ? 'completed' : 'paid', createdAt, createdAt],
+    )
+    const [[order]] = await connection.execute('SELECT id, user_id FROM orders WHERE order_no = ? LIMIT 1', [orderNo])
+    await connection.execute(
+      `INSERT INTO order_items (order_id, product_id, product_name, product_category, price, quantity, subtotal)
+       SELECT ?, ?, ?, ?, ?, ?, ? FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM order_items WHERE order_id = ? AND product_id = ?)`,
+      [order.id, product.id, product.name, product.category, product.price, index % 2 + 1, total, order.id, product.id],
+    )
+    await connection.execute(
+      `INSERT INTO payments (payment_no, order_id, user_id, amount, method, status, paid_at, created_at)
+       VALUES (?, ?, ?, ?, 'wechat', 'paid', ?, ?) ON DUPLICATE KEY UPDATE payment_no = payment_no`,
+      [`PAY-${orderNo}`, order.id, order.user_id, total, createdAt, createdAt],
+    )
+  }
+
+  const favorites = [['book', book?.id], ['product', products[0]?.id], ['post', post?.id], ['event', event?.id]]
+  for (const [targetType, targetId] of favorites) {
+    if (targetId) await connection.execute('INSERT IGNORE INTO user_favorites (user_id, target_type, target_id) VALUES (?, ?, ?)', [user.id, targetType, targetId])
+  }
+  await connection.execute(
+    `INSERT IGNORE INTO user_avatars (user_id, avatar_url, source, is_current)
+     VALUES (?, '/uploads/seed/reader-chen-avatar.svg', 'seed', 1)`,
+    [user.id],
+  )
+  if (post?.id && otherUser?.id) {
+    await connection.execute('INSERT IGNORE INTO post_likes (post_id, user_id) VALUES (?, ?)', [post.id, otherUser.id])
+  }
+  if (event?.id) await connection.execute("INSERT INTO event_registrations (event_id, user_id, status) VALUES (?, ?, 'registered') ON DUPLICATE KEY UPDATE status = status", [event.id, user.id])
+  if (space?.id && seat?.id) {
+    const bookingDate = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10)
+    await connection.execute(
+      `INSERT INTO bookings (booking_no, user_id, space_id, seat_id, booking_date, booking_time, time_slot,
+        people_count, contact_name, phone, status) VALUES ('SEED-P13-BOOKING', ?, ?, ?, ?, '14:00', '14:00-16:00', 1,
+        'Phase 13 Seed User', '13900000001', 'confirmed') ON DUPLICATE KEY UPDATE booking_no = booking_no`,
+      [user.id, space.id, seat.id, bookingDate],
+    )
+  }
+  await connection.execute(
+    `INSERT INTO audit_logs (operator_type, action, module, description)
+     SELECT 'admin', 'seed.phase13', 'seed', 'Phase 13 operational data seeded'
+     FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM audit_logs WHERE action = 'seed.phase13' LIMIT 1)`,
+  )
+}
+
 async function seed() {
   const connection = await pool.getConnection()
   try {
@@ -393,6 +391,7 @@ async function seed() {
     await seedEvents(connection)
     await seedCommunityPosts(connection)
     await seedSpaces(connection)
+    await seedOperationalData(connection)
     const seedSql = await readFile(seedSqlPath, 'utf8')
     await connection.query(seedSql)
     await connection.commit()

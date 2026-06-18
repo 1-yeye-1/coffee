@@ -4,28 +4,38 @@ import { useRoute, useRouter } from 'vue-router'
 import { resolveUploadUrl } from '@/api/upload'
 
 import { BaseBadge, BaseButton, BaseCard, EmptyState } from '@/components/base'
-import { books } from '@/data/books'
 import { useBooksStore } from '@/stores/books'
+import { useAuthStore } from '@/stores/auth'
+import { useMembershipStore } from '@/stores/membership'
 import '@/assets/styles/pages/catalog.css'
 
 const route = useRoute()
 const router = useRouter()
 const booksStore = useBooksStore()
-const favorite = ref(false)
+const authStore = useAuthStore()
+const membershipStore = useMembershipStore()
+const favorite = computed(() => membershipStore.isFavorite('book', book.value?.id))
 const book = computed(() => booksStore.currentBook)
 const recommendations = computed(() => {
   if (!book.value) return []
-  const sameCategory = books.filter(
+  const sameCategory = booksStore.items.filter(
     (item) => item.id !== book.value.id && item.category === book.value.category,
   )
-  const others = books.filter(
+  const others = booksStore.items.filter(
     (item) => item.id !== book.value.id && item.category !== book.value.category,
   )
   return [...sameCategory, ...others].slice(0, 4)
 })
 
-function loadBook() {
-  return booksStore.fetchBookDetail(route.params.slug)
+async function loadBook() {
+  booksStore.fetchBooks({ page: 1, pageSize: 100 })
+  await booksStore.fetchBookDetail(route.params.slug)
+  if (authStore.isAuthenticated) await membershipStore.fetchFavorites()
+}
+
+async function toggleFavorite() {
+  if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
+  await membershipStore.toggleFavorite('book', book.value.id)
 }
 
 watch(() => route.params.slug, loadBook)
@@ -38,7 +48,7 @@ onMounted(loadBook)
       <BaseButton variant="ghost" size="sm" @click="router.push('/books')">← 返回图书中心</BaseButton>
     </div>
 
-    <p v-if="booksStore.error && book" class="cb-container text-muted" role="status">API 暂不可用，当前展示本地图书资料。</p>
+    <p v-if="booksStore.error" class="cb-container form-error" role="status">{{ booksStore.error }}</p>
 
     <template v-if="book">
       <section class="cb-container detail-hero">
@@ -58,7 +68,7 @@ onMounted(loadBook)
           <span class="detail-rating">★ {{ book.rating }} · {{ book.favorites.toLocaleString('zh-CN') }} 人收藏</span>
           <p class="page-subtitle">{{ book.summary }}</p>
           <div class="detail-actions">
-            <BaseButton :variant="favorite ? 'secondary' : 'outline'" @click="favorite = !favorite">
+            <BaseButton :variant="favorite ? 'secondary' : 'outline'" @click="toggleFavorite">
               {{ favorite ? '已收藏' : '加入收藏' }}
             </BaseButton>
             <BaseButton :disabled="book.stock === 0">预约阅读 / 查看馆藏</BaseButton>

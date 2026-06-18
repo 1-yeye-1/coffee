@@ -93,6 +93,23 @@ export async function findProductById(id) {
   return normalizeProduct(rows[0])
 }
 
+export async function listProductRecommendations(query = {}) {
+  const limit = Math.min(12, Math.max(1, Number(query.limit) || 4))
+  const excluded = String(query.exclude || '').split(',').map(Number).filter(Number.isFinite)
+  const params = []
+  let exclusion = ''
+  if (excluded.length) {
+    exclusion = `AND id NOT IN (${excluded.map(() => '?').join(',')})`
+    params.push(...excluded)
+  }
+  const [rows] = await pool.execute(
+    `SELECT ${columns} FROM products WHERE status = 'active' AND stock > 0 ${exclusion}
+     ORDER BY sales DESC, stock DESC, created_at DESC, id DESC LIMIT ${limit}`,
+    params,
+  )
+  return rows.map(normalizeProduct)
+}
+
 function normalizeProductType(payload) {
   return payload.productType === 'coffee' ? 'coffee' : 'cultural'
 }

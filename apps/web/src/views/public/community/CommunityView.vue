@@ -5,22 +5,29 @@ import { useRouter } from 'vue-router'
 import { resolveUploadUrl } from '@/api/upload'
 import { BaseBadge, BaseButton, BaseCard, BaseTabs } from '@/components/base'
 import { useCommunityStore } from '@/stores/community'
+import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/pages/engagement.css'
 
 const router = useRouter()
 const communityStore = useCommunityStore()
+const authStore = useAuthStore()
 const feed = ref('hot')
 const tabs = [{ label: '热门帖子', value: 'hot' }, { label: '最新帖子', value: 'latest' }]
 const visiblePosts = computed(() => [...communityStore.posts].sort((a, b) =>
   feed.value === 'hot' ? b.likes - a.likes : new Date(b.createdAt) - new Date(a.createdAt),
 ))
 const topics = ['阅读笔记', '咖啡风味', '城市空间', '阅读方法', '生活灵感']
-const users = [
-  { name: '林间页', avatar: '林', posts: 36 },
-  { name: '清烘时刻', avatar: '清', posts: 28 },
-  { name: '城市慢读', avatar: '城', posts: 24 },
-]
+const users = computed(() => Object.values(communityStore.posts.reduce((items, post) => {
+  const key = post.userId || post.author
+  if (!items[key]) items[key] = { name: post.author, avatar: post.avatar || post.author?.slice(0, 1), posts: 0 }
+  items[key].posts += 1
+  return items
+}, {})).sort((a, b) => b.posts - a.posts).slice(0, 3))
 const formatDate = (value) => new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' }).format(new Date(value))
+async function toggleFavorite(post) {
+  if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: `/community/${post.slug}` } })
+  await communityStore.toggleFavorite(post.id)
+}
 onMounted(() => {
   communityStore.fetchPosts()
 })
@@ -54,7 +61,7 @@ onMounted(() => {
             <div class="post-actions" @click.stop>
               <BaseButton size="sm" :variant="communityStore.likedIds.includes(post.id) ? 'primary' : 'ghost'" @click.stop="communityStore.toggleLike(post.id)">赞 {{ post.likes }}</BaseButton>
               <BaseButton size="sm" variant="ghost" @click.stop="router.push(`/community/${post.slug}`)">评论 {{ post.comments.length }}</BaseButton>
-              <BaseButton size="sm" :variant="communityStore.favoriteIds.includes(post.id) ? 'secondary' : 'ghost'" @click.stop="communityStore.toggleFavorite(post.id)">收藏</BaseButton>
+              <BaseButton size="sm" :variant="communityStore.favoriteIds.includes(post.id) ? 'secondary' : 'ghost'" @click.stop="toggleFavorite(post)">收藏</BaseButton>
             </div>
           </BaseCard>
         </div>

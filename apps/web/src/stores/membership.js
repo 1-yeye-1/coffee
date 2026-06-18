@@ -1,35 +1,45 @@
 import { defineStore } from 'pinia'
 
-const STORAGE_KEY = 'coffee-book-membership'
-const defaultAccount = {
-  nickname: 'Coffee Reader',
-  phone: '13800138000',
-  email: 'reader@coffeebook.local',
-  level: 'Gold Reader',
-  points: 2680,
-  growth: 4260,
-  nextLevelGrowth: 6000,
-  avatar: 'CR',
-  favoriteBookSlugs: ['the-little-prince', 'deep-work'],
-  favoriteProductSlugs: ['ethiopia-yirgacheffe', 'coffee-bean-gift-box'],
-}
-
-function readAccount() {
-  try {
-    return { ...defaultAccount, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }
-  } catch {
-    return defaultAccount
-  }
-}
+import * as accountApi from '@/api/account'
 
 export const useMembershipStore = defineStore('membership', {
-  state: () => ({
-    account: readAccount(),
-  }),
+  state: () => ({ account: null, overview: null, favorites: [], loading: false, error: '' }),
+  getters: {
+    isFavorite: (state) => (targetType, targetId) => state.favorites.some(
+      (item) => item.targetType === targetType && Number(item.targetId) === Number(targetId),
+    ),
+  },
   actions: {
-    updateProfile(profile) {
-      this.account = { ...this.account, ...profile }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.account))
+    async fetchOverview() {
+      this.loading = true
+      try {
+        this.overview = (await accountApi.getAccountOverview()).data
+        this.account = this.overview.user
+        this.error = ''
+      } catch (error) { this.overview = null; this.account = null; this.error = error.message }
+      finally { this.loading = false }
+      return this.overview
+    },
+    async fetchFavorites() {
+      this.loading = true
+      try { this.favorites = (await accountApi.getFavorites()).data; this.error = '' }
+      catch (error) { this.favorites = []; this.error = error.message }
+      finally { this.loading = false }
+      return this.favorites
+    },
+    async toggleFavorite(targetType, targetId) {
+      const existing = this.favorites.find((item) => item.targetType === targetType && Number(item.targetId) === Number(targetId))
+      if (existing) await accountApi.removeFavorite(existing.id)
+      else await accountApi.addFavorite({ targetType, targetId })
+      return this.fetchFavorites()
+    },
+    async removeFavorite(id) {
+      await accountApi.removeFavorite(id)
+      this.favorites = this.favorites.filter((item) => Number(item.id) !== Number(id))
+    },
+    async updateProfile(profile) {
+      this.account = (await accountApi.updateProfile(profile)).data
+      return this.account
     },
   },
 })

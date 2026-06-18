@@ -5,22 +5,49 @@ import {
   getPublicProfile,
   getSecuritySettings,
   listAddresses,
+  listAvatars,
   listMyPosts,
   listPointRecords,
+  listFavorites,
+  addFavorite,
+  removeFavorite,
   saveAddress,
+  selectAvatar,
   updatePrivacy,
   updateProfile,
+  useAvatarHistory,
   verifyCurrentPhone,
 } from '../services/account.service.js'
-import { success } from '../utils/response.js'
+import { failure, success } from '../utils/response.js'
 
 export function registerAccountRoutes(router) {
   router.get('/api/account/overview', requireUser, async (req, res) => {
     return success(res, await getAccountOverview(req.user.id))
   })
 
+  router.get('/api/users/me/overview', requireUser, async (req, res) => success(res, await getAccountOverview(req.user.id)))
+  router.get('/api/users/me/points', requireUser, async (req, res) => success(res, await listPointRecords(req.user.id)))
+  router.get('/api/users/me/favorites', requireUser, async (req, res) => success(res, await listFavorites(req.user.id)))
+  router.post('/api/users/me/favorites', requireUser, async (req, res) => success(res, await addFavorite(req.user.id, req.body), 'Favorite added', 201))
+  router.delete('/api/users/me/favorites/:id', requireUser, async (req, res) => {
+    if (!await removeFavorite(req.user.id, req.params.id)) return failure(res, 404, 'Favorite not found', 404)
+    return success(res, {}, 'Favorite removed')
+  })
+
   router.patch('/api/account/profile', requireUser, async (req, res) => {
     return success(res, await updateProfile(req.user.id, req.body), '个人资料已保存')
+  })
+
+  router.get('/api/users/me/avatars', requireUser, async (req, res) => {
+    return success(res, await listAvatars(req.user.id))
+  })
+
+  router.post('/api/users/me/avatar/select', requireUser, async (req, res) => {
+    return success(res, await selectAvatar(req.user.id, req.body.avatarUrl, 'preset'), '头像已更新')
+  })
+
+  router.post('/api/users/me/avatar/history/:id/use', requireUser, async (req, res) => {
+    return success(res, await useAvatarHistory(req.user.id, req.params.id), '头像已更新')
   })
 
   router.patch('/api/account/privacy', requireUser, async (req, res) => {

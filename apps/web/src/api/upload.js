@@ -10,7 +10,7 @@ function buildFormData(file) {
 }
 
 export function resolveUploadUrl(url) {
-  if (!url || /^https?:\/\//.test(url)) return url
+  if (!url || /^(https?:\/\/|data:|blob:)/.test(url)) return url
   return `${apiOrigin}${url}`
 }
 

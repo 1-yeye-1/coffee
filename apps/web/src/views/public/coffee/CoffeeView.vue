@@ -14,7 +14,6 @@ import {
   BaseTabs,
   EmptyState,
 } from '@/components/base'
-import { products as localProducts } from '@/data/products'
 import { useProductsStore } from '@/stores/products'
 import '@/assets/styles/pages/catalog.css'
 
@@ -45,12 +44,11 @@ const visibleProducts = computed(() => productsStore.items)
 const totalProducts = computed(() => productsStore.meta?.total ?? visibleProducts.value.length)
 const totalPages = computed(() => Math.max(1, Math.ceil(totalProducts.value / pageSize)))
 const availableCount = computed(() => visibleProducts.value.filter((product) => product.stock > 0).length)
-const discountCount = computed(() => localProducts.filter((product) => product.originalPrice && product.originalPrice > product.price).length)
-const recommendedCount = computed(() => localProducts.filter((product) => product.recommended).length)
+const discountCount = computed(() => visibleProducts.value.filter((product) => product.originalPrice && product.originalPrice > product.price).length)
+const recommendedCount = computed(() => visibleProducts.value.filter((product) => product.recommended).length)
 const todayRecommendation = computed(() =>
   visibleProducts.value.find((product) => product.recommended && product.stock > 0)
   || visibleProducts.value.find((product) => product.stock > 0)
-  || localProducts.find((product) => product.recommended && product.stock > 0)
   || null,
 )
 

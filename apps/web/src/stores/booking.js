@@ -2,26 +2,15 @@ import { defineStore } from 'pinia'
 
 import * as bookingApi from '@/api/booking'
 
-const STORAGE_KEY = 'coffee-book-bookings'
-
-function readBookings() {
-  try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-    return Array.isArray(value) ? value : []
-  } catch {
-    return []
-  }
-}
-
 export const useBookingStore = defineStore('booking', {
   state: () => ({
-    bookings: readBookings(),
+    bookings: [],
     spaces: [],
     slots: [],
     seats: [],
     availability: [],
     apiError: '',
-    dataSource: 'local',
+    dataSource: 'api',
   }),
   actions: {
     async fetchSpaces() {
@@ -31,7 +20,7 @@ export const useBookingStore = defineStore('booking', {
         this.apiError = ''
       } catch (error) {
         this.apiError = error.message
-        this.dataSource = 'local'
+        this.spaces = []
       }
       return this.spaces
     },
@@ -42,30 +31,18 @@ export const useBookingStore = defineStore('booking', {
         this.apiError = ''
       } catch (error) {
         this.apiError = error.message
-        this.dataSource = 'local'
+        this.slots = []
       }
       return this.slots
     },
     async createBooking(payload) {
-      if (this.dataSource === 'api') {
-        try {
-          const booking = (await bookingApi.createBooking(payload)).data
-          this.bookings.unshift(booking)
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.bookings))
-          return booking
-        } catch (error) {
-          this.apiError = error.message
-        }
-      }
-      const booking = {
-        id: `BK${Date.now()}`,
-        ...payload,
-        status: 'confirmed',
-        createdAt: new Date().toISOString(),
-      }
+      const booking = (await bookingApi.createBooking(payload)).data
       this.bookings.unshift(booking)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.bookings))
       return booking
+    },
+    async fetchMyBookings() {
+      this.bookings = (await bookingApi.fetchMyBookings()).data
+      return this.bookings
     },
     async fetchSeats() {
       this.seats = (await bookingApi.fetchSeats()).data
@@ -81,14 +58,10 @@ export const useBookingStore = defineStore('booking', {
       return { ...response.data, message: response.message }
     },
     async cancelBooking(id) {
-      if (this.dataSource === 'api') {
-        try { await bookingApi.cancelBooking(id) }
-        catch (error) { this.apiError = error.message }
-      }
+      await bookingApi.cancelBooking(id)
       this.bookings = this.bookings.map((booking) =>
         booking.id === id ? { ...booking, status: 'cancelled' } : booking,
       )
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.bookings))
     },
   },
 })

@@ -67,7 +67,7 @@ npm run dev:all
 1. 在服务器安装 Node.js 和 MySQL。
 2. 创建后端 `.env`，配置 `DB_HOST`、`DB_USER`、`DB_PASSWORD`、`JWT_SECRET`、`CORS_ORIGIN`。
 3. 执行 `npm install`。
-4. 执行 `npm run db:init` 初始化 `coffee` 数据库。
+4. 配置 `DB_NAME` 后执行 `npm run db:init`，完成建表、幂等 seed 和数据库一致性检查。
 5. 按需要执行 `npm run db:seed` 写入演示数据。
 6. 配置 `apps/web/.env` 和 `apps/admin/.env` 的 `VITE_API_BASE_URL`。
 7. 执行 `npm run build` 生成 `dist/web` 和 `dist/admin`。

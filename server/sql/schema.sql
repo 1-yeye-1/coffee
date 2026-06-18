@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS verification_codes (
   scene VARCHAR(30) NOT NULL,
   code_hash VARCHAR(255) NOT NULL,
   used_at TIMESTAMP NULL,
-  expires_at TIMESTAMP NOT NULL,
+  expires_at DATETIME NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_verification_codes_phone_scene (phone, scene),
@@ -116,6 +116,19 @@ CREATE TABLE IF NOT EXISTS user_favorites (
   KEY idx_user_favorites_user (user_id),
   KEY idx_user_favorites_target (target_type, target_id),
   CONSTRAINT fk_user_favorites_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS user_avatars (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  avatar_url VARCHAR(500) NOT NULL,
+  source VARCHAR(30) NOT NULL DEFAULT 'upload',
+  is_current TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_user_avatars_url (user_id, avatar_url),
+  KEY idx_user_avatars_current (user_id, is_current),
+  CONSTRAINT fk_user_avatars_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS upload_files (
@@ -317,7 +330,7 @@ CREATE TABLE IF NOT EXISTS payments (
   method VARCHAR(50) NOT NULL,
   status VARCHAR(30) NOT NULL,
   paid_at TIMESTAMP NULL,
-  expires_at TIMESTAMP NULL,
+  expires_at DATETIME NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -401,6 +414,7 @@ CREATE TABLE IF NOT EXISTS comments (
   author VARCHAR(120) NOT NULL,
   content TEXT NOT NULL,
   status VARCHAR(30) NOT NULL DEFAULT 'published',
+  is_anonymous TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -481,6 +495,9 @@ CREATE TABLE IF NOT EXISTS seats (
   capacity INT NOT NULL DEFAULT 1,
   x INT NOT NULL DEFAULT 0,
   y INT NOT NULL DEFAULT 0,
+  width INT NOT NULL DEFAULT 64,
+  height INT NOT NULL DEFAULT 52,
+  sort_order INT NOT NULL DEFAULT 0,
   status VARCHAR(20) NOT NULL DEFAULT 'available',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

@@ -15,8 +15,9 @@
     "preview:admin": "vite preview --config apps/admin/vite.config.js",
     "start": "node server/index.js",
     "server": "node server/index.js",
-    "db:init": "node server/db/migrate.js",
+    "db:init": "node server/db/migrate.js && node server/db/seed.js && node scripts/check-db-schema.js",
     "db:seed": "node server/db/seed.js",
+    "db:check": "node scripts/check-db-schema.js",
     "smoke:api": "node scripts/smoke-api.js"
   },
   "dependencies": {
