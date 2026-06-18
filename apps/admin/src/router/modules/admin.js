@@ -8,6 +8,7 @@ import AdminProductsView from '@/views/admin/AdminProductsView.vue'
 import AdminLogsView from '@/views/admin/AdminLogsView.vue'
 import UploadFilesView from '@/views/admin/UploadFilesView.vue'
 import AdminUsersView from '@/views/admin/AdminUsersView.vue'
+import AdminSeatsView from '@/views/admin/AdminSeatsView.vue'
 import DashboardView from '@/views/admin/DashboardView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 
@@ -31,6 +32,7 @@ export const adminRoutes = [
       { path: 'events', name: ROUTE_NAMES.ADMIN_EVENTS, component: AdminEventsView, meta: { ...adminMeta, title: '活动管理' } },
       { path: 'community', name: ROUTE_NAMES.ADMIN_COMMUNITY, component: AdminCommunityView, meta: { ...adminMeta, title: '社区审核' } },
       { path: 'bookings', name: ROUTE_NAMES.ADMIN_BOOKINGS, component: AdminBookingsView, meta: { ...adminMeta, title: '预约管理' } },
+      { path: 'seats', name: ROUTE_NAMES.ADMIN_SEATS, component: AdminSeatsView, meta: { ...adminMeta, title: '座位使用' } },
       { path: 'uploads', name: ROUTE_NAMES.ADMIN_UPLOAD_FILES, component: UploadFilesView, meta: { ...adminMeta, title: '上传文件' } },
       { path: 'logs', name: ROUTE_NAMES.ADMIN_LOGS, component: AdminLogsView, meta: { ...adminMeta, title: '操作日志' } },
       { path: '404', name: ROUTE_NAMES.NOT_FOUND, component: PlaceholderView, meta: { ...adminMeta, title: '页面不存在' } },

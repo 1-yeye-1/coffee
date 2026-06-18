@@ -3,6 +3,7 @@ import {
   createComment,
   createPost,
   findPost,
+  listPostLikes,
   listPosts,
   togglePostLike,
 } from '../services/community.service.js'
@@ -43,5 +44,10 @@ export function registerCommunityRoutes(router) {
   router.post('/api/posts/:id/like', requireUser, async (req, res) => {
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
     return success(res, await togglePostLike(req.params.id, req.user.id))
+  })
+
+  router.get('/api/posts/:id/likes', async (req, res) => {
+    if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
+    return success(res, { items: await listPostLikes(req.params.id) })
   })
 }

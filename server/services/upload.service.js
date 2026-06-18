@@ -66,6 +66,11 @@ export async function saveCommunityUpload(userId, meta) {
   return { url: meta.url, file }
 }
 
+export const saveProductUpload = saveCommunityUpload
+export const saveReviewUpload = saveCommunityUpload
+export const saveBookUpload = saveCommunityUpload
+export const saveEventUpload = saveCommunityUpload
+
 export async function listUploadFiles(query = {}) {
   const { page, pageSize, offset } = parsePagination(query, 20)
   const clauses = []

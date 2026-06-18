@@ -7,3 +7,11 @@ export function fetchProducts(params = {}) {
 export function fetchProductDetail(slug) {
   return request(`/products/${encodeURIComponent(slug)}`)
 }
+
+export function fetchProductReviews(productId, params = {}) {
+  return request(`/products/${encodeURIComponent(productId)}/reviews${toQuery(params)}`)
+}
+
+export function createProductReview(productId, payload) {
+  return request(`/products/${encodeURIComponent(productId)}/reviews`, { method: 'POST', body: payload })
+}

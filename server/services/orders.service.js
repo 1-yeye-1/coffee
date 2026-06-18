@@ -7,7 +7,7 @@ import { getCart } from './cart.service.js'
 import { createNotification } from './notifications.service.js'
 
 const paymentTtlMinutes = 15
-const validStatuses = new Set(['pending_payment', 'pending_review', 'paid', 'completed', 'cancelled', 'payment_expired'])
+const validStatuses = new Set(['pending_payment', 'pending_review', 'paid', 'completed', 'cancelled', 'refunded', 'payment_expired'])
 const orderNo = () => `CB${Date.now()}${randomBytes(3).toString('hex').toUpperCase()}`
 const paymentNo = () => `PAY${Date.now()}${randomBytes(3).toString('hex').toUpperCase()}`
 const statusText = {
@@ -16,6 +16,7 @@ const statusText = {
   paid: '已支付',
   completed: '已完成',
   cancelled: '已取消',
+  refunded: '已退款',
   payment_expired: '支付已超时',
 }
 
@@ -436,9 +437,10 @@ export async function changeOrderStatus(id, target, userId, isAdmin = false, ope
     if (!order) throw Object.assign(new Error('订单不存在'), { statusCode: 404 })
 
     const allowed = isAdmin
-      ? ['paid', 'completed', 'cancelled'].includes(target)
-      : (target === 'cancelled' && order.status === 'pending_payment')
+      ? ['pending_payment', 'pending_review', 'paid', 'completed', 'cancelled', 'refunded'].includes(target)
+      : (target === 'cancelled' && ['pending_payment', 'pending_review'].includes(order.status))
         || (target === 'completed' && order.status === 'paid')
+        || (target === 'refunded' && ['paid', 'completed'].includes(order.status))
     if (!allowed) throw Object.assign(new Error('当前订单状态不允许此操作'), { statusCode: 400 })
 
     if (target === 'cancelled' && ['pending_payment', 'pending_review'].includes(order.status)) await restoreStock(id, connection)

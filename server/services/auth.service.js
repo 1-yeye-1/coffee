@@ -7,6 +7,7 @@ import { createNotification } from './notifications.service.js'
 
 const userColumns = `
   id, username, nickname, email, phone, avatar, role, status, points, level,
+  profile_public AS profilePublic,
   created_at AS createdAt, updated_at AS updatedAt
 `
 const adminColumns = `
@@ -14,7 +15,7 @@ const adminColumns = `
   created_at AS createdAt, updated_at AS updatedAt
 `
 const phonePattern = /^1\d{10}$/
-const codeScenes = new Set(['login', 'register'])
+const codeScenes = new Set(['login', 'register', 'change_phone_old', 'change_phone_new', 'booking_guest'])
 
 export function normalizePhone(phone) {
   return String(phone || '').trim()
@@ -110,9 +111,7 @@ export async function sendVerificationCode(phone, scene = 'login') {
     throw Object.assign(new Error('今日验证码发送次数已达上限'), { statusCode: 429 })
   }
 
-  const code = env.nodeEnv === 'production'
-    ? String(randomInt(0, 1000000)).padStart(6, '0')
-    : '756137'
+  const code = String(randomInt(100000, 1000000))
   const codeHash = await hashPassword(code)
   await pool.execute(
     `INSERT INTO verification_codes (phone, scene, code_hash, expires_at)
@@ -120,11 +119,22 @@ export async function sendVerificationCode(phone, scene = 'login') {
     [normalizedPhone, scene, codeHash],
   )
 
+  if (env.nodeEnv !== 'production') {
+    const sceneLabel = scene === 'login'
+      ? '登录'
+      : scene === 'register'
+        ? '注册'
+        : scene === 'change_phone_old'
+          ? '当前手机号验证'
+          : scene === 'booking_guest' ? '游客预约' : '新手机号验证'
+    console.log(`[DEV SMS CODE] 手机号 ${normalizedPhone} 的${sceneLabel}验证码是：${code}`)
+  }
+
   return {
     phone: normalizedPhone,
     scene,
     expiresIn: 300,
-    devCode: env.nodeEnv === 'production' ? undefined : code,
+    cooldown: 60,
   }
 }
 

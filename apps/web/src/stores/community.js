@@ -103,7 +103,7 @@ export const useCommunityStore = defineStore('community', {
           this.likedIds = result.liked
             ? [...new Set([...this.likedIds, id])]
             : this.likedIds.filter((item) => item !== id)
-          return
+          return result
         } catch (error) {
           this.apiError = error.message
         }
@@ -116,6 +116,15 @@ export const useCommunityStore = defineStore('community', {
         post.likes += 1
       }
       persist(this.$state)
+      return { liked: this.likedIds.includes(id), likes: post.likes }
+    },
+    async fetchLikes(id) {
+      try {
+        return (await communityApi.fetchPostLikes(id)).data.items || []
+      } catch (error) {
+        this.apiError = error.message
+        return []
+      }
     },
     toggleFavorite(id) {
       this.favoriteIds = this.favoriteIds.includes(id)

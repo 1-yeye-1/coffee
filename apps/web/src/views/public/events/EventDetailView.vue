@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { resolveUploadUrl } from '@/api/upload'
 
 import { BaseBadge, BaseButton, BaseCard, BaseToast, EmptyState } from '@/components/base'
 import { useEventsStore } from '@/stores/events'
@@ -29,7 +30,10 @@ onMounted(() => {
       <BaseButton class="detail-back" variant="ghost" size="sm" @click="router.push('/events')">← 返回活动中心</BaseButton>
       <template v-if="event">
         <section class="detail-hero-grid">
-          <div class="detail-cover"><strong>{{ event.category }} · {{ event.date }}</strong></div>
+          <div class="detail-cover">
+            <img v-if="event.coverUrl" class="event-cover-image" :src="resolveUploadUrl(event.coverUrl)" :alt="event.title" />
+            <strong v-else>{{ event.category }} · {{ event.date }}</strong>
+          </div>
           <div class="detail-copy">
             <div class="cb-cluster"><BaseBadge variant="neutral">{{ event.category }}</BaseBadge><BaseBadge variant="success">{{ event.status }}</BaseBadge></div>
             <h1>{{ event.title }}</h1>
@@ -52,7 +56,8 @@ onMounted(() => {
           </div>
           <aside class="side-panel">
             <h2 class="section-title">主讲嘉宾</h2>
-            <div class="speaker-card"><span class="avatar">{{ event.speaker.name.slice(0, 1) }}</span><div><strong>{{ event.speaker.name }}</strong><p>{{ event.speaker.role }}</p></div></div>
+            <div v-if="event.speaker?.name" class="speaker-card"><span class="avatar">{{ event.speaker.name.slice(0, 1) }}</span><div><strong>{{ event.speaker.name }}</strong><p>{{ event.speaker.role }}</p></div></div>
+            <p v-else class="text-muted">嘉宾信息待公布</p>
             <p class="text-muted">已有 {{ event.attendees }} 人报名，还剩 {{ event.capacity - event.attendees }} 个名额。</p>
           </aside>
         </div>
@@ -64,3 +69,7 @@ onMounted(() => {
     <div class="page-toast"><BaseToast v-model="toastVisible" variant="success" title="报名成功">活动报名已保存，可在会员中心查看。</BaseToast></div>
   </div>
 </template>
+
+<style scoped>
+.event-cover-image { display:block; width:100%; height:100%; min-height:22rem; object-fit:cover; border-radius:var(--cb-radius-xl); }
+</style>

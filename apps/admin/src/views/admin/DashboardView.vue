@@ -27,11 +27,15 @@ const stats = computed(() => [
   { label: '待审核帖子', value: adminStore.dashboardStats.pendingPosts, hint: '等待处理', icon: 'Q' },
 ])
 const quickActions = [
-  { label: '新增图书', path: '/admin/books', note: '维护馆藏' },
-  { label: '新增商品', path: '/admin/products', note: '更新商城' },
-  { label: '发布活动', path: '/admin/events', note: '创建活动' },
-  { label: '审核社区', path: '/admin/community', note: '内容治理' },
-  { label: '查看预约', path: '/admin/bookings', note: '空间运营' },
+  { label: '图书管理', path: '/books', note: '维护馆藏' },
+  { label: '商品管理', path: '/products', note: '更新商城' },
+  { label: '订单管理', path: '/orders', note: '审核与履约' },
+  { label: '活动管理', path: '/events', note: '创建活动' },
+  { label: '社区管理', path: '/community', note: '内容审核' },
+  { label: '预约管理', path: '/bookings', note: '空间运营' },
+  { label: '座位使用', path: '/seats', note: '地图与占用' },
+  { label: '上传文件', path: '/uploads', note: '文件管理' },
+  { label: '操作日志', path: '/logs', note: '审计记录' },
 ]
 const recentColumns = [
   { key: 'id', label: '订单号' }, { key: 'user', label: '用户' }, { key: 'amount', label: '金额' },

@@ -82,5 +82,11 @@ export const useProductsStore = defineStore('products', {
       }
       return this.currentProduct
     },
+    async fetchProductReviews(productId, params = {}) {
+      return await productsApi.fetchProductReviews(productId, params)
+    },
+    async createProductReview(productId, payload) {
+      return await productsApi.createProductReview(productId, payload)
+    },
   },
 })

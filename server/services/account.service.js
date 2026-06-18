@@ -1,11 +1,29 @@
 import { pool } from '../db/mysql.js'
-import { listNotifications as listUserNotifications, markAsRead } from './notifications.service.js'
+import { assertPhone, normalizePhone, phoneExists, verifyCode } from './auth.service.js'
+import { createNotification, listNotifications as listUserNotifications, markAsRead } from './notifications.service.js'
 import { writeAudit } from './admin.service.js'
 
 const userSelect = `
   id, username, nickname, email, phone, avatar, status, points, level,
+  profile_public AS profilePublic,
   created_at AS createdAt, updated_at AS updatedAt
 `
+
+const currentPhoneVerifications = new Map()
+
+export function maskPhone(phone) {
+  const value = String(phone || '')
+  return value.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2')
+}
+
+function mapUser(row) {
+  if (!row) return null
+  return {
+    ...row,
+    profilePublic: row.profilePublic === undefined ? true : Boolean(row.profilePublic),
+    phoneMasked: maskPhone(row.phone),
+  }
+}
 
 export async function getAccountOverview(userId) {
   const [[user]] = await pool.execute(
@@ -20,7 +38,7 @@ export async function getAccountOverview(userId) {
     pool.execute('SELECT COUNT(*) AS total FROM user_addresses WHERE user_id = ?', [userId]),
   ])
   return {
-    user,
+    user: mapUser(user),
     stats: {
       orders: Number(orders[0].total),
       bookings: Number(bookings[0].total),
@@ -41,7 +59,7 @@ export async function updateProfile(userId, payload) {
     `SELECT ${userSelect} FROM users WHERE id = ? AND role = 'user' LIMIT 1`,
     [userId],
   )
-  return user
+  return mapUser(user)
 }
 
 export async function listPointRecords(userId) {
@@ -128,9 +146,110 @@ export async function getSecuritySettings(userId) {
     [userId],
   )
   return {
-    phone: user?.phone || '',
+    phone: maskPhone(user?.phone || ''),
     passwordUpdatedAt: user?.passwordUpdatedAt || null,
     loginProtection: true,
     smsVerification: Boolean(user?.phone),
+  }
+}
+
+export async function updatePrivacy(userId, payload) {
+  const profilePublic = payload.profilePublic ? 1 : 0
+  await pool.execute('UPDATE users SET profile_public = ? WHERE id = ? AND role = "user"', [profilePublic, userId])
+  await writeAudit(userId, 'user.privacy.update', 'account', { profilePublic: Boolean(profilePublic) })
+  const [[user]] = await pool.execute(
+    `SELECT ${userSelect} FROM users WHERE id = ? AND role = 'user' LIMIT 1`,
+    [userId],
+  )
+  return mapUser(user)
+}
+
+export async function getPublicProfile(userId) {
+  const [[user]] = await pool.execute(
+    `SELECT id, nickname, username, avatar, created_at AS createdAt,
+      profile_public AS profilePublic
+     FROM users WHERE id = ? AND role = 'user' AND status = 'active' LIMIT 1`,
+    [userId],
+  )
+  if (!user) throw Object.assign(new Error('用户不存在'), { statusCode: 404 })
+  if (!Boolean(user.profilePublic)) {
+    throw Object.assign(new Error('该用户已关闭个人主页访问'), { statusCode: 403 })
+  }
+
+  const [[postsCount], [likesCount], [posts]] = await Promise.all([
+    pool.execute("SELECT COUNT(*) AS total FROM posts WHERE user_id = ? AND status = 'published'", [userId]),
+    pool.execute(
+      `SELECT COUNT(*) AS total
+       FROM post_likes pl
+       INNER JOIN posts p ON p.id = pl.post_id
+       WHERE p.user_id = ? AND p.status = 'published'`,
+      [userId],
+    ),
+    pool.execute(
+      `SELECT id, slug, title, topic, excerpt, likes_count AS likes,
+        comments_count AS commentsCount, created_at AS createdAt
+       FROM posts WHERE user_id = ? AND status = 'published'
+       ORDER BY created_at DESC, id DESC LIMIT 20`,
+      [userId],
+    ),
+  ])
+
+  return {
+    id: user.id,
+    nickname: user.nickname || user.username,
+    avatar: user.avatar,
+    createdAt: user.createdAt,
+    postsCount: Number(postsCount[0].total),
+    likesCount: Number(likesCount[0].total),
+    posts,
+  }
+}
+
+export async function verifyCurrentPhone(userId, code) {
+  const [[user]] = await pool.execute('SELECT phone FROM users WHERE id = ? AND role = "user" LIMIT 1', [userId])
+  if (!user?.phone) throw Object.assign(new Error('当前账号未绑定手机号'), { statusCode: 400 })
+  await verifyCode(user.phone, 'change_phone_old', code)
+  currentPhoneVerifications.set(Number(userId), Date.now() + 10 * 60 * 1000)
+  await writeAudit(userId, 'user.phone.verify_current', 'account', { userId })
+  return { verified: true, expiresIn: 600 }
+}
+
+export async function changePhone(userId, payload) {
+  const newPhone = normalizePhone(payload.newPhone)
+  assertPhone(newPhone)
+  const verifiedUntil = currentPhoneVerifications.get(Number(userId)) || 0
+  if (verifiedUntil < Date.now()) {
+    throw Object.assign(new Error('请先完成当前手机号验证'), { statusCode: 400 })
+  }
+
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [[user]] = await connection.execute(
+      'SELECT phone FROM users WHERE id = ? AND role = "user" LIMIT 1 FOR UPDATE',
+      [userId],
+    )
+    if (!user) throw Object.assign(new Error('用户不存在'), { statusCode: 404 })
+    if (newPhone === user.phone) throw Object.assign(new Error('新手机号不能与当前手机号相同'), { statusCode: 400 })
+    if (await phoneExists(newPhone, connection)) throw Object.assign(new Error('该手机号已被其他账号绑定'), { statusCode: 409 })
+
+    await verifyCode(newPhone, 'change_phone_new', payload.newPhoneCode, connection)
+    await connection.execute('UPDATE users SET phone = ? WHERE id = ? AND role = "user"', [newPhone, userId])
+    await writeAudit(userId, 'user.phone.change', 'account', { userId }, connection)
+    await createNotification({
+      userId,
+      title: '手机号已成功更换',
+      content: '你的手机号已成功更换，请妥善保管账号安全。',
+      type: 'system',
+    }, connection)
+    await connection.commit()
+    currentPhoneVerifications.delete(Number(userId))
+    const [[updated]] = await pool.execute(`SELECT ${userSelect} FROM users WHERE id = ? LIMIT 1`, [userId])
+    return mapUser(updated)
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
   }
 }

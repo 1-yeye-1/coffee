@@ -1,6 +1,7 @@
 import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
 import { writeAudit } from './admin.service.js'
+import { maskPhone } from './account.service.js'
 import { createNotification } from './notifications.service.js'
 
 const postColumns = `
@@ -26,11 +27,32 @@ function slugify(value) {
 
 async function getComments(postId, publishedOnly = true) {
   const [rows] = await pool.execute(
-    `SELECT ${commentColumns} FROM comments WHERE post_id = ? ${publishedOnly ? "AND status = 'published'" : ''}
-     ORDER BY created_at ASC, id ASC`,
+    `SELECT c.id, c.post_id AS postId, c.user_id AS userId, c.author, c.content, c.status,
+      c.created_at AS createdAt, c.updated_at AS updatedAt,
+      u.nickname, u.username, u.avatar AS userAvatar, u.phone, u.profile_public AS profilePublic
+     FROM comments c
+     LEFT JOIN users u ON u.id = c.user_id
+     WHERE c.post_id = ? ${publishedOnly ? "AND c.status = 'published'" : ''}
+     ORDER BY c.created_at ASC, c.id ASC`,
     [postId],
   )
-  return rows
+  return rows.map((row) => ({
+    id: row.id,
+    postId: row.postId,
+    userId: row.userId,
+    author: row.author,
+    content: row.content,
+    status: row.status,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    user: row.userId ? {
+      id: row.userId,
+      nickname: row.nickname || row.username || row.author,
+      avatar: row.userAvatar,
+      phoneMasked: maskPhone(row.phone),
+      profilePublic: row.profilePublic === undefined ? true : Boolean(row.profilePublic),
+    } : null,
+  }))
 }
 
 async function attachComments(posts, publishedOnly = true) {
@@ -165,7 +187,30 @@ export async function togglePostLike(postId, userId) {
   }
 }
 
+export async function listPostLikes(postId) {
+  const [rows] = await pool.execute(
+    `SELECT pl.user_id AS userId, pl.created_at AS likedAt,
+      u.nickname, u.username, u.avatar, u.phone, u.profile_public AS profilePublic
+     FROM post_likes pl
+     INNER JOIN users u ON u.id = pl.user_id
+     WHERE pl.post_id = ?
+     ORDER BY pl.created_at DESC, pl.id DESC`,
+    [postId],
+  )
+  return rows.map((row) => ({
+    userId: row.userId,
+    nickname: row.nickname || row.username || `用户${String(row.userId).slice(-4)}`,
+    avatar: row.avatar,
+    phoneMasked: maskPhone(row.phone),
+    profilePublic: Boolean(row.profilePublic),
+    likedAt: row.likedAt,
+  }))
+}
+
 export async function updatePostStatus(id, status, operatorId) {
+  if (!['pending', 'published', 'rejected', 'hidden'].includes(status)) {
+    throw Object.assign(new Error('社区内容状态无效'), { statusCode: 400 })
+  }
   const [[post]] = await pool.execute('SELECT user_id AS userId, title FROM posts WHERE id = ? LIMIT 1', [id])
   await pool.execute('UPDATE posts SET status = ? WHERE id = ?', [status, id])
   await writeAudit(operatorId, 'post.status.update', 'community', { id, status })

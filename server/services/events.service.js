@@ -2,10 +2,16 @@ import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
 import { writeAudit } from './admin.service.js'
 
+const validEventStatuses = new Set(['draft', 'published', 'ongoing', 'ended', 'cancelled'])
+
+function assertEventStatus(status) {
+  if (!validEventStatuses.has(status)) throw Object.assign(new Error('活动状态无效'), { statusCode: 400 })
+}
+
 const columns = `
   id, slug, title, category, DATE_FORMAT(event_date, '%Y-%m-%d') AS date,
   event_time AS time, location, capacity, attendees, status, tone, summary,
-  description, speaker, agenda, created_at AS createdAt, updated_at AS updatedAt
+  cover_url AS coverUrl, description, speaker, agenda, created_at AS createdAt, updated_at AS updatedAt
 `
 
 function normalize(row) {
@@ -20,7 +26,7 @@ function normalize(row) {
 function buildFilters(query = {}, admin = false) {
   const clauses = []
   const params = []
-  if (!admin) clauses.push("status <> 'inactive'")
+  if (!admin) clauses.push("status IN ('published', 'ongoing', 'open', 'active')")
   if (query.category && query.category !== 'all') {
     clauses.push('category = ?')
     params.push(query.category)
@@ -44,7 +50,7 @@ export async function listEvents(query = {}, admin = false) {
 }
 
 export async function findEventBySlug(slug) {
-  const [rows] = await pool.execute(`SELECT ${columns} FROM events WHERE slug = ? LIMIT 1`, [slug])
+  const [rows] = await pool.execute(`SELECT ${columns} FROM events WHERE slug = ? AND status IN ('published', 'ongoing', 'open', 'active') LIMIT 1`, [slug])
   return normalize(rows[0])
 }
 
@@ -54,11 +60,12 @@ export async function findEventById(id) {
 }
 
 export async function createEvent(payload) {
+  assertEventStatus(payload.status || 'draft')
   const [result] = await pool.execute(
     `INSERT INTO events
       (slug, title, category, event_date, event_time, location, capacity, attendees, status,
-       tone, summary, description, speaker, agenda)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       tone, cover_url, summary, description, speaker, agenda)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       payload.slug,
       payload.title,
@@ -68,8 +75,9 @@ export async function createEvent(payload) {
       payload.location || '',
       Number(payload.capacity) || 0,
       Number(payload.attendees) || 0,
-      payload.status || 'open',
+      payload.status || 'draft',
       payload.tone || null,
+      payload.coverUrl || null,
       payload.summary || null,
       payload.description || null,
       JSON.stringify(payload.speaker || null),
@@ -80,9 +88,10 @@ export async function createEvent(payload) {
 }
 
 export async function updateEvent(id, payload) {
+  assertEventStatus(payload.status || 'draft')
   await pool.execute(
     `UPDATE events SET slug=?, title=?, category=?, event_date=?, event_time=?, location=?,
-      capacity=?, attendees=?, status=?, tone=?, summary=?, description=?, speaker=?, agenda=?
+      capacity=?, attendees=?, status=?, tone=?, cover_url=?, summary=?, description=?, speaker=?, agenda=?
      WHERE id=?`,
     [
       payload.slug,
@@ -93,8 +102,9 @@ export async function updateEvent(id, payload) {
       payload.location || '',
       Number(payload.capacity) || 0,
       Number(payload.attendees) || 0,
-      payload.status || 'open',
+      payload.status || 'draft',
       payload.tone || null,
+      payload.coverUrl || null,
       payload.summary || null,
       payload.description || null,
       JSON.stringify(payload.speaker || null),

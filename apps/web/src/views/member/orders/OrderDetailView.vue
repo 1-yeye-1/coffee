@@ -1,8 +1,8 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { BaseBadge, BaseButton, BaseToast, EmptyState } from '@/components/base'
+import { BaseBadge, BaseButton, BaseModal, BaseToast, EmptyState } from '@/components/base'
 import { useCartStore } from '@/stores/cart'
 import { useOrderStore } from '@/stores/orders'
 import '@/assets/styles/pages/commerce.css'
@@ -14,8 +14,15 @@ const orderStore = useOrderStore()
 const toastVisible = ref(route.query.created === '1')
 const toastTitle = ref(route.query.created === '1' ? '订单创建成功' : '')
 const toastMessage = ref(route.query.created === '1' ? '订单已创建，请在有效时间内完成模拟支付。' : '')
+const toastVariant = ref('success')
+const cancelOpen = ref(false)
+const cancelling = ref(false)
+const refreshing = ref(false)
+const paying = ref(false)
+const confirming = ref(false)
+let pollTimer = null
 const order = computed(() => orderStore.currentOrder || orderStore.getOrderById(route.params.id))
-
+const cancellableStatuses = new Set(['pending_payment', 'pending_review', 'pending', 'unpaid', 'created'])
 const statusMeta = {
   pending_payment: { label: '待支付', badge: 'warning', step: 1 },
   pending_review: { label: '待后台确认', badge: 'warning', step: 2 },
@@ -31,9 +38,10 @@ const pickupNames = {
   riverside: 'Coffee Book 江畔店',
 }
 const paymentNames = { wechat: '微信支付', alipay: '支付宝', store: '到店支付' }
+const shouldPoll = computed(() => ['pending_payment', 'pending_review'].includes(order.value?.status))
 
 function meta(status) {
-  return statusMeta[status] || statusMeta.pending_payment
+  return statusMeta[status] || { label: status, badge: 'neutral', step: 1 }
 }
 
 function formatDate(value) {
@@ -51,38 +59,91 @@ function brewMethodText(value) {
   return { self_grind: '自己手磨', barista: '咖啡师制作' }[value] || '-'
 }
 
-function notify(title, message) {
+function notify(title, message, variant = 'success') {
   toastVisible.value = false
   toastTitle.value = title
   toastMessage.value = message
+  toastVariant.value = variant
   nextTick(() => { toastVisible.value = true })
 }
 
+async function loadOrder(silent = false) {
+  const previous = order.value?.status
+  refreshing.value = true
+  await orderStore.fetchOrderDetail(route.params.id)
+  refreshing.value = false
+  if (silent && previous && order.value?.status && previous !== order.value.status) {
+    notify('订单状态已更新', '后台审核结果已同步。')
+  }
+}
+
+function resetPolling() {
+  window.clearInterval(pollTimer)
+  if (shouldPoll.value) pollTimer = window.setInterval(() => loadOrder(true), 12000)
+}
+
+async function refreshStatus() {
+  await loadOrder(false)
+  notify('订单状态已刷新', '当前订单状态已是最新。')
+}
+
 async function pay() {
-  await orderStore.payOrder(order.value.id)
-  notify('已提交支付', '订单已进入后台确认流程，请等待管理员审核。')
+  paying.value = true
+  try {
+    await orderStore.payOrder(order.value.id)
+    notify('已提交支付', '订单已进入后台确认流程，请等待管理员审核。')
+  } catch (error) {
+    notify('支付提交失败', error.message || '请稍后重试。', 'error')
+  } finally {
+    paying.value = false
+  }
 }
 
 async function cancel() {
-  await orderStore.cancelOrder(order.value.id)
-  notify('订单已取消', '该订单已标记为取消。')
+  cancelling.value = true
+  try {
+    await orderStore.cancelOrder(order.value.id)
+    cancelOpen.value = false
+    notify('订单已取消', '该订单已标记为 cancelled。')
+  } catch (error) {
+    notify('取消失败', error.message || '当前订单不允许取消。', 'error')
+  } finally {
+    cancelling.value = false
+  }
 }
 
 async function confirm() {
-  await orderStore.confirmOrder(order.value.id)
-  notify('订单已完成', '感谢确认收货。')
+  confirming.value = true
+  try {
+    await orderStore.confirmOrder(order.value.id)
+    notify('订单已完成', '感谢确认收货。')
+  } catch (error) {
+    notify('确认失败', error.message || '请稍后重试。', 'error')
+  } finally {
+    confirming.value = false
+  }
 }
-
-function loadOrder() {
-  return orderStore.fetchOrderDetail(route.params.id)
-}
-watch(() => route.params.id, loadOrder)
-onMounted(loadOrder)
 
 function buyAgain() {
   order.value.items.forEach((item) => cartStore.addItem(item, item.quantity, { brewMethod: item.brewMethod }))
   notify('已重新加入购物车', '订单商品已加入购物车。')
 }
+
+function handleFocus() {
+  if (shouldPoll.value) loadOrder(true)
+}
+
+watch(() => route.params.id, () => loadOrder(false))
+watch(() => order.value?.status, resetPolling)
+onMounted(async () => {
+  await loadOrder(false)
+  resetPolling()
+  window.addEventListener('focus', handleFocus)
+})
+onBeforeUnmount(() => {
+  window.clearInterval(pollTimer)
+  window.removeEventListener('focus', handleFocus)
+})
 </script>
 
 <template>
@@ -101,20 +162,16 @@ function buyAgain() {
         </div>
 
         <div class="order-timeline" aria-label="订单状态时间线">
-          <div
-            v-for="(step, index) in timeline"
-            :key="step"
-            class="order-timeline__step"
-            :class="{ 'is-active': index < meta(order.status).step }"
-          >
+          <div v-for="(step, index) in timeline" :key="step" class="order-timeline__step" :class="{ 'is-active': index < meta(order.status).step }">
             <span>{{ step }}</span>
           </div>
         </div>
 
         <div class="order-detail-actions">
-          <BaseButton v-if="order.status === 'pending_payment'" @click="pay">去支付</BaseButton>
-          <BaseButton v-if="order.status === 'pending_payment'" variant="outline" @click="cancel">取消订单</BaseButton>
-          <BaseButton v-if="order.status === 'paid'" @click="confirm">确认收货</BaseButton>
+          <BaseButton variant="outline" :loading="refreshing" @click="refreshStatus">刷新状态</BaseButton>
+          <BaseButton v-if="order.status === 'pending_payment'" :loading="paying" @click="pay">去支付</BaseButton>
+          <BaseButton v-if="cancellableStatuses.has(order.status)" variant="outline" @click="cancelOpen = true">取消订单</BaseButton>
+          <BaseButton v-if="order.status === 'paid'" :loading="confirming" @click="confirm">确认收货</BaseButton>
           <BaseButton v-if="['completed', 'cancelled', 'payment_expired'].includes(order.status)" @click="buyAgain">再次购买</BaseButton>
         </div>
       </section>
@@ -129,7 +186,7 @@ function buyAgain() {
                 <h3>{{ item.name }}</h3>
                 <p>{{ item.category }}<template v-if="item.flavor?.length"> / {{ item.flavor.join(' / ') }}</template></p>
                 <p v-if="item.brewMethod">制作方式：{{ brewMethodText(item.brewMethod) }}</p>
-                <strong>¥{{ item.price }} × {{ item.quantity }}</strong>
+                <strong>￥{{ item.price }} × {{ item.quantity }}</strong>
               </div>
             </div>
           </div>
@@ -164,30 +221,45 @@ function buyAgain() {
         <section class="commerce-panel">
           <div class="commerce-panel__header"><h2>金额明细</h2></div>
           <div class="detail-list">
-            <div class="detail-list__row"><span>商品总价</span><strong>¥{{ order.amounts.subtotal }}</strong></div>
-            <div class="detail-list__row"><span>优惠</span><strong>-¥{{ order.amounts.discount }}</strong></div>
-            <div class="detail-list__row"><span>积分抵扣</span><strong>-¥{{ order.amounts.pointsDeduction }}</strong></div>
-            <div class="detail-list__row"><span>配送费</span><strong>¥{{ order.amounts.shippingFee }}</strong></div>
-            <div class="detail-list__row summary-row--total"><span>实付金额</span><strong>¥{{ order.amounts.total }}</strong></div>
+            <div class="detail-list__row"><span>商品总价</span><strong>￥{{ order.amounts.subtotal }}</strong></div>
+            <div class="detail-list__row"><span>优惠</span><strong>-￥{{ order.amounts.discount }}</strong></div>
+            <div class="detail-list__row"><span>积分抵扣</span><strong>-￥{{ order.amounts.pointsDeduction }}</strong></div>
+            <div class="detail-list__row"><span>配送费</span><strong>￥{{ order.amounts.shippingFee }}</strong></div>
+            <div class="detail-list__row summary-row--total"><span>实付金额</span><strong>￥{{ order.amounts.total }}</strong></div>
           </div>
         </section>
       </div>
     </template>
 
-    <EmptyState
-      v-else
-      title="未找到该订单"
-      description="订单不存在，或本地订单数据已被清除。"
-      action-label="返回我的订单"
-      @action="router.push('/account/orders')"
-    >
-      <template #icon>□</template>
+    <EmptyState v-else title="未找到该订单" description="订单不存在，或本地订单数据已被清除。" action-label="返回我的订单" @action="router.push('/account/orders')">
+      <template #icon>!</template>
     </EmptyState>
 
+    <BaseModal v-model="cancelOpen" title="确认取消订单">
+      <div class="cancel-confirm">
+        <p>确认取消该订单吗？取消成功后订单状态会变为 cancelled。</p>
+        <div>
+          <BaseButton variant="ghost" @click="cancelOpen = false">再想想</BaseButton>
+          <BaseButton variant="danger" :loading="cancelling" @click="cancel">确认取消</BaseButton>
+        </div>
+      </div>
+    </BaseModal>
+
     <div class="page-toast">
-      <BaseToast v-model="toastVisible" variant="success" :title="toastTitle">
-        {{ toastMessage }}
-      </BaseToast>
+      <BaseToast v-model="toastVisible" :variant="toastVariant" :title="toastTitle">{{ toastMessage }}</BaseToast>
     </div>
   </div>
 </template>
+
+<style scoped>
+.cancel-confirm {
+  display: grid;
+  gap: var(--cb-space-4);
+}
+.cancel-confirm div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cb-space-3);
+  justify-content: flex-end;
+}
+</style>

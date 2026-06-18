@@ -5,7 +5,7 @@ export function register(payload) {
 }
 
 export function sendCode(payload) {
-  return request('/auth/send-code', { method: 'POST', body: payload })
+  return request('/auth/sms-code', { method: 'POST', body: payload })
 }
 
 export function login(payload) {

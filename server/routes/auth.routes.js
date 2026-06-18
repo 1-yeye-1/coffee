@@ -19,11 +19,14 @@ function serializeSession(user) {
   }
 }
 
+async function sendCode(req, res) {
+  const data = await sendVerificationCode(req.body.phone, req.body.scene || 'login')
+  return success(res, data, '验证码已发送')
+}
+
 export function registerAuthRoutes(router) {
-  router.post('/api/auth/send-code', async (req, res) => {
-    const data = await sendVerificationCode(req.body.phone, req.body.scene || 'login')
-    return success(res, data, '验证码已发送')
-  })
+  router.post('/api/auth/send-code', sendCode)
+  router.post('/api/auth/sms-code', sendCode)
 
   router.post('/api/auth/register', async (req, res) => {
     const phone = String(req.body.phone || '').trim()

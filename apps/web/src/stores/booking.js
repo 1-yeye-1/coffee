@@ -18,6 +18,8 @@ export const useBookingStore = defineStore('booking', {
     bookings: readBookings(),
     spaces: [],
     slots: [],
+    seats: [],
+    availability: [],
     apiError: '',
     dataSource: 'local',
   }),
@@ -64,6 +66,19 @@ export const useBookingStore = defineStore('booking', {
       this.bookings.unshift(booking)
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.bookings))
       return booking
+    },
+    async fetchSeats() {
+      this.seats = (await bookingApi.fetchSeats()).data
+      return this.seats
+    },
+    async fetchAvailability(date, timeSlot) {
+      if (!date || !timeSlot) return []
+      this.availability = (await bookingApi.fetchSeatAvailability({ date, timeSlot })).data
+      return this.availability
+    },
+    async createGuestBooking(payload) {
+      const response = await bookingApi.createGuestBooking(payload)
+      return { ...response.data, message: response.message }
     },
     async cancelBooking(id) {
       if (this.dataSource === 'api') {

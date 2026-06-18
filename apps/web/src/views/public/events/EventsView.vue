@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { resolveUploadUrl } from '@/api/upload'
 
 import { BaseBadge, BaseButton, BaseCard, BaseTabs } from '@/components/base'
 import { useEventsStore } from '@/stores/events'
@@ -52,8 +53,8 @@ onMounted(() => {
         <div v-if="view === 'list'" class="event-grid">
           <BaseCard v-for="event in visibleEvents" :key="event.id" class="event-card" variant="hover">
             <div class="event-card__visual">
-              <span>{{ event.category }}</span>
-              <strong>{{ event.date.slice(5).replace('-', '.') }}</strong>
+              <img v-if="event.coverUrl" class="event-card__image" :src="resolveUploadUrl(event.coverUrl)" :alt="event.title" />
+              <template v-else><span>{{ event.category }}</span><strong>{{ event.date.slice(5).replace('-', '.') }}</strong></template>
             </div>
             <div class="event-card__meta">
               <BaseBadge variant="neutral">{{ event.category }}</BaseBadge>
@@ -80,3 +81,7 @@ onMounted(() => {
     </main>
   </div>
 </template>
+
+<style scoped>
+.event-card__image { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+</style>

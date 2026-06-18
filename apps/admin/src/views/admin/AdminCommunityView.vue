@@ -1,15 +1,17 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { BaseBadge, BaseButton, BaseInput, BaseModal, BaseSelect, BaseTable, EmptyState } from '@/components/base'
 import { useAdminStore } from '@/stores/admin'
 import '@/assets/styles/pages/admin-management.css'
 
 const adminStore = useAdminStore()
+const route = useRoute()
 const deleting = ref(null)
 const rejecting = ref(null)
 const detail = ref(null)
-const filters = reactive({ keyword: '', status: 'all', featured: 'all', media: 'all' })
+const filters = reactive({ keyword: String(route.query.keyword || ''), status: 'all', featured: 'all', media: 'all' })
 
 const columns = [
   { key: 'title', label: '标题 / 摘要' },
@@ -27,7 +29,7 @@ const statusOptions = [
   { label: '待审核', value: 'pending' },
   { label: '已发布', value: 'published' },
   { label: '已拒绝', value: 'rejected' },
-  { label: '已下架', value: 'inactive' },
+  { label: '已隐藏', value: 'hidden' },
 ]
 
 const featuredOptions = [
@@ -47,7 +49,7 @@ const statusMap = {
   pending: { label: '待审核', variant: 'warning' },
   published: { label: '已发布', variant: 'success' },
   rejected: { label: '已拒绝', variant: 'danger' },
-  inactive: { label: '已下架', variant: 'neutral' },
+  hidden: { label: '已隐藏', variant: 'neutral' },
 }
 
 const rows = computed(() => adminStore.posts.map((item) => ({
@@ -113,6 +115,7 @@ async function remove() {
 }
 
 onMounted(refresh)
+watch(() => route.query.keyword, (value) => { filters.keyword = String(value || '') })
 </script>
 
 <template>
@@ -178,7 +181,7 @@ onMounted(refresh)
       </template>
 
       <template #cell-status="{ item }">
-        <BaseBadge :variant="statusMeta(item.status).variant">{{ statusMeta(item.status).label }}</BaseBadge>
+        <BaseSelect :model-value="item.status" :aria-label="`修改${item.title}状态`" :options="statusOptions.filter((option) => option.value !== 'all')" @update:model-value="adminStore.reviewPost(item.id, $event)" />
       </template>
 
       <template #cell-featured="{ item }">

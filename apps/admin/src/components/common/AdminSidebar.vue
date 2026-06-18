@@ -17,6 +17,7 @@ const items = [
   { label: '活动管理', to: '/events', icon: 'E' },
   { label: '社区审核', to: '/community', icon: 'C' },
   { label: '预约管理', to: '/bookings', icon: 'R' },
+  { label: '座位使用', to: '/seats', icon: 'S' },
   { label: '上传文件', to: '/uploads', icon: 'F' },
   { label: '操作日志', to: '/logs', icon: 'L' },
 ]

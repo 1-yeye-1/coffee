@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { resolveUploadUrl } from '@/api/upload'
 
 import { BaseBadge, BaseButton, BaseCard, EmptyState } from '@/components/base'
 import { books } from '@/data/books'
@@ -42,7 +43,8 @@ onMounted(loadBook)
     <template v-if="book">
       <section class="cb-container detail-hero">
         <div class="detail-visual">
-          <div class="book-cover" :class="`tone-${book.coverTone}`">
+          <img v-if="book.coverUrl" class="detail-content-image" :src="resolveUploadUrl(book.coverUrl)" :alt="book.title" />
+          <div v-else class="book-cover" :class="`tone-${book.coverTone}`">
             <span>{{ book.category }}</span><strong>{{ book.title }}</strong><small>Coffee Book Edition</small>
           </div>
         </div>
@@ -117,3 +119,7 @@ onMounted(loadBook)
     </div>
   </div>
 </template>
+
+<style scoped>
+.detail-content-image { display:block; width:100%; height:100%; min-height:28rem; object-fit:cover; border-radius:var(--cb-radius-xl); }
+</style>

@@ -46,5 +46,16 @@ html[data-theme="dark"] {
   --cb-border-soft: #403832;
   --cb-border-strong: #6d6055;
   --cb-color-coffee: #c8a165;
+  --cb-success: #79c99a;
+  --cb-warning: #e4b86f;
+  --cb-danger: #ef8b8b;
+  --cb-info: #84b7dc;
 }
 
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select { color:var(--cb-text-primary); background:var(--cb-bg-surface); border-color:var(--cb-border-strong); }
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder { color:var(--cb-text-muted); opacity:1; }
+html[data-theme="dark"] table,
+html[data-theme="dark"] dialog { color:var(--cb-text-primary); }

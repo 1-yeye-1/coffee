@@ -1,7 +1,8 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { resolveUploadUrl } from '@/api/upload'
 import {
   BaseBadge,
   BaseButton,
@@ -11,22 +12,18 @@ import {
   BaseSelect,
   BaseSkeleton,
   BaseTabs,
-  BaseToast,
   EmptyState,
 } from '@/components/base'
 import { products as localProducts } from '@/data/products'
-import { useCartStore } from '@/stores/cart'
 import { useProductsStore } from '@/stores/products'
 import '@/assets/styles/pages/catalog.css'
 
 const router = useRouter()
-const cartStore = useCartStore()
 const productsStore = useProductsStore()
 const keyword = ref('')
 const productType = ref('all')
 const sort = ref('recommended')
 const page = ref(1)
-const toastVisible = ref(false)
 const pageSize = 8
 let requestTimer
 
@@ -43,16 +40,19 @@ const sortOptions = [
   { label: '销量优先', value: 'sales' },
 ]
 
+const sortMap = { recommended: 'default', 'price-asc': 'price_asc', 'price-desc': 'price_desc', sales: 'sales_desc' }
 const visibleProducts = computed(() => productsStore.items)
 const totalProducts = computed(() => productsStore.meta?.total ?? visibleProducts.value.length)
 const totalPages = computed(() => Math.max(1, Math.ceil(totalProducts.value / pageSize)))
 const availableCount = computed(() => visibleProducts.value.filter((product) => product.stock > 0).length)
-const discountCount = computed(
-  () => localProducts.filter((product) => product.originalPrice && product.originalPrice > product.price).length,
-)
+const discountCount = computed(() => localProducts.filter((product) => product.originalPrice && product.originalPrice > product.price).length)
 const recommendedCount = computed(() => localProducts.filter((product) => product.recommended).length)
-
-const sortMap = { recommended: 'default', 'price-asc': 'price_asc', 'price-desc': 'price_desc', sales: 'sales_desc' }
+const todayRecommendation = computed(() =>
+  visibleProducts.value.find((product) => product.recommended && product.stock > 0)
+  || visibleProducts.value.find((product) => product.stock > 0)
+  || localProducts.find((product) => product.recommended && product.stock > 0)
+  || null,
+)
 
 function loadProducts() {
   return productsStore.fetchProducts({
@@ -64,6 +64,25 @@ function loadProducts() {
   })
 }
 
+function clearFilters() {
+  keyword.value = ''
+  productType.value = 'all'
+  sort.value = 'recommended'
+}
+
+function scrollToProducts() {
+  document.querySelector('#coffee-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+async function openTodayRecommendation() {
+  sort.value = 'recommended'
+  productType.value = 'all'
+  page.value = 1
+  await loadProducts()
+  const recommended = visibleProducts.value.find((item) => item.stock > 0) || visibleProducts.value[0]
+  if (recommended) await router.push(`/coffee/${recommended.slug}`)
+}
+
 watch([keyword, productType, sort], () => {
   page.value = 1
   clearTimeout(requestTimer)
@@ -71,20 +90,6 @@ watch([keyword, productType, sort], () => {
 })
 watch(page, loadProducts)
 onMounted(loadProducts)
-
-function clearFilters() {
-  keyword.value = ''
-  productType.value = 'all'
-  sort.value = 'recommended'
-}
-
-function addToCart(product) {
-  cartStore.addItem(product, 1)
-  toastVisible.value = false
-  nextTick(() => {
-    toastVisible.value = true
-  })
-}
 </script>
 
 <template>
@@ -97,10 +102,10 @@ function addToCart(product) {
           <p>从手冲豆到城市随行杯，把咖啡馆带回你的日常。</p>
           <div class="catalog-hero__actions">
             <BaseButton @click="productType = 'all'">查看全部商品</BaseButton>
-            <BaseButton variant="outline" @click="sort = 'recommended'">今日推荐</BaseButton>
+            <BaseButton variant="outline" @click="openTodayRecommendation">今日推荐</BaseButton>
           </div>
         </div>
-        <div class="catalog-hero__art coffee-hero-art" aria-label="咖啡器具艺术插画">
+        <div class="catalog-hero__art coffee-hero-art" aria-label="咖啡器具插画">
           <div class="coffee-hero-art__ring" />
           <div class="product-art__cup" />
           <span class="coffee-hero-art__bean coffee-hero-art__bean--one" />
@@ -113,9 +118,7 @@ function addToCart(product) {
     <div class="cb-container catalog-toolbar">
       <div class="catalog-toolbar__surface">
         <div class="catalog-toolbar__controls">
-          <BaseInput v-model="keyword" search placeholder="搜索商品名、风味、产地">
-            <template #prefix>⌕</template>
-          </BaseInput>
+          <BaseInput v-model="keyword" search placeholder="搜索商品名、风味、产地" />
           <BaseSelect v-model="sort" aria-label="商品排序" :options="sortOptions" />
         </div>
         <BaseTabs v-model="productType" class="catalog-tabs" :tabs="productTypes" />
@@ -123,6 +126,17 @@ function addToCart(product) {
     </div>
 
     <main class="cb-container cb-section">
+      <section v-if="todayRecommendation" class="today-recommendation" @click="router.push(`/coffee/${todayRecommendation.slug}`)">
+        <div>
+          <BaseBadge variant="premium">今日推荐</BaseBadge>
+          <h2>{{ todayRecommendation.name }}</h2>
+          <p>{{ todayRecommendation.description || (todayRecommendation.flavor || []).join(' / ') }}</p>
+        </div>
+        <div class="today-recommendation__actions" @click.stop>
+          <BaseButton size="sm" @click="router.push(`/coffee/${todayRecommendation.slug}`)">查看详情</BaseButton>
+          <BaseButton size="sm" variant="ghost" @click="scrollToProducts">查看更多</BaseButton>
+        </div>
+      </section>
       <section class="catalog-stats" aria-label="商品统计">
         <div class="catalog-stat"><strong>{{ totalProducts }}</strong><span>商品数量</span></div>
         <div class="catalog-stat"><strong>{{ availableCount }}</strong><span>有货商品</span></div>
@@ -132,16 +146,12 @@ function addToCart(product) {
 
       <p v-if="productsStore.error" class="text-muted" role="status">API 暂不可用，当前展示本地数据。</p>
 
-      <div class="catalog-grid">
+      <div id="coffee-products" class="catalog-grid">
         <BaseSkeleton v-if="productsStore.loading" v-for="index in pageSize" :key="`product-loading-${index}`" variant="card" />
-        <BaseCard
-          v-for="product in visibleProducts"
-          :key="product.id"
-          class="catalog-card"
-          variant="hover"
-        >
+        <BaseCard v-for="product in visibleProducts" :key="product.id" class="catalog-card" variant="hover">
           <div class="catalog-card__visual">
-            <div class="product-art catalog-card__visual-inner" :class="`tone-${product.tone}`">
+            <img v-if="product.imageUrl" class="catalog-card__image" :src="resolveUploadUrl(product.imageUrl)" :alt="product.name" />
+            <div v-else class="product-art catalog-card__visual-inner" :class="`tone-${product.tone}`">
               <div class="product-art__cup" />
               <span class="product-art__label">{{ product.origin }}</span>
             </div>
@@ -149,30 +159,17 @@ function addToCart(product) {
           <div class="catalog-card__body">
             <div class="catalog-card__topline">
               <BaseBadge variant="neutral">{{ product.category }}</BaseBadge>
-              <BaseBadge :variant="product.stock > 0 ? 'success' : 'danger'">{{ product.status }}</BaseBadge>
+              <BaseBadge :variant="product.stock > 0 ? 'success' : 'danger'">{{ product.stock > 0 ? '有库存' : '已售罄' }}</BaseBadge>
             </div>
             <h2>{{ product.name }}</h2>
-            <p>{{ product.flavor.join(' · ') }}</p>
+            <p>{{ product.flavor.join(' / ') }}</p>
             <div class="catalog-price-row">
-              <span class="catalog-price">¥{{ product.price }}</span>
-              <span v-if="product.originalPrice" class="catalog-original-price">¥{{ product.originalPrice }}</span>
+              <span class="catalog-price">￥{{ product.price }}</span>
+              <span v-if="product.originalPrice" class="catalog-original-price">￥{{ product.originalPrice }}</span>
               <small>已售 {{ product.sales }}</small>
             </div>
             <div class="catalog-card__actions">
-              <BaseButton
-                size="sm"
-                :disabled="product.stock === 0"
-                @click="addToCart(product)"
-              >
-                加入购物车
-              </BaseButton>
-              <BaseButton
-                size="sm"
-                variant="outline"
-                @click="router.push(`/coffee/${product.slug}`)"
-              >
-                查看详情
-              </BaseButton>
+              <BaseButton size="sm" variant="outline" @click="router.push(`/coffee/${product.slug}`)">查看详情</BaseButton>
             </div>
           </div>
         </BaseCard>
@@ -185,7 +182,7 @@ function addToCart(product) {
           action-label="清空筛选"
           @action="clearFilters"
         >
-          <template #icon>◇</template>
+          <template #icon>!</template>
         </EmptyState>
       </div>
 
@@ -193,12 +190,6 @@ function addToCart(product) {
         <BasePagination v-model="page" :total-pages="totalPages" />
       </div>
     </main>
-
-    <div class="page-toast">
-      <BaseToast v-model="toastVisible" variant="success" title="已加入购物车">
-        商品已加入购物车。
-      </BaseToast>
-    </div>
   </div>
 </template>
 
@@ -210,13 +201,11 @@ function addToCart(product) {
   border: var(--cb-space-3) solid color-mix(in srgb, var(--cb-color-gold) 34%, transparent);
   border-radius: var(--cb-radius-pill);
 }
-
 .coffee-hero-art > .product-art__cup {
   z-index: 1;
   width: 9rem;
   height: 7.5rem;
 }
-
 .coffee-hero-art__bean {
   position: absolute;
   width: 2.5rem;
@@ -224,19 +213,16 @@ function addToCart(product) {
   background: var(--cb-color-caramel);
   border-radius: var(--cb-radius-pill);
 }
-
 .coffee-hero-art__bean--one {
   top: 22%;
   left: 18%;
   transform: rotate(30deg);
 }
-
 .coffee-hero-art__bean--two {
   right: 16%;
   bottom: 24%;
   transform: rotate(-22deg);
 }
-
 .coffee-hero-art p {
   position: absolute;
   bottom: var(--cb-space-4);
@@ -244,4 +230,31 @@ function addToCart(product) {
   font-size: var(--cb-font-size-xs);
   letter-spacing: 0.12em;
 }
+.catalog-card__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 12rem;
+  object-fit: cover;
+}
+.today-recommendation {
+  display: flex;
+  margin-bottom: var(--cb-space-6);
+  padding: var(--cb-space-6);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cb-space-5);
+  color: var(--cb-text-primary);
+  background: var(--cb-bg-surface);
+  border: 0.0625rem solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-xl);
+  box-shadow: var(--cb-shadow-sm);
+  cursor: pointer;
+  transition: transform var(--cb-duration-fast) var(--cb-ease-standard), box-shadow var(--cb-duration-fast) var(--cb-ease-standard);
+}
+.today-recommendation:hover { box-shadow: var(--cb-shadow-md); transform: translateY(-2px); }
+.today-recommendation h2 { margin-top: var(--cb-space-2); }
+.today-recommendation p { margin-top: var(--cb-space-2); color: var(--cb-text-secondary); }
+.today-recommendation__actions { display: flex; flex-wrap: wrap; gap: var(--cb-space-2); }
+@media (max-width: 40rem) { .today-recommendation { align-items: stretch; flex-direction: column; } }
 </style>

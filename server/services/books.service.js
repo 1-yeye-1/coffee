@@ -3,7 +3,7 @@ import { parsePagination } from '../utils/pagination.js'
 
 const columns = `
   id, slug, title, author, category, rating, stock, status,
-  cover_tone AS coverTone, summary, description, isbn, publisher, year, pages,
+  cover_tone AS coverTone, cover_url AS coverUrl, summary, description, isbn, publisher, year, pages,
   language, author_bio AS authorBio, created_at AS createdAt, updated_at AS updatedAt
 `
 
@@ -13,9 +13,14 @@ const sortMap = {
   newest: 'created_at DESC, id DESC',
   stock_desc: 'stock DESC, id ASC',
 }
+const validBookStatuses = new Set(['available', 'unavailable', 'hidden'])
+
+function assertBookStatus(status) {
+  if (!validBookStatuses.has(status)) throw Object.assign(new Error('图书状态无效'), { statusCode: 400 })
+}
 
 function buildFilters(query) {
-  const clauses = []
+  const clauses = query.admin ? [] : ["status IN ('available', 'active')"]
   const params = []
   const keyword = String(query.keyword || '').trim()
 
@@ -56,7 +61,7 @@ export async function listBooks(query = {}) {
 
 export async function findBookBySlug(slug) {
   const [rows] = await pool.execute(
-    `SELECT ${columns} FROM books WHERE slug = ? LIMIT 1`,
+    `SELECT ${columns} FROM books WHERE slug = ? AND status IN ('available', 'active') LIMIT 1`,
     [slug],
   )
   return rows[0] || null
@@ -68,12 +73,13 @@ export async function findBookById(id) {
 }
 
 export async function createBook(payload) {
+  assertBookStatus(payload.status || 'available')
   const [result] = await pool.execute(
-    `INSERT INTO books (slug, title, author, category, rating, stock, status, cover_tone, summary,
+    `INSERT INTO books (slug, title, author, category, rating, stock, status, cover_tone, cover_url, summary,
       description, isbn, publisher, year, pages, language, author_bio)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [payload.slug, payload.title, payload.author, payload.category || '', Number(payload.rating) || 0,
-      Number(payload.stock) || 0, payload.status || 'active', payload.coverTone || null,
+      Number(payload.stock) || 0, payload.status || 'available', payload.coverTone || null, payload.coverUrl || null,
       payload.summary || null, payload.description || null, payload.isbn || null,
       payload.publisher || null, payload.year || null, payload.pages || null,
       payload.language || null, payload.authorBio || null],
@@ -82,12 +88,13 @@ export async function createBook(payload) {
 }
 
 export async function updateBook(id, payload) {
+  assertBookStatus(payload.status || 'available')
   await pool.execute(
     `UPDATE books SET slug=?, title=?, author=?, category=?, rating=?, stock=?, status=?,
-      cover_tone=?, summary=?, description=?, isbn=?, publisher=?, year=?, pages=?, language=?, author_bio=?
+      cover_tone=?, cover_url=?, summary=?, description=?, isbn=?, publisher=?, year=?, pages=?, language=?, author_bio=?
      WHERE id=?`,
     [payload.slug, payload.title, payload.author, payload.category || '', Number(payload.rating) || 0,
-      Number(payload.stock) || 0, payload.status || 'active', payload.coverTone || null,
+      Number(payload.stock) || 0, payload.status || 'available', payload.coverTone || null, payload.coverUrl || null,
       payload.summary || null, payload.description || null, payload.isbn || null,
       payload.publisher || null, payload.year || null, payload.pages || null,
       payload.language || null, payload.authorBio || null, id],
@@ -96,6 +103,7 @@ export async function updateBook(id, payload) {
 }
 
 export async function updateBookStatus(id, status) {
+  assertBookStatus(status)
   await pool.execute('UPDATE books SET status = ? WHERE id = ?', [status, id])
   return findBookById(id)
 }

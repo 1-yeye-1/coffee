@@ -15,6 +15,7 @@ import CreatePostView from '@/views/public/community/CreatePostView.vue'
 import PostDetailView from '@/views/public/community/PostDetailView.vue'
 import EventDetailView from '@/views/public/events/EventDetailView.vue'
 import EventsView from '@/views/public/events/EventsView.vue'
+import PublicUserProfileView from '@/views/public/users/PublicUserProfileView.vue'
 import AboutView from '@/views/public/info/AboutView.vue'
 import ContactView from '@/views/public/info/ContactView.vue'
 import HelpView from '@/views/public/info/HelpView.vue'
@@ -92,6 +93,11 @@ export const publicRoutes = [
         name: ROUTE_NAMES.COMMUNITY_POST,
         component: PostDetailView,
         meta: { title: '帖子详情' },
+      },
+      {
+        path: 'users/:id',
+        component: PublicUserProfileView,
+        meta: { title: '用户主页' },
       },
       {
         path: 'booking',

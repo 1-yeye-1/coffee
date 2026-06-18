@@ -5,6 +5,7 @@ const adminUsername = process.env.SMOKE_ADMIN_USERNAME || 'admin'
 const adminPassword = process.env.SMOKE_ADMIN_PASSWORD || 'admin123456'
 const stamp = Date.now()
 const smokePhone = `139${String(stamp).slice(-8)}`
+const guestPhone = `181${String(stamp + 1).slice(-8)}`
 const createdPostSlugs = []
 
 function logPass(name) {
@@ -34,8 +35,9 @@ async function request(method, path, { token, body, expectedStatus } = {}) {
 }
 
 async function cleanup() {
-  await pool.query('DELETE FROM verification_codes WHERE phone = ?', [smokePhone])
-  const [users] = await pool.query('SELECT id FROM users WHERE phone = ?', [smokePhone])
+  await pool.query('DELETE FROM verification_codes WHERE phone IN (?, ?)', [smokePhone, guestPhone])
+  if (createdPostSlugs.length) await pool.query('DELETE FROM posts WHERE slug IN (?)', [createdPostSlugs])
+  const [users] = await pool.query('SELECT id FROM users WHERE phone IN (?, ?)', [smokePhone, guestPhone])
   const userIds = users.map((row) => row.id)
   if (userIds.length) {
     const [orders] = await pool.query('SELECT id FROM orders WHERE user_id IN (?)', [userIds])
@@ -47,7 +49,6 @@ async function cleanup() {
     await pool.query('DELETE FROM carts WHERE user_id IN (?)', [userIds])
     await pool.query('DELETE FROM users WHERE id IN (?)', [userIds])
   }
-  if (createdPostSlugs.length) await pool.query('DELETE FROM posts WHERE slug IN (?)', [createdPostSlugs])
 }
 
 async function main() {
@@ -86,6 +87,10 @@ async function main() {
   await request('GET', '/admin/dashboard', { token: adminToken })
   logPass('admin dashboard')
 
+  const adminSearch = await request('GET', '/admin/search?keyword=小王子', { token: adminToken })
+  assert(Array.isArray(adminSearch.payload.data.books), 'admin search books missing')
+  logPass('admin realtime search')
+
   const adminOrdersDenied = await request('GET', '/orders', { token: adminToken, expectedStatus: 401 })
   assert([401, 403].includes(adminOrdersDenied.payload.code), 'admin token should not access user orders')
   logPass('admin token blocked from user orders')
@@ -93,7 +98,15 @@ async function main() {
   const registerCode = await request('POST', '/auth/send-code', {
     body: { phone: smokePhone, scene: 'register' },
   })
-  assert(registerCode.payload.data.devCode, 'dev verification code missing')
+  assert(!registerCode.payload.data.devCode, 'verification code must not be returned to frontend')
+  const smokeCode = '123456'
+  const { hashPassword } = await import('../server/utils/crypto.js')
+  await pool.query(
+    `UPDATE verification_codes SET code_hash = ?
+     WHERE phone = ? AND scene = 'register'
+     ORDER BY id DESC LIMIT 1`,
+    [await hashPassword(smokeCode), smokePhone],
+  )
   logPass('send register code')
 
   const register = await request('POST', '/auth/register', {
@@ -101,7 +114,7 @@ async function main() {
       phone: smokePhone,
       password: 'smoke123456',
       confirmPassword: 'smoke123456',
-      code: registerCode.payload.data.devCode,
+      code: smokeCode,
       nickname: 'Smoke User',
     },
   })
@@ -174,9 +187,19 @@ async function main() {
   const posts = await request('GET', '/posts?page=1&pageSize=3')
   const post = posts.payload.data[0]
   assert(post, 'posts list empty')
+  const submittedPost = await request('POST', '/posts', { token: userToken, body: { title: `Smoke community ${stamp}`, content: '社区审核同步测试内容' } })
+  createdPostSlugs.push(submittedPost.payload.data.slug)
+  await request('GET', `/posts/${submittedPost.payload.data.id}`, { expectedStatus: 404 })
+  await request('PATCH', `/admin/posts/${submittedPost.payload.data.id}/status`, { token: adminToken, body: { status: 'published' } })
+  await request('GET', `/posts/${submittedPost.payload.data.id}`)
+  await request('PATCH', `/admin/posts/${submittedPost.payload.data.id}/status`, { token: adminToken, body: { status: 'hidden' } })
+  await request('GET', `/posts/${submittedPost.payload.data.id}`, { expectedStatus: 404 })
+  logPass('community moderation synchronization')
   const unauthLike = await request('POST', `/posts/${post.id}/like`, { expectedStatus: 401 })
   assert(unauthLike.payload.code === 401, 'unauth like should return 401')
   await request('POST', `/posts/${post.id}/like`, { token: userToken })
+  const postLikes = await request('GET', `/posts/${post.id}/likes`)
+  assert(postLikes.payload.data.items.some((item) => item.nickname === 'Smoke User'), 'post like users missing')
   logPass('post like permission flow')
 
   const events = await request('GET', '/events?page=1&pageSize=3')
@@ -186,6 +209,28 @@ async function main() {
   const spaces = await request('GET', '/spaces')
   assert(spaces.payload.data.length > 0, 'spaces list empty')
   logPass('spaces list')
+
+  const bookingNow = new Date()
+  const bookingDate = `${bookingNow.getFullYear()}-${String(bookingNow.getMonth() + 1).padStart(2, '0')}-${String(bookingNow.getDate()).padStart(2, '0')}`
+  const availability = await request('GET', `/seats/availability?date=${bookingDate}&timeSlot=09%3A00-11%3A00`)
+  const freeSeats = availability.payload.data.filter((item) => item.status === 'available')
+  assert(freeSeats.length >= 2, 'not enough available seats')
+  await request('POST', '/bookings', { token: userToken, body: { date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[0].seatId, peopleCount: 1, contactName: 'Smoke User', phone: smokePhone } })
+  const occupied = await request('GET', `/seats/availability?date=${bookingDate}&timeSlot=09%3A00-11%3A00`)
+  assert(occupied.payload.data.find((item) => item.seatId === freeSeats[0].seatId)?.status === 'reserved', 'seat should be reserved')
+  logPass('member seat booking flow')
+
+  await request('POST', '/auth/send-code', { body: { phone: guestPhone, scene: 'booking_guest' } })
+  const guestCode = '654321'
+  const { hashPassword: hashGuestCode } = await import('../server/utils/crypto.js')
+  await pool.query(`UPDATE verification_codes SET code_hash = ? WHERE phone = ? AND scene = 'booking_guest' ORDER BY id DESC LIMIT 1`, [await hashGuestCode(guestCode), guestPhone])
+  const guestBooking = await request('POST', '/bookings/guest', { body: { phone: guestPhone, code: guestCode, name: '游客测试', date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[1].seatId, peopleCount: 1 } })
+  assert(guestBooking.payload.data.accountCreated === true, 'guest account should be created')
+  logPass('guest verification booking flow')
+
+  const usage = await request('GET', `/admin/seats/usage?date=${bookingDate}&timeSlot=09%3A00-11%3A00`, { token: adminToken })
+  assert(usage.payload.data.some((item) => item.bookingInfo?.phoneMasked), 'admin seat usage missing booking info')
+  logPass('admin seat usage')
 
   const notFound = await request('GET', '/does-not-exist', { expectedStatus: 404 })
   assert(notFound.payload.code === 404 && notFound.payload.data === null, '404 payload should keep unified format')

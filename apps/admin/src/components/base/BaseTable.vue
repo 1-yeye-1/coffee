@@ -103,10 +103,20 @@ defineProps({
 }
 
 .base-table th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
   color: var(--cb-text-secondary);
   font-size: var(--cb-font-size-sm);
   font-weight: var(--cb-font-semibold);
   background: var(--cb-bg-soft);
+}
+
+.base-table td {
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
 }
 
 .base-table tbody tr:last-child td {

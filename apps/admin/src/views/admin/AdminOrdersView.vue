@@ -1,12 +1,14 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { BaseBadge, BaseButton, BaseDrawer, BaseInput, BaseSelect, BaseTable, EmptyState } from '@/components/base'
 import { useAdminStore } from '@/stores/admin'
 import '@/assets/styles/pages/admin-management.css'
 
 const adminStore = useAdminStore()
-const keyword = ref('')
+const route = useRoute()
+const keyword = ref(String(route.query.keyword || ''))
 const status = ref('')
 const drawerOpen = ref(false)
 const current = ref(null)
@@ -17,6 +19,7 @@ const statusOptions = [
   { label: '已支付', value: 'paid' },
   { label: '已完成', value: 'completed' },
   { label: '已取消', value: 'cancelled' },
+  { label: '已退款', value: 'refunded' },
   { label: '支付过期', value: 'payment_expired' },
 ]
 const columns = [
@@ -35,6 +38,7 @@ const statusText = {
   paid: '已支付',
   completed: '已完成',
   cancelled: '已取消',
+  refunded: '已退款',
   payment_expired: '支付过期',
 }
 const badgeVariant = {
@@ -43,6 +47,7 @@ const badgeVariant = {
   paid: 'info',
   completed: 'success',
   cancelled: 'neutral',
+  refunded: 'neutral',
   payment_expired: 'neutral',
 }
 const rows = computed(() => adminStore.orders.map((item) => ({
@@ -65,6 +70,7 @@ const stats = computed(() => [
   ['已完成', adminStore.orders.filter((item) => item.status === 'completed').length],
   ['总营收', `¥${revenue.value}`],
 ])
+const editableStatusOptions = computed(() => statusOptions.filter((option) => option.value !== 'all' && option.value !== 'payment_expired'))
 
 async function open(item) {
   current.value = await adminStore.fetchAdminOrderDetail(item.id)
@@ -84,6 +90,7 @@ function brewMethodText(value) {
 }
 
 onMounted(() => adminStore.fetchAdminOrders())
+watch(() => route.query.keyword, (value) => { keyword.value = String(value || '') })
 </script>
 
 <template>
@@ -120,6 +127,7 @@ onMounted(() => adminStore.fetchAdminOrders())
           <h3>{{ current.orderNo || current.id }}</h3>
           <p>{{ new Date(current.createdAt).toLocaleString('zh-CN') }}</p>
         </div>
+        <BaseSelect :model-value="current.status" label="订单状态" :options="editableStatusOptions" @update:model-value="updateStatus" />
 
         <section>
           <h3>商品清单</h3>

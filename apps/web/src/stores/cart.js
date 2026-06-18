@@ -78,7 +78,7 @@ export const useCartStore = defineStore('cart', {
         category: item.category, productType: item.productType, supportsBrewMethod: item.supportsBrewMethod,
         brewMethod: item.brewMethod || null, price: Number(item.price), originalPrice: item.originalPrice,
         stock: Number(item.stock), status: item.status, origin: item.origin,
-        flavor: [...(item.flavor || [])], tone: item.tone, quantity: Number(item.quantity),
+        flavor: [...(item.flavor || [])], imageUrl: item.imageUrl, tone: item.tone, quantity: Number(item.quantity),
       }))
       this.selectedIds = cart.items.filter((item) => item.selected).map((item) => item.id)
       this.source = 'api'
@@ -121,6 +121,7 @@ export const useCartStore = defineStore('cart', {
           status: product.status,
           origin: product.origin,
           flavor: [...product.flavor],
+          imageUrl: product.imageUrl,
           tone: product.tone,
           quantity: Math.min(Number(product.stock), amount),
         })

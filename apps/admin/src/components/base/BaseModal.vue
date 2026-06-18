@@ -118,6 +118,12 @@ onBeforeUnmount(restorePage)
   outline: 0;
 }
 
+@media (max-width: 40rem) {
+  .base-modal { padding: 0; place-items: end stretch; }
+  .base-modal__dialog { width: 100%; max-height: 92vh; border-radius: var(--cb-radius-2xl) var(--cb-radius-2xl) 0 0; }
+  .base-modal__header, .base-modal__footer, .base-modal__body { padding: var(--cb-space-4); }
+}
+
 .base-modal__header,
 .base-modal__footer {
   display: flex;

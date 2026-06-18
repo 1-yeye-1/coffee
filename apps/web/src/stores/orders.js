@@ -108,7 +108,7 @@ export const useOrderStore = defineStore('orders', {
         catch (error) { this.error=error.message; throw error }
       }
       const order = this.getOrderById(id)
-      if (!order || order.status !== 'pending_payment') return
+      if (!order || !['pending_payment', 'pending_review', 'pending', 'unpaid', 'created'].includes(order.status)) return
       order.status = 'cancelled'
       order.timeline.cancelledAt = new Date().toISOString()
       persistOrders(this.orders)

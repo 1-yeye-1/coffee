@@ -1,5 +1,6 @@
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import {
   BaseBadge,
@@ -12,6 +13,7 @@ import {
   BaseToast,
 } from '@/components/base'
 import { useAdminStore } from '@/stores/admin'
+import { uploadContentImage } from '@/api/admin'
 import '@/assets/styles/pages/admin-management.css'
 
 const props = defineProps({
@@ -26,7 +28,8 @@ const props = defineProps({
 })
 
 const adminStore = useAdminStore()
-const keyword = ref('')
+const route = useRoute()
+const keyword = ref(String(route.query.keyword || ''))
 const category = ref('')
 const status = ref('')
 const loading = ref(true)
@@ -40,8 +43,12 @@ const deletingItem = ref(null)
 const registrationEvent = ref(null)
 const registrationOpen = ref(false)
 const form = reactive({})
+const uploadingField = ref('')
+const updatingStatus = ref(null)
+const apiOrigin = String(import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://127.0.0.1:4173/api' : '')).replace(/\/api\/?$/, '').replace(/\/$/, '')
 
 const items = computed(() => adminStore[props.type])
+const statusField = computed(() => props.fields.find((field) => field.key === 'status'))
 const categoryFilterOptions = computed(() => [{ label: '全部分类', value: 'all' }, ...props.categoryOptions])
 const statusOptions = [
   { label: '全部状态', value: 'all' },
@@ -53,10 +60,7 @@ const filteredItems = computed(() => {
   return items.value.filter((item) => {
     const text = [item.title, item.name, item.author, item.category, item.location].join(' ').toLowerCase()
     const categoryMatches = !category.value || category.value === 'all' || item.category === category.value
-    const statusMatches =
-      !status.value ||
-      status.value === 'all' ||
-      (status.value === 'enabled' ? item.enabled !== false : item.enabled === false)
+    const statusMatches = !status.value || status.value === 'all' || item.status === status.value
     return (!query || text.includes(query)) && categoryMatches && statusMatches
   })
 })
@@ -98,6 +102,22 @@ async function save() {
   } catch (error) { notify(error.message, 'error') }
 }
 
+async function uploadImageField(field, event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  uploadingField.value = field.key
+  try {
+    const response = await uploadContentImage(file, field.uploadScene || 'product')
+    form[field.key] = response.data.url
+    notify('商品示例图上传成功')
+  } catch (error) {
+    notify(error.message || '图片上传失败', 'error')
+  } finally {
+    uploadingField.value = ''
+    event.target.value = ''
+  }
+}
+
 function askDelete(item) {
   deletingItem.value = item
   confirmOpen.value = true
@@ -111,6 +131,19 @@ function viewRegistrations(item) {
 async function toggleItem(item) {
   try { await adminStore.toggleEnabled(props.type, item.id) }
   catch (error) { notify(error.message, 'error') }
+}
+
+async function changeStatus(item, nextStatus) {
+  if (!nextStatus || nextStatus === item.status) return
+  updatingStatus.value = item.id
+  try {
+    await adminStore.updateCollectionStatus(props.type, item.id, nextStatus)
+    notify('状态已更新')
+  } catch (error) {
+    notify(error.message, 'error')
+  } finally {
+    updatingStatus.value = null
+  }
 }
 
 async function confirmDelete() {
@@ -128,12 +161,18 @@ function notify(title, variant = 'success') {
   nextTick(() => { toastVisible.value = true })
 }
 
+function resolveAssetUrl(url) {
+  if (!url || /^https?:\/\//.test(url)) return url
+  return `${apiOrigin}${url}`
+}
+
 onMounted(async () => {
   if (['books', 'products', 'events'].includes(props.type)) {
     await adminStore.fetchAdminCollection(props.type)
   }
   loading.value = false
 })
+watch(() => route.query.keyword, (value) => { keyword.value = String(value || '') })
 </script>
 
 <template>
@@ -157,18 +196,21 @@ onMounted(async () => {
     <section class="admin-filter-bar">
       <BaseInput v-model="keyword" search :placeholder="`搜索${singular}关键词`" />
       <BaseSelect v-model="category" aria-label="分类筛选" :options="categoryFilterOptions" />
-      <BaseSelect v-model="status" aria-label="状态筛选" :options="statusOptions" />
+      <BaseSelect v-model="status" aria-label="状态筛选" :options="[{ label: '全部状态', value: 'all' }, ...(statusField?.options || [])]" />
     </section>
 
     <section class="admin-panel">
       <div class="admin-panel__header"><h2>{{ singular }}列表</h2><span class="text-muted">{{ filteredItems.length }} 条记录</span></div>
       <BaseTable :columns="columns" :items="filteredItems" :loading="loading" :empty-text="`暂无匹配${singular}`">
-        <template #cell-visual="{ item }"><span class="admin-table-visual">{{ (item.title || item.name).slice(0, 1) }}</span></template>
+        <template #cell-visual="{ item }">
+          <img v-if="item.imageUrl" class="admin-table-image" :src="resolveAssetUrl(item.imageUrl)" :alt="item.title || item.name" />
+          <span v-else class="admin-table-visual">{{ (item.title || item.name).slice(0, 1) }}</span>
+        </template>
         <template #cell-primary="{ item }"><div class="admin-cell-primary"><strong>{{ item.title || item.name }}</strong><small>{{ item.author || item.origin || item.location }}</small></div></template>
         <template #cell-productType="{ item }"><BaseBadge :variant="item.productType === 'coffee' ? 'premium' : 'neutral'">{{ item.productType === 'coffee' ? '咖啡商品' : '文创商品' }}</BaseBadge></template>
         <template #cell-category="{ item }"><BaseBadge variant="neutral">{{ item.category }}</BaseBadge></template>
-        <template #cell-status="{ item }"><BaseBadge :variant="item.enabled === false ? 'neutral' : item.stock === 0 ? 'danger' : 'success'">{{ item.enabled === false ? '已停用' : item.status || '启用' }}</BaseBadge></template>
-        <template #cell-actions="{ item }"><div class="admin-row-actions"><BaseButton size="sm" variant="ghost" @click="openEdit(item)">编辑</BaseButton><BaseButton v-if="type === 'events'" size="sm" variant="ghost" @click="viewRegistrations(item)">查看报名</BaseButton><BaseButton size="sm" variant="ghost" @click="toggleItem(item)">{{ item.enabled === false ? '启用' : '停用' }}</BaseButton><BaseButton size="sm" variant="danger" @click="askDelete(item)">删除</BaseButton></div></template>
+        <template #cell-status="{ item }"><BaseSelect :model-value="item.status" :disabled="updatingStatus === item.id" :aria-label="`修改${item.title || item.name}状态`" :options="statusField?.options || []" @update:model-value="changeStatus(item, $event)" /></template>
+        <template #cell-actions="{ item }"><div class="admin-row-actions"><BaseButton size="sm" variant="ghost" @click="openEdit(item)">编辑</BaseButton><BaseButton v-if="type === 'events'" size="sm" variant="ghost" @click="viewRegistrations(item)">查看报名</BaseButton><BaseButton size="sm" variant="danger" @click="askDelete(item)">删除</BaseButton></div></template>
       </BaseTable>
     </section>
 
@@ -177,6 +219,14 @@ onMounted(async () => {
         <template v-for="field in fields" :key="field.key">
           <BaseTextarea v-if="field.type === 'textarea'" v-model="form[field.key]" :label="field.label" :rows="4" />
           <BaseSelect v-else-if="field.type === 'select'" v-model="form[field.key]" :label="field.label" :options="field.options" />
+          <div v-else-if="field.type === 'image'" class="admin-image-field">
+            <BaseInput v-model="form[field.key]" :label="field.label" placeholder="填写图片 URL，或上传一张示例图" />
+            <img v-if="form[field.key]" :src="resolveAssetUrl(form[field.key])" alt="商品示例图预览" />
+            <label class="admin-upload-button">
+              <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" @change="uploadImageField(field, $event)" />
+              <span>{{ uploadingField === field.key ? '上传中...' : '上传图片' }}</span>
+            </label>
+          </div>
           <label v-else-if="field.type === 'checkbox'" class="admin-checkbox-field">
             <input v-model="form[field.key]" type="checkbox" />
             <span>{{ field.label }}</span>
@@ -203,3 +253,38 @@ onMounted(async () => {
     <div class="admin-toast"><BaseToast v-model="toastVisible" :variant="toastVariant" :title="toastTitle">{{ toastVariant === 'success' ? '数据已更新。' : '操作未完成。' }}</BaseToast></div>
   </div>
 </template>
+
+<style scoped>
+.admin-image-field {
+  display: grid;
+  gap: var(--cb-space-3);
+}
+.admin-image-field img {
+  width: 8rem;
+  height: 5.5rem;
+  object-fit: cover;
+  border: 0.0625rem solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-lg);
+}
+.admin-upload-button {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 2.5rem;
+  padding: 0 var(--cb-space-4);
+  align-items: center;
+  color: var(--cb-color-coffee);
+  font-weight: var(--cb-font-semibold);
+  border: 0.0625rem solid var(--cb-border-strong);
+  border-radius: var(--cb-radius-lg);
+  cursor: pointer;
+}
+.admin-upload-button input {
+  display: none;
+}
+.admin-table-image {
+  width: 3rem;
+  height: 3rem;
+  object-fit: cover;
+  border-radius: var(--cb-radius-lg);
+}
+</style>

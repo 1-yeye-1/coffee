@@ -5,6 +5,11 @@ const productTypes = [
   { label: '咖啡商品', value: 'coffee' },
   { label: '文创商品', value: 'cultural' },
 ]
+const statuses = [
+  { label: '上架', value: 'active' },
+  { label: '下架', value: 'inactive' },
+  { label: '草稿', value: 'draft' },
+]
 
 const categories = [
   '咖啡',
@@ -39,6 +44,7 @@ const fields = [
   { key: 'slug', label: 'Slug' },
   { key: 'productType', label: '商品类型', type: 'select', options: productTypes, default: 'coffee' },
   { key: 'supportsBrewMethod', label: '咖啡商品支持制作方式', type: 'checkbox', default: true },
+  { key: 'imageUrl', label: '商品示例图', type: 'image' },
   { key: 'category', label: '细分类', type: 'select', options: categories },
   { key: 'price', label: '价格', type: 'number' },
   { key: 'originalPrice', label: '原价', type: 'number' },
@@ -48,7 +54,7 @@ const fields = [
   { key: 'origin', label: '产地/来源' },
   { key: 'roast', label: '烘焙度/规格' },
   { key: 'description', label: '简介', type: 'textarea' },
-  { key: 'status', label: '状态' },
+  { key: 'status', label: '状态', type: 'select', options: statuses, default: 'active' },
 ]
 
 const stats = [

@@ -15,7 +15,7 @@ const columns = [
   { key: 'commentsCount', label: '评论' },
   { key: 'createdAt', label: '时间' },
 ]
-const statusText = { pending: '待审核', published: '已发布', rejected: '未通过' }
+const statusText = { pending: '待审核', published: '已发布', rejected: '已拒绝', hidden: '已隐藏' }
 
 onMounted(async () => {
   try {

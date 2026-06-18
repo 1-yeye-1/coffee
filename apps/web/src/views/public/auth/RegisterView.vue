@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { onBeforeUnmount, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import * as authApi from '@/api/auth'
@@ -11,6 +11,8 @@ const authStore = useAuthStore()
 const error = ref('')
 const success = ref('')
 const sending = ref(false)
+const countdown = ref(0)
+let countdownTimer = null
 const form = reactive({
   nickname: '',
   phone: '',
@@ -22,6 +24,15 @@ const form = reactive({
 
 function isPhone(value) {
   return /^1\d{10}$/.test(String(value || '').trim())
+}
+
+function startCountdown(seconds = 60) {
+  countdown.value = seconds
+  window.clearInterval(countdownTimer)
+  countdownTimer = window.setInterval(() => {
+    countdown.value -= 1
+    if (countdown.value <= 0) window.clearInterval(countdownTimer)
+  }, 1000)
 }
 
 function validate() {
@@ -43,11 +54,10 @@ async function sendCode() {
   sending.value = true
   try {
     const response = await authApi.sendCode({ phone: form.phone.trim(), scene: 'register' })
-    success.value = response.data.devCode
-      ? `验证码已发送，开发环境验证码：${response.data.devCode}`
-      : '验证码已发送，请留意短信。'
+    startCountdown(response.data.cooldown || 60)
+    success.value = '验证码已发送，请查看短信或联系开发环境控制台日志。'
   } catch (requestError) {
-    error.value = requestError.message
+    error.value = requestError.message || '验证码发送失败，请稍后重试。'
   } finally {
     sending.value = false
   }
@@ -67,9 +77,11 @@ async function submit() {
     })
     await router.replace('/')
   } catch (requestError) {
-    error.value = requestError.message
+    error.value = requestError.message || '注册失败，请稍后重试。'
   }
 }
+
+onBeforeUnmount(() => window.clearInterval(countdownTimer))
 </script>
 
 <template>
@@ -84,7 +96,9 @@ async function submit() {
       <BaseInput v-model="form.phone" label="手机号" type="tel" autocomplete="tel" placeholder="请输入 11 位手机号" />
       <div class="auth-code-row">
         <BaseInput v-model="form.code" label="短信验证码" inputmode="numeric" placeholder="请输入验证码" />
-        <BaseButton type="button" variant="outline" :loading="sending" @click="sendCode">获取验证码</BaseButton>
+        <BaseButton type="button" variant="outline" :loading="sending" :disabled="countdown > 0" @click="sendCode">
+          {{ countdown > 0 ? `${countdown} 秒后重试` : '获取验证码' }}
+        </BaseButton>
       </div>
       <BaseInput v-model="form.password" label="密码" password autocomplete="new-password" hint="至少 6 位" />
       <BaseInput v-model="form.confirmPassword" label="确认密码" password autocomplete="new-password" />

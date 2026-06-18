@@ -44,17 +44,17 @@ onMounted(() => {
       <section>
         <BaseTabs v-model="feed" :tabs="tabs" />
         <div class="post-grid">
-          <BaseCard v-for="post in visiblePosts" :key="post.id" class="post-card" variant="hover">
+          <BaseCard v-for="post in visiblePosts" :key="post.id" class="post-card post-card--clickable" variant="hover" role="link" tabindex="0" @click="router.push(`/community/${post.slug}`)" @keydown.enter="router.push(`/community/${post.slug}`)">
             <div class="post-card__author"><span class="avatar">{{ post.avatar }}</span><div><strong>{{ post.author }}</strong><small>{{ formatDate(post.createdAt) }} · {{ post.topic }}</small></div></div>
             <div v-if="post.mediaUrl" class="post-media">
               <img v-if="post.mediaType === 'image'" :src="resolveUploadUrl(post.mediaUrl)" alt="帖子图片" />
-              <video v-else controls :src="resolveUploadUrl(post.mediaUrl)">当前浏览器不支持视频预览。</video>
+              <video v-else controls :src="resolveUploadUrl(post.mediaUrl)" @click.stop>当前浏览器不支持视频预览。</video>
             </div>
             <div><BaseBadge variant="neutral">{{ post.topic }}</BaseBadge><h2>{{ post.title }}</h2><p>{{ post.excerpt }}</p></div>
-            <div class="post-actions">
-              <BaseButton size="sm" :variant="communityStore.likedIds.includes(post.id) ? 'primary' : 'ghost'" @click="communityStore.toggleLike(post.id)">赞 {{ post.likes }}</BaseButton>
-              <BaseButton size="sm" variant="ghost" @click="router.push(`/community/${post.slug}`)">评论 {{ post.comments.length }}</BaseButton>
-              <BaseButton size="sm" :variant="communityStore.favoriteIds.includes(post.id) ? 'secondary' : 'ghost'" @click="communityStore.toggleFavorite(post.id)">收藏</BaseButton>
+            <div class="post-actions" @click.stop>
+              <BaseButton size="sm" :variant="communityStore.likedIds.includes(post.id) ? 'primary' : 'ghost'" @click.stop="communityStore.toggleLike(post.id)">赞 {{ post.likes }}</BaseButton>
+              <BaseButton size="sm" variant="ghost" @click.stop="router.push(`/community/${post.slug}`)">评论 {{ post.comments.length }}</BaseButton>
+              <BaseButton size="sm" :variant="communityStore.favoriteIds.includes(post.id) ? 'secondary' : 'ghost'" @click.stop="communityStore.toggleFavorite(post.id)">收藏</BaseButton>
             </div>
           </BaseCard>
         </div>
@@ -76,6 +76,8 @@ onMounted(() => {
   border-radius: var(--cb-radius-lg);
   background: var(--cb-bg-soft);
 }
+.post-card--clickable { cursor:pointer; transition:transform var(--cb-duration-fast) var(--cb-ease-standard),box-shadow var(--cb-duration-fast) var(--cb-ease-standard); }
+.post-card--clickable:hover { transform:translateY(-2px); }
 
 .post-media img,
 .post-media video {

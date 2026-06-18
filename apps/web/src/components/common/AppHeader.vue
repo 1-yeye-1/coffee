@@ -1,6 +1,8 @@
 <script setup>
 import { ref } from 'vue'
 
+import NotificationBell from '@/components/notifications/NotificationBell.vue'
+
 import CartTrigger from './CartTrigger.vue'
 import GlobalSearchTrigger from './GlobalSearchTrigger.vue'
 import LayoutShell from './LayoutShell.vue'
@@ -46,6 +48,7 @@ function isActive(path, currentPath) {
         <GlobalSearchTrigger />
         <ThemeToggle />
         <CartTrigger />
+        <NotificationBell />
         <UserMenu />
         <button
           class="app-header__menu"
@@ -74,7 +77,6 @@ function isActive(path, currentPath) {
   border-bottom: 0.0625rem solid var(--cb-border-soft);
   backdrop-filter: blur(var(--cb-space-3));
 }
-
 .app-header__inner {
   display: grid;
   min-height: 4.5rem;
@@ -82,7 +84,6 @@ function isActive(path, currentPath) {
   gap: var(--cb-space-4);
   align-items: center;
 }
-
 .app-header__brand {
   display: inline-flex;
   width: fit-content;
@@ -93,7 +94,6 @@ function isActive(path, currentPath) {
   font-size: var(--cb-font-size-xl);
   font-weight: var(--cb-font-bold);
 }
-
 .app-header__mark {
   display: inline-grid;
   width: 2.25rem;
@@ -106,14 +106,12 @@ function isActive(path, currentPath) {
   background: var(--cb-color-coffee);
   border-radius: var(--cb-radius-pill);
 }
-
 .app-header__nav {
   display: none;
   align-items: center;
   justify-content: center;
   gap: var(--cb-space-1);
 }
-
 .app-header__nav a {
   position: relative;
   padding: var(--cb-space-3) var(--cb-space-4);
@@ -125,13 +123,11 @@ function isActive(path, currentPath) {
     color var(--cb-duration-fast) var(--cb-ease-standard),
     background-color var(--cb-duration-fast) var(--cb-ease-standard);
 }
-
 .app-header__nav a:hover,
 .app-header__nav a.is-current {
   color: var(--cb-color-coffee);
   background: var(--cb-bg-soft);
 }
-
 .app-header__actions {
   display: flex;
   min-width: 0;
@@ -139,7 +135,6 @@ function isActive(path, currentPath) {
   justify-content: flex-end;
   gap: var(--cb-space-1);
 }
-
 .app-header__menu {
   display: inline-grid;
   width: 2.75rem;
@@ -151,12 +146,10 @@ function isActive(path, currentPath) {
   border: 0;
   border-radius: var(--cb-radius-pill);
 }
-
 .app-header__menu:hover {
   color: var(--cb-text-primary);
   background: var(--cb-bg-soft);
 }
-
 .app-header__menu svg {
   width: 1.25rem;
   fill: none;
@@ -164,23 +157,19 @@ function isActive(path, currentPath) {
   stroke-linecap: round;
   stroke-width: 1.75;
 }
-
 @media (max-width: 30rem) {
   .app-header__brand > span:last-child,
   .app-header__actions :deep(.base-button) {
     display: none;
   }
 }
-
 @media (min-width: 64rem) {
   .app-header__inner {
     grid-template-columns: auto minmax(0, 1fr) auto;
   }
-
   .app-header__nav {
     display: flex;
   }
-
   .app-header__menu {
     display: none;
   }

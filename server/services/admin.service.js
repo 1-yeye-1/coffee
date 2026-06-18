@@ -24,7 +24,7 @@ export async function getDashboardStats() {
   }
 }
 
-export const listAdminBooks = listBooks
+export const listAdminBooks = (query = {}) => listBooks({ ...query, admin: true })
 export const listAdminProducts = listProducts
 
 function mapUser(row) {

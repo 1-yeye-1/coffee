@@ -38,6 +38,12 @@ const communityImageRules = {
   maxSize: 5 * 1024 * 1024,
 }
 
+const contentImageRules = {
+  extensions: new Set(['jpg', 'jpeg', 'png', 'webp']),
+  mimes: new Set(['image/jpeg', 'image/png', 'image/webp']),
+  maxSize: 5 * 1024 * 1024,
+}
+
 const communityVideoRules = {
   extensions: new Set(['mp4', 'webm', 'mov']),
   mimes: new Set(['video/mp4', 'video/webm', 'video/quicktime']),
@@ -99,6 +105,54 @@ function resolveCommunityTarget(file) {
   return { ok: false, message: '社区媒体仅支持 jpg、jpeg、png、webp、gif、mp4、webm、mov 文件' }
 }
 
+function resolveProductTarget(file) {
+  const imageMatch = matchRules(file, communityImageRules)
+  if (!imageMatch.ok) return { ok: false, message: '商品示例图仅支持 jpg、jpeg、png、webp、gif 文件' }
+  return {
+    ...imageMatch,
+    fileType: 'image',
+    maxSize: communityImageRules.maxSize,
+    directory: path.join(uploadRoot, 'products'),
+    urlBase: '/uploads/products',
+  }
+}
+
+function resolveContentImageTarget(scene, file) {
+  const imageMatch = matchRules(file, contentImageRules)
+  if (!imageMatch.ok) return { ok: false, message: '封面图片仅支持 jpg、jpeg、png、webp 文件' }
+  return {
+    ...imageMatch,
+    fileType: 'image',
+    maxSize: contentImageRules.maxSize,
+    directory: path.join(uploadRoot, `${scene}s`),
+    urlBase: `/uploads/${scene}s`,
+  }
+}
+
+function resolveReviewTarget(file) {
+  const imageMatch = matchRules(file, communityImageRules)
+  if (imageMatch.ok) {
+    return {
+      ...imageMatch,
+      fileType: 'image',
+      maxSize: communityImageRules.maxSize,
+      directory: path.join(uploadRoot, 'reviews/images'),
+      urlBase: '/uploads/reviews/images',
+    }
+  }
+  const videoMatch = matchRules(file, communityVideoRules)
+  if (videoMatch.ok) {
+    return {
+      ...videoMatch,
+      fileType: 'video',
+      maxSize: communityVideoRules.maxSize,
+      directory: path.join(uploadRoot, 'reviews/videos'),
+      urlBase: '/uploads/reviews/videos',
+    }
+  }
+  return { ok: false, message: '评价媒体仅支持图片或 mp4、webm、mov 视频' }
+}
+
 function resolveTarget(scene, file) {
   if (scene === 'avatar') {
     const match = matchRules(file, avatarRules)
@@ -111,6 +165,9 @@ function resolveTarget(scene, file) {
       urlBase: '/uploads/avatar',
     }
   }
+  if (scene === 'product') return resolveProductTarget(file)
+  if (scene === 'book' || scene === 'event') return resolveContentImageTarget(scene, file)
+  if (scene === 'review') return resolveReviewTarget(file)
   return resolveCommunityTarget(file)
 }
 
@@ -140,7 +197,13 @@ export function createUploadMiddleware(scene) {
 
   return multer({
     storage,
-    limits: { fileSize: scene === 'avatar' ? avatarRules.maxSize : communityVideoRules.maxSize },
+    limits: {
+      fileSize: scene === 'avatar'
+        ? avatarRules.maxSize
+        : ['book', 'event', 'product'].includes(scene)
+          ? communityImageRules.maxSize
+          : communityVideoRules.maxSize,
+    },
     fileFilter(_req, file, callback) {
       const target = resolveTarget(scene, file)
       if (!target.ok) {
@@ -156,7 +219,17 @@ export function createUploadMiddleware(scene) {
 export function buildUploadedFileMeta(file) {
   const target = file.uploadTarget
   return {
-    scene: target.urlBase.includes('/avatar') ? 'avatar' : 'community',
+    scene: target.urlBase.includes('/avatar')
+      ? 'avatar'
+      : target.urlBase.includes('/products')
+        ? 'product'
+        : target.urlBase.includes('/books')
+          ? 'book'
+          : target.urlBase.includes('/events')
+            ? 'event'
+        : target.urlBase.includes('/reviews')
+          ? 'review'
+          : 'community',
     fileType: target.fileType,
     originalName: file.originalname,
     storedName: file.filename,

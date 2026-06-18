@@ -194,6 +194,21 @@ export const useAdminStore = defineStore('admin', {
       item.enabled = !item.enabled
       persist(this.$state)
     },
+    async updateCollectionStatus(collection, id, status) {
+      const request = {
+        books: adminApi.updateBookStatus,
+        products: adminApi.updateProductStatus,
+        events: adminApi.updateEventStatus,
+      }[collection]
+      if (!request) return
+      try {
+        await request(id, status)
+        await this.fetchAdminCollection(collection)
+      } catch (error) {
+        this.apiError = error.message
+        throw error
+      }
+    },
     async reviewPost(id, status) {
       if (this.dataSource === 'api') {
         try {

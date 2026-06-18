@@ -81,6 +81,7 @@
   padding: var(--cb-space-4);
   background: var(--cb-bg-soft);
   border-radius: var(--cb-radius-xl);
+  border: 0.0625rem solid var(--cb-border-soft);
 }
 
 .admin-panel {
@@ -124,6 +125,14 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--cb-space-1);
+}
+
+.admin-row-actions > * { flex: 0 0 auto; }
+
+.admin-page :is(input, select, textarea):focus-visible,
+.admin-header :is(input, button):focus-visible {
+  outline: 0;
+  box-shadow: var(--cb-shadow-focus);
 }
 
 .admin-form {

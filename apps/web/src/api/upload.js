@@ -25,3 +25,9 @@ export const uploadCommunityMedia = (file) => request('/upload/community', {
   body: buildFormData(file),
   timeoutMs: 60000,
 })
+
+export const uploadReviewMedia = (file) => request('/upload/review', {
+  method: 'POST',
+  body: buildFormData(file),
+  timeoutMs: 60000,
+})

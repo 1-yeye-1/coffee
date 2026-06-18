@@ -23,6 +23,7 @@ import {
   rejectOrderPayment,
 } from '../services/orders.service.js'
 import { signAdminToken } from '../utils/jwt.js'
+import { searchAdmin } from '../services/admin-search.service.js'
 import { failure, paginated, success } from '../utils/response.js'
 
 function requireFields(res, payload, fields) {
@@ -53,6 +54,10 @@ export function registerAdminRoutes(router) {
 
   router.get('/api/admin/dashboard', requireAdmin, async (_req, res) => {
     return success(res, await getDashboardStats())
+  })
+
+  router.get('/api/admin/search', requireAdmin, async (req, res) => {
+    return success(res, await searchAdmin(req.query.keyword))
   })
 
   router.get('/api/admin/users', requireAdmin, async (req, res) => {
@@ -94,7 +99,7 @@ export function registerAdminRoutes(router) {
   })
 
   router.patch('/api/admin/books/:id/status', requireAdmin, async (req, res) => {
-    if (!['active', 'inactive'].includes(req.body.status)) return failure(res, 400, '无效图书状态')
+    if (!['available', 'unavailable', 'hidden'].includes(req.body.status)) return failure(res, 400, '图书状态无效')
     const book = await updateBookStatus(req.params.id, req.body.status)
     if (!book) return failure(res, 404, '图书不存在', 404)
     await writeAudit(req.user.id, 'book.status.update', 'books', { id: book.id, status: req.body.status })
@@ -130,7 +135,7 @@ export function registerAdminRoutes(router) {
   })
 
   router.patch('/api/admin/products/:id/status', requireAdmin, async (req, res) => {
-    if (!['active', 'inactive', 'sold_out'].includes(req.body.status)) return failure(res, 400, '无效商品状态')
+    if (!['active', 'inactive', 'draft'].includes(req.body.status)) return failure(res, 400, '商品状态无效')
     const product = await updateProductStatus(req.params.id, req.body.status)
     if (!product) return failure(res, 404, '商品不存在', 404)
     await writeAudit(req.user.id, 'product.status.update', 'products', { id: product.id, status: req.body.status })
@@ -200,6 +205,15 @@ export function registerAdminRoutes(router) {
     return success(res, event)
   })
 
+  router.patch('/api/admin/events/:id/status', requireAdmin, async (req, res) => {
+    if (!['draft', 'published', 'ongoing', 'ended', 'cancelled'].includes(req.body.status)) return failure(res, 400, '活动状态无效')
+    const current = await findEventById(req.params.id)
+    if (!current) return failure(res, 404, '活动不存在', 404)
+    const event = await updateEvent(req.params.id, { ...current, status: req.body.status })
+    await writeAudit(req.user.id, 'event.status.update', 'events', { id: event.id, status: req.body.status })
+    return success(res, event)
+  })
+
   router.delete('/api/admin/events/:id', requireAdmin, async (req, res) => {
     if (!await deleteEvent(req.params.id)) return failure(res, 404, '活动不存在', 404)
     await writeAudit(req.user.id, 'event.delete', 'events', { id: req.params.id })
@@ -212,7 +226,7 @@ export function registerAdminRoutes(router) {
   })
 
   router.patch('/api/admin/posts/:id/status', requireAdmin, async (req, res) => {
-    if (!['pending', 'published', 'rejected'].includes(req.body.status)) return failure(res, 400, '无效帖子状态')
+    if (!['pending', 'published', 'rejected', 'hidden'].includes(req.body.status)) return failure(res, 400, '社区内容状态无效')
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
     const post = await updatePostStatus(req.params.id, req.body.status, req.user.id)
     await logAdminAction({
@@ -233,7 +247,7 @@ export function registerAdminRoutes(router) {
   })
 
   router.patch('/api/admin/bookings/:id/status', requireAdmin, async (req, res) => {
-    if (!['confirmed', 'cancelled', 'arrived'].includes(req.body.status)) return failure(res, 400, '无效预约状态')
+    if (!['pending', 'confirmed', 'cancelled', 'completed'].includes(req.body.status)) return failure(res, 400, '预约状态无效')
     const booking = await updateBookingStatus(req.params.id, req.body.status, req.user.id)
     if (!booking) return failure(res, 404, '预约不存在', 404)
     await logAdminAction({ admin: req.user, action: 'change_status', module: 'booking', targetType: 'booking', targetId: req.params.id, description: `修改预约状态为 ${req.body.status}`, req })

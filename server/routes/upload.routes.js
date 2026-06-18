@@ -6,12 +6,20 @@ import {
   listUploadFiles,
   saveAvatarUpload,
   saveCommunityUpload,
+  saveProductUpload,
+  saveReviewUpload,
+  saveBookUpload,
+  saveEventUpload,
 } from '../services/upload.service.js'
 import { createUploadMiddleware, assertUploadedFileSize, buildUploadedFileMeta } from '../utils/upload.js'
 import { failure, paginated, success } from '../utils/response.js'
 
 const uploadAvatar = createUploadMiddleware('avatar')
 const uploadCommunity = createUploadMiddleware('community')
+const uploadProduct = createUploadMiddleware('product')
+const uploadReview = createUploadMiddleware('review')
+const uploadBook = createUploadMiddleware('book')
+const uploadEvent = createUploadMiddleware('event')
 
 function requireFile(req, res) {
   if (req.file) return true
@@ -43,6 +51,32 @@ export function registerUploadRoutes(router) {
     await validateUploadedFile(req)
     const result = await saveCommunityUpload(req.user.id, buildUploadedFileMeta(req.file))
     return success(res, result, '社区媒体上传成功', 201)
+  })
+
+  router.post('/api/upload/product', requireAdmin, uploadProduct, async (req, res) => {
+    if (!requireFile(req, res)) return false
+    await validateUploadedFile(req)
+    const result = await saveProductUpload(req.user.id, buildUploadedFileMeta(req.file))
+    return success(res, result, '商品示例图上传成功', 201)
+  })
+
+  router.post('/api/upload/review', requireUser, uploadReview, async (req, res) => {
+    if (!requireFile(req, res)) return false
+    await validateUploadedFile(req)
+    const result = await saveReviewUpload(req.user.id, buildUploadedFileMeta(req.file))
+    return success(res, result, '评价媒体上传成功', 201)
+  })
+
+  router.post('/api/upload/book', requireAdmin, uploadBook, async (req, res) => {
+    if (!requireFile(req, res)) return false
+    await validateUploadedFile(req)
+    return success(res, await saveBookUpload(req.user.id, buildUploadedFileMeta(req.file)), '图书封面上传成功', 201)
+  })
+
+  router.post('/api/upload/event', requireAdmin, uploadEvent, async (req, res) => {
+    if (!requireFile(req, res)) return false
+    await validateUploadedFile(req)
+    return success(res, await saveEventUpload(req.user.id, buildUploadedFileMeta(req.file)), '活动海报上传成功', 201)
   })
 
   router.get('/api/upload/files', requireAdmin, async (req, res) => {

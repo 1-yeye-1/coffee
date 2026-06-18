@@ -12,7 +12,9 @@ import { registerEventsRoutes } from './events.routes.js'
 import { registerNotificationsRoutes } from './notifications.routes.js'
 import { registerOrdersRoutes } from './orders.routes.js'
 import { registerProductsRoutes } from './products.routes.js'
+import { registerSearchRoutes } from './search.routes.js'
 import { registerUploadRoutes } from './upload.routes.js'
+import { registerSeatsRoutes } from './seats.routes.js'
 
 function wrapHandlers(handlers) {
   return async (req, res, next) => {
@@ -67,6 +69,7 @@ export function createRouter() {
   registerAuthRoutes(router)
   registerBooksRoutes(router)
   registerProductsRoutes(router)
+  registerSearchRoutes(router)
   registerEventsRoutes(router)
   registerCommunityRoutes(router)
   registerBookingRoutes(router)
@@ -75,6 +78,7 @@ export function createRouter() {
   registerAccountRoutes(router)
   registerNotificationsRoutes(router)
   registerUploadRoutes(router)
+  registerSeatsRoutes(router)
   registerAdminLogRoutes(router)
   registerAdminRoutes(router)
 

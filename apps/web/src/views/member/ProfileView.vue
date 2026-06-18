@@ -1,18 +1,21 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 
-import { getAccountOverview, updateProfile } from '@/api/account'
+import { getAccountOverview, updatePrivacy, updateProfile } from '@/api/account'
 import { resolveUploadUrl, uploadAvatar } from '@/api/upload'
 import { BaseBadge, BaseButton, BaseInput, BaseToast } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/pages/engagement.css'
 
 const authStore = useAuthStore()
-const form = reactive({ nickname: '', phone: '', email: '' })
+const form = reactive({ nickname: '', phone: '', email: '', profilePublic: true })
 const user = ref(null)
 const toastVisible = ref(false)
+const toastTitle = ref('保存成功')
+const toastMessage = ref('个人资料已同步到数据库。')
 const loading = ref(false)
 const avatarUploading = ref(false)
+const privacySaving = ref(false)
 const error = ref('')
 const avatarPreview = ref('')
 const avatarFile = ref(null)
@@ -25,8 +28,9 @@ async function load() {
     user.value = (await getAccountOverview()).data.user
     Object.assign(form, {
       nickname: user.value.nickname || '',
-      phone: user.value.phone || '',
+      phone: user.value.phoneMasked || user.value.phone || '',
       email: user.value.email || '',
+      profilePublic: user.value.profilePublic !== false,
     })
   } catch (err) {
     error.value = err.message
@@ -35,15 +39,38 @@ async function load() {
   }
 }
 
+function syncUser(nextUser) {
+  user.value = nextUser
+  authStore.user = { ...authStore.user, ...nextUser }
+  authStore.persist()
+}
+
 async function save() {
   error.value = ''
   try {
-    user.value = (await updateProfile({ nickname: form.nickname, email: form.email })).data
-    authStore.user = { ...authStore.user, ...user.value }
-    authStore.persist()
+    syncUser((await updateProfile({ nickname: form.nickname, email: form.email })).data)
+    toastTitle.value = '保存成功'
+    toastMessage.value = '个人资料已同步到数据库。'
     toastVisible.value = true
   } catch (err) {
     error.value = err.message
+  }
+}
+
+async function savePrivacy() {
+  privacySaving.value = true
+  error.value = ''
+  try {
+    syncUser((await updatePrivacy({ profilePublic: form.profilePublic })).data)
+    toastTitle.value = '隐私设置已保存'
+    toastMessage.value = form.profilePublic
+      ? '其他用户现在可以查看你的公开个人主页。'
+      : '你的个人主页已关闭对其他用户的访问。'
+    toastVisible.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    privacySaving.value = false
   }
 }
 
@@ -77,14 +104,13 @@ async function submitAvatar() {
   avatarUploading.value = true
   error.value = ''
   try {
-    const response = await uploadAvatar(avatarFile.value)
-    const avatar = response.data.url
-    user.value = { ...user.value, avatar }
-    authStore.user = { ...authStore.user, avatar }
-    authStore.persist()
+    const avatar = (await uploadAvatar(avatarFile.value)).data.url
+    syncUser({ ...user.value, avatar })
     avatarPreview.value = ''
     avatarFile.value = null
     if (avatarInput.value) avatarInput.value.value = ''
+    toastTitle.value = '头像已更新'
+    toastMessage.value = '新的头像已保存。'
     toastVisible.value = true
   } catch (err) {
     error.value = err.message
@@ -101,7 +127,7 @@ onMounted(load)
     <header>
       <span class="section-eyebrow">Profile</span>
       <h2 class="page-title">个人资料</h2>
-      <p class="page-subtitle">个人资料会同步保存到数据库。</p>
+      <p class="page-subtitle">管理你的昵称、头像和个人主页可见性。</p>
     </header>
 
     <p v-if="error" class="form-error">{{ error }}</p>
@@ -135,17 +161,26 @@ onMounted(load)
       <BaseButton :loading="loading" @click="save">保存资料</BaseButton>
     </section>
 
+    <section class="member-panel privacy-panel">
+      <div>
+        <h3 class="section-title">个人主页可见性</h3>
+        <p class="text-muted">关闭后，其他用户点击你的头像或昵称时会看到隐私保护提示。</p>
+      </div>
+      <label class="privacy-toggle">
+        <input v-model="form.profilePublic" type="checkbox" />
+        <span>允许其他用户查看我的个人主页</span>
+      </label>
+      <BaseButton :loading="privacySaving" variant="outline" @click="savePrivacy">保存隐私设置</BaseButton>
+    </section>
+
     <div class="page-toast">
-      <BaseToast v-model="toastVisible" variant="success" title="保存成功">个人资料已同步到数据库。</BaseToast>
+      <BaseToast v-model="toastVisible" variant="success" :title="toastTitle">{{ toastMessage }}</BaseToast>
     </div>
   </div>
 </template>
 
 <style scoped>
-.profile-card {
-  align-items: center;
-}
-
+.profile-card { align-items: center; }
 .profile-avatar {
   width: 4.5rem;
   height: 4.5rem;
@@ -155,18 +190,29 @@ onMounted(load)
   border-radius: var(--cb-radius-2xl);
   box-shadow: var(--cb-shadow-sm);
 }
-
 .avatar-actions {
   display: flex;
   margin-left: auto;
   flex-wrap: wrap;
   gap: var(--cb-space-2);
 }
-
-.avatar-input {
-  display: none;
+.avatar-input { display: none; }
+.privacy-panel {
+  display: grid;
+  gap: var(--cb-space-4);
 }
-
+.privacy-toggle {
+  display: flex;
+  gap: var(--cb-space-3);
+  align-items: center;
+  color: var(--cb-text-primary);
+  font-weight: var(--cb-font-semibold);
+}
+.privacy-toggle input {
+  width: 1.2rem;
+  height: 1.2rem;
+  accent-color: var(--cb-color-coffee);
+}
 @media (max-width: 42rem) {
   .avatar-actions {
     width: 100%;

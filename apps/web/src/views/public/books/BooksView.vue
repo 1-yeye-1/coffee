@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { resolveUploadUrl } from '@/api/upload'
 
 import {
   BaseBadge,
@@ -134,7 +135,8 @@ function toggleFavorite(id) {
             >
               {{ favorites.has(book.id) ? '♥' : '♡' }}
             </button>
-            <div class="book-cover catalog-card__visual-inner" :class="`tone-${book.coverTone}`">
+            <img v-if="book.coverUrl" class="catalog-content-image" :src="resolveUploadUrl(book.coverUrl)" :alt="book.title" />
+            <div v-else class="book-cover catalog-card__visual-inner" :class="`tone-${book.coverTone}`">
               <span>{{ book.category }}</span><strong>{{ book.title }}</strong><small>Coffee Book Edition</small>
             </div>
           </div>
@@ -215,4 +217,5 @@ function toggleFavorite(id) {
   font-size: var(--cb-font-size-xs);
   letter-spacing: 0.12em;
 }
+.catalog-content-image { display:block; width:100%; height:100%; min-height:18rem; object-fit:cover; }
 </style>

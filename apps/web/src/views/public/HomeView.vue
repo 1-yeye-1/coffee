@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseBadge, BaseButton, BaseCard, BaseToast } from '@/components/base'
@@ -53,13 +53,6 @@ const benefits = [
 
 function navigate(path) {
   router.push(path)
-}
-
-function addToCart() {
-  toastVisible.value = false
-  nextTick(() => {
-    toastVisible.value = true
-  })
 }
 
 function formatNumber(value) {
@@ -212,7 +205,7 @@ onBeforeUnmount(() => {
             <div class="coffee-card__content">
               <div class="card-topline"><BaseBadge :variant="coffee.badge">{{ coffee.stock }}</BaseBadge><strong>{{ coffee.price }}</strong></div>
               <h3>{{ coffee.name }}</h3><p>{{ coffee.flavor }}</p>
-              <BaseButton size="sm" @click="addToCart">加入购物车</BaseButton>
+              <BaseButton size="sm" variant="outline" @click="navigate('/coffee')">查看详情</BaseButton>
             </div>
           </BaseCard>
         </div>

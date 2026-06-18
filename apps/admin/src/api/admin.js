@@ -4,6 +4,8 @@ export function fetchDashboard() {
   return request('/admin/dashboard')
 }
 
+export const searchAdmin = (keyword) => request(`/admin/search${toQuery({ keyword })}`)
+
 export function fetchAdminBooks(params = {}) {
   return request(`/admin/books${toQuery(params)}`)
 }
@@ -32,6 +34,7 @@ export const updateAdminUserStatus = (id, status) => request(`/admin/users/${id}
 export const fetchAdminEvents = (params = {}) => request(`/admin/events${toQuery(params)}`)
 export const createEvent = (payload) => request('/admin/events', { method: 'POST', body: payload })
 export const updateEvent = (id, payload) => request(`/admin/events/${id}`, { method: 'PUT', body: payload })
+export const updateEventStatus = (id, status) => request(`/admin/events/${id}/status`, { method: 'PATCH', body: { status } })
 export const deleteEvent = (id) => request(`/admin/events/${id}`, { method: 'DELETE' })
 export const fetchAdminPosts = (params = {}) => request(`/admin/posts${toQuery(params)}`)
 export const updateAdminPostStatus = (id, status) => request(`/admin/posts/${id}/status`, { method: 'PATCH', body: { status } })
@@ -39,6 +42,18 @@ export const fetchAdminBookings = (params = {}) => request(`/admin/bookings${toQ
 export const updateAdminBookingStatus = (id, status) => request(`/admin/bookings/${id}/status`, { method: 'PATCH', body: { status } })
 export const fetchUploadFiles = (params = {}) => request(`/upload/files${toQuery(params)}`)
 export const deleteUploadFile = (id) => request(`/upload/files/${id}`, { method: 'DELETE' })
+export const uploadProductImage = (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request('/upload/product', { method: 'POST', body: formData, timeoutMs: 30000 })
+}
+export const uploadContentImage = (file, scene) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request(`/upload/${scene}`, { method: 'POST', body: formData, timeoutMs: 30000 })
+}
 export const getAdminLogs = (params = {}) => request(`/admin/logs${toQuery(params)}`)
+export const fetchSeatUsage = (params = {}) => request(`/admin/seats/usage${toQuery(params)}`)
+export const updateSeatStatus = (id, status) => request(`/admin/seats/${id}/status`, { method: 'PATCH', body: { status } })
 export const getAdminLogDetail = (id) => request(`/admin/logs/${id}`)
 export const exportAdminLogs = (params = {}) => request(`/admin/logs/export${toQuery(params)}`)

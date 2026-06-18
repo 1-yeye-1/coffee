@@ -4,6 +4,8 @@ import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
 import { writeAudit } from './admin.service.js'
 import { createNotification } from './notifications.service.js'
+import { createUser, findUserByIdentifier, normalizePhone, verifyCode } from './auth.service.js'
+import { assertBookingDateAndTime } from './seats.service.js'
 
 const spaceColumns = `
   id, slug, name, location, description, capacity, status,
@@ -12,8 +14,10 @@ const spaceColumns = `
 
 const bookingColumns = `
   b.id, b.booking_no AS bookingNo, b.user_id AS userId, b.space_id AS spaceId, s.slug AS spaceSlug,
-  s.name AS space, b.slot_id AS slotId, DATE_FORMAT(b.booking_date, '%Y-%m-%d') AS date,
-  b.booking_time AS time, b.seat, b.contact_name AS contactName, b.phone, b.note, b.status,
+  s.name AS space, b.slot_id AS slotId, b.seat_id AS seatId, st.code AS seatCode, st.name AS seatName,
+  DATE_FORMAT(b.booking_date, '%Y-%m-%d') AS date,
+  COALESCE(b.time_slot, REPLACE(b.booking_time, ' ', '')) AS timeSlot, b.booking_time AS time,
+  b.seat, b.people_count AS peopleCount, b.contact_name AS contactName, b.phone, b.note, b.status,
   b.created_at AS createdAt, b.updated_at AS updatedAt
 `
 
@@ -68,6 +72,7 @@ export async function listBookings(query = {}, admin = false, userId = null) {
   const [rows] = await pool.query(
     `SELECT ${bookingColumns} FROM bookings b
      INNER JOIN spaces s ON s.id = b.space_id
+     LEFT JOIN seats st ON st.id = b.seat_id
      ${where}
      ORDER BY b.booking_date DESC, b.id DESC LIMIT ? OFFSET ?`,
     [...params, pageSize, offset],
@@ -75,10 +80,10 @@ export async function listBookings(query = {}, admin = false, userId = null) {
   return { items: rows, meta: { page, pageSize, total: Number(countRows[0].total) } }
 }
 
-export async function createBooking(payload, userId) {
-  const connection = await pool.getConnection()
-  try {
-    await connection.beginTransaction()
+async function insertBooking(payload, userId, connection) {
+    const timeSlot = assertBookingDateAndTime(payload.date, payload.timeSlot || payload.time)
+    const peopleCount = Number(payload.peopleCount || 1)
+    if (!Number.isInteger(peopleCount) || peopleCount < 1) throw Object.assign(new Error('请选择预约人数'), { statusCode: 400 })
     const [spaces] = await connection.execute('SELECT id FROM spaces WHERE slug = ? AND status = ? LIMIT 1', [
       payload.spaceSlug || 'city-reading-room',
       'active',
@@ -89,60 +94,86 @@ export async function createBooking(payload, userId) {
       error.statusCode = 404
       throw error
     }
-    const [slots] = await connection.execute(
-      `SELECT id, capacity FROM booking_slots
-       WHERE space_id = ? AND slot_date = ? AND slot_time = ? AND status = 'open'
-       LIMIT 1 FOR UPDATE`,
-      [space.id, payload.date, payload.time],
-    )
-    const slot = slots[0]
-    if (!slot) {
-      const error = new Error('预约时段不存在')
-      error.statusCode = 404
-      throw error
+    let seatId = Number(payload.seatId || 0)
+    if (!seatId && payload.seat) {
+      const [[legacySeat]] = await connection.execute('SELECT id FROM seats WHERE code = ? LIMIT 1', [payload.seat])
+      seatId = Number(legacySeat?.id || 0)
     }
-    const [reserved] = await connection.execute(
-      `SELECT COUNT(*) AS total FROM bookings WHERE slot_id = ? AND status = 'confirmed'`,
-      [slot.id],
-    )
-    if (Number(reserved[0].total) >= Number(slot.capacity)) {
-      const error = new Error('该时段预约已满')
-      error.statusCode = 409
-      throw error
-    }
+    if (!seatId) throw Object.assign(new Error('请选择座位'), { statusCode: 400 })
+    const [[seat]] = await connection.execute('SELECT id, code, capacity, status FROM seats WHERE id = ? FOR UPDATE', [seatId])
+    if (!seat) throw Object.assign(new Error('座位不存在'), { statusCode: 404 })
+    if (seat.status === 'disabled') throw Object.assign(new Error('该座位已停用'), { statusCode: 409 })
+    if (peopleCount > Number(seat.capacity)) throw Object.assign(new Error('预约人数超过座位容量'), { statusCode: 400 })
+    const [reserved] = await connection.execute(`SELECT id FROM bookings
+      WHERE seat_id = ? AND booking_date = ? AND COALESCE(time_slot, REPLACE(booking_time, ' ', '')) = ?
+      AND status IN ('pending', 'confirmed') LIMIT 1 FOR UPDATE`, [seatId, payload.date, timeSlot])
+    if (reserved.length) throw Object.assign(new Error('该座位在当前时段已被预约'), { statusCode: 409 })
     const bookingNo = `BK${Date.now()}${randomUUID().slice(0, 6).toUpperCase()}`
     const [result] = await connection.execute(
       `INSERT INTO bookings
-        (booking_no, user_id, space_id, slot_id, booking_date, booking_time, seat, contact_name, phone, note, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`,
+        (booking_no, user_id, space_id, slot_id, seat_id, booking_date, booking_time, time_slot, seat, people_count, contact_name, phone, note, status)
+       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`,
       [
         bookingNo,
         userId,
         space.id,
-        slot.id,
+        seatId,
         payload.date,
-        payload.time,
-        payload.seat || null,
+        timeSlot,
+        timeSlot,
+        seat.code,
+        peopleCount,
         payload.contactName,
         payload.phone,
         payload.note || null,
       ],
     )
-    await writeAudit(userId, 'booking.create', 'bookings', { id: result.insertId, bookingNo }, connection)
+    await writeAudit(userId, 'booking.create', 'bookings', { id: result.insertId, bookingNo, seatId, timeSlot }, connection)
     await createNotification({
       userId,
       title: '预约成功',
-      content: `你已成功预约 ${payload.date} ${payload.time} 的 Coffee Book 空间。`,
+      content: `你已成功预约 ${payload.date} ${timeSlot} 的 Coffee Book 座位 ${seat.code}。`,
       type: 'booking',
       relatedId: result.insertId,
       relatedType: 'booking',
     }, connection)
-    await connection.commit()
-    const [rows] = await pool.execute(
-      `SELECT ${bookingColumns} FROM bookings b INNER JOIN spaces s ON s.id = b.space_id WHERE b.id = ? LIMIT 1`,
+    const [rows] = await connection.execute(
+      `SELECT ${bookingColumns} FROM bookings b INNER JOIN spaces s ON s.id = b.space_id LEFT JOIN seats st ON st.id = b.seat_id WHERE b.id = ? LIMIT 1`,
       [result.insertId],
     )
     return rows[0]
+}
+
+export async function createBooking(payload, userId) {
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const booking = await insertBooking(payload, userId, connection)
+    await connection.commit()
+    return booking
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export async function createGuestBooking(payload) {
+  const phone = normalizePhone(payload.phone)
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    await verifyCode(phone, 'booking_guest', payload.code, connection)
+    let user = await findUserByIdentifier(phone, connection)
+    let created = false
+    if (!user) {
+      user = await createUser({ phone, username: phone, nickname: `咖啡访客${phone.slice(-4)}`, password: randomUUID() }, connection)
+      created = true
+    }
+    const booking = await insertBooking({ ...payload, contactName: payload.name || payload.contactName, phone }, user.id, connection)
+    await connection.commit()
+    return { booking, accountCreated: created, user: { id: user.id, nickname: user.nickname } }
   } catch (error) {
     await connection.rollback()
     throw error
@@ -173,6 +204,9 @@ export async function cancelBooking(id, userId, admin = false) {
 }
 
 export async function updateBookingStatus(id, status, operatorId) {
+  if (!['pending', 'confirmed', 'cancelled', 'completed'].includes(status)) {
+    throw Object.assign(new Error('预约状态无效'), { statusCode: 400 })
+  }
   const [[before]] = await pool.execute('SELECT user_id AS userId FROM bookings WHERE id = ? LIMIT 1', [id])
   await pool.execute('UPDATE bookings SET status = ? WHERE id = ?', [status, id])
   await writeAudit(operatorId, 'booking.status.update', 'bookings', { id, status })
@@ -180,14 +214,14 @@ export async function updateBookingStatus(id, status, operatorId) {
     await createNotification({
       userId: before.userId,
       title: '预约状态已更新',
-      content: `你的预约状态已更新为：${status === 'confirmed' ? '已确认' : status === 'cancelled' ? '已取消' : status === 'arrived' ? '已到店' : status}。`,
+      content: `你的预约状态已更新为：${status === 'pending' ? '待确认' : status === 'confirmed' ? '已确认' : status === 'cancelled' ? '已取消' : status === 'completed' ? '已完成' : status}。`,
       type: 'booking',
       relatedId: id,
       relatedType: 'booking',
     })
   }
   const [rows] = await pool.execute(
-    `SELECT ${bookingColumns} FROM bookings b INNER JOIN spaces s ON s.id = b.space_id WHERE b.id = ? LIMIT 1`,
+    `SELECT ${bookingColumns} FROM bookings b INNER JOIN spaces s ON s.id = b.space_id LEFT JOIN seats st ON st.id = b.seat_id WHERE b.id = ? LIMIT 1`,
     [id],
   )
   return rows[0] || null
