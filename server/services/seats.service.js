@@ -46,7 +46,7 @@ export async function getSeatAvailability(date, timeSlot, admin = false) {
     [date, normalized],
   )
   return rows.map((row) => {
-    const status = row.baseStatus === 'disabled' ? 'disabled' : row.bookingId ? 'reserved' : 'available'
+    const status = ['disabled', 'maintenance'].includes(row.baseStatus) ? 'maintenance' : row.bookingId ? 'reserved' : 'available'
     const seat = { seatId: row.id, code: row.code, name: row.name, area: row.area, capacity: row.capacity, x: row.x, y: row.y, width: row.width, height: row.height, sortOrder: row.sortOrder, status }
     if (admin && row.bookingId) seat.bookingInfo = {
       id: row.bookingId, bookingNo: row.bookingNo, nickname: row.nickname || row.contactName,
@@ -63,12 +63,12 @@ function normalizeSeat(payload) {
     area: String(payload.area || '').trim() || null,
     capacity: Number(payload.capacity), x: Number(payload.x), y: Number(payload.y),
     width: Number(payload.width || 64), height: Number(payload.height || 52),
-    sortOrder: Number(payload.sortOrder || 0), status: payload.status || 'available',
+    sortOrder: Number(payload.sortOrder || 0), status: payload.status === 'disabled' ? 'maintenance' : payload.status || 'available',
   }
   if (!seat.code || !seat.name) throw Object.assign(new Error('座位编号和名称必填'), { statusCode: 400 })
   if (!Number.isInteger(seat.capacity) || seat.capacity < 1) throw Object.assign(new Error('座位容量无效'), { statusCode: 400 })
   if (![seat.x, seat.y].every((value) => Number.isFinite(value) && value >= 0 && value <= 100)) throw Object.assign(new Error('座位坐标必须在 0 到 100 之间'), { statusCode: 400 })
-  if (!['available', 'disabled'].includes(seat.status)) throw Object.assign(new Error('座位状态无效'), { statusCode: 400 })
+  if (!['available', 'maintenance'].includes(seat.status)) throw Object.assign(new Error('座位状态无效'), { statusCode: 400 })
   return seat
 }
 
@@ -102,10 +102,11 @@ export async function deleteSeat(id, operatorId) {
 }
 
 export async function updateSeatStatus(id, status, operatorId) {
-  if (!['available', 'disabled'].includes(status)) throw Object.assign(new Error('座位状态无效'), { statusCode: 400 })
-  const [result] = await pool.execute('UPDATE seats SET status = ? WHERE id = ?', [status, id])
+  const normalizedStatus = status === 'disabled' ? 'maintenance' : status
+  if (!['available', 'maintenance'].includes(normalizedStatus)) throw Object.assign(new Error('座位状态无效'), { statusCode: 400 })
+  const [result] = await pool.execute('UPDATE seats SET status = ? WHERE id = ?', [normalizedStatus, id])
   if (!result.affectedRows) return null
-  await writeAudit(operatorId, 'seat.status.update', 'seats', { id, status, operatorType: 'admin' })
+  await writeAudit(operatorId, 'seat.status.update', 'seats', { id, status: normalizedStatus, operatorType: 'admin' })
   const [[seat]] = await pool.execute('SELECT id, code, name, area, capacity, x, y, width, height, status, sort_order AS sortOrder FROM seats WHERE id = ?', [id])
   return seat
 }

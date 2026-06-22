@@ -1,6 +1,7 @@
 ﻿import { requireUser } from '../middlewares/auth.js'
 import {
   createComment,
+  createContentReport,
   createPost,
   deleteComment,
   findPost,
@@ -55,5 +56,10 @@ export function registerCommunityRoutes(router) {
   router.get('/api/posts/:id/likes', async (req, res) => {
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
     return success(res, { items: await listPostLikes(req.params.id) })
+  })
+
+  router.post('/api/posts/:id/reports', requireUser, async (req, res) => {
+    if (!requireBodyFields(res, req.body, ['reason'])) return false
+    return success(res, await createContentReport(req.params.id, req.body, req.user.id), '举报已提交', 201)
   })
 }

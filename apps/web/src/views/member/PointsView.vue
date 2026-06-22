@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { getPointRecords } from '@/api/account'
-import { BaseBadge, BaseTable } from '@/components/base'
+import { BaseBadge, BaseTable, ErrorPanel } from '@/components/base'
 import '@/assets/styles/pages/engagement.css'
 
 const records = ref([])
@@ -15,13 +15,16 @@ const columns = [
 ]
 const total = computed(() => records.value.reduce((sum, item) => sum + Number(item.points || 0), 0))
 
-onMounted(async () => {
+async function load() {
+  error.value = ''
   try {
     records.value = (await getPointRecords()).data
   } catch (err) {
     error.value = err.message
   }
-})
+}
+
+onMounted(load)
 </script>
 
 <template>
@@ -32,7 +35,7 @@ onMounted(async () => {
       <p class="page-subtitle">积分明细与数据库 user_points 表同步。</p>
     </header>
 
-    <p v-if="error" class="form-error">{{ error }}</p>
+    <ErrorPanel v-if="error" :message="error" @retry="load" />
     <section class="member-panel">
       <BaseBadge variant="premium">累计变动 {{ total }} 积分</BaseBadge>
     </section>

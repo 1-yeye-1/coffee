@@ -3,18 +3,6 @@ import { defineStore } from 'pinia'
 import * as adminApi from '@/api/admin'
 
 const STORAGE_KEY = 'coffee-book-admin'
-const defaultSettings = {
-  siteName: 'Coffee Book',
-  siteDescription: '融合精品咖啡、精选阅读与城市文化的生活方式空间。',
-  phone: '021-8888-2026',
-  businessHours: '09:00 - 21:30',
-  featuredBooks: '小王子、活着、深度工作',
-  featuredProducts: '埃塞俄比亚耶加雪菲、精品咖啡豆礼盒',
-  featuredEvents: '周末读书会、城市夜读沙龙',
-  newsletterEnabled: true,
-  newsletterWelcome: '每周一封，分享值得阅读与品尝的新鲜灵感。',
-}
-
 const clone = (value) => JSON.parse(JSON.stringify(value))
 
 function normalizeProducts(items) {
@@ -32,12 +20,10 @@ function initialState() {
     return {
       navigationCollapsed: false,
       books: [], products: [], events: [], users: [], posts: [],
-      settings: { ...defaultSettings, ...(saved.settings || {}) },
       auditItems: saved.auditItems || [],
       remoteDashboard: null,
       dashboardTrends: null,
       dashboardRecent: null,
-      financeDashboard: null,
       apiLoading: false,
       apiError: '',
       dataSource: 'api',
@@ -48,12 +34,10 @@ function initialState() {
     return {
       navigationCollapsed: false,
       books: [], products: [], events: [], users: [], posts: [],
-      settings: defaultSettings,
       auditItems: [],
       remoteDashboard: null,
       dashboardTrends: null,
       dashboardRecent: null,
-      financeDashboard: null,
       apiLoading: false,
       apiError: '',
       dataSource: 'api',
@@ -70,7 +54,6 @@ function persist(state) {
     events: state.events,
     users: state.users,
     posts: state.posts,
-    settings: state.settings,
     auditItems: state.auditItems.slice(0, 30),
   }))
 }
@@ -82,7 +65,6 @@ export const useAdminStore = defineStore('admin', {
       return state.remoteDashboard || {}
     },
     adminUsers: (state) => state.users,
-    adminSettings: (state) => state.settings,
   },
   actions: {
     async fetchDashboard() {
@@ -105,17 +87,6 @@ export const useAdminStore = defineStore('admin', {
         this.apiLoading = false
       }
       return this.dashboardStats
-    },
-    async fetchFinanceDashboard() {
-      this.apiLoading = true
-      try {
-        this.financeDashboard = (await adminApi.fetchFinanceDashboard()).data
-        this.apiError = ''
-      } catch (error) {
-        this.financeDashboard = null
-        this.apiError = error.message
-      } finally { this.apiLoading = false }
-      return this.financeDashboard
     },
     async fetchAdminCollection(collection, params = {}) {
       if (!['books', 'products', 'events', 'posts', 'bookings', 'users'].includes(collection)) return this[collection]
@@ -208,10 +179,10 @@ export const useAdminStore = defineStore('admin', {
         throw error
       }
     },
-    async reviewPost(id, status) {
+    async reviewPost(id, status, reason = '') {
       if (this.dataSource === 'api') {
         try {
-          await adminApi.updateAdminPostStatus(id, status)
+          await adminApi.updateAdminPostStatus(id, status, reason)
           await this.fetchAdminCollection('posts')
           return
         } catch (error) { this.apiError = error.message; throw error }
@@ -241,11 +212,6 @@ export const useAdminStore = defineStore('admin', {
       const user = this.users.find((item) => item.id === id)
       if (!user) return
       Object.assign(user, changes)
-      persist(this.$state)
-    },
-    saveSettings(settings) {
-      this.settings = { ...this.settings, ...settings }
-      this.log('settings: update')
       persist(this.$state)
     },
     async fetchAdminOrders(params = {}) {

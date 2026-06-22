@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { BaseBadge, BaseButton, BaseModal, BaseTabs, BaseToast, EmptyState } from '@/components/base'
+import { BaseBadge, BaseButton, BaseModal, BaseTabs, BaseToast, EmptyState, ErrorPanel } from '@/components/base'
 import { useOrderStore } from '@/stores/orders'
 import '@/assets/styles/pages/commerce.css'
 
@@ -138,6 +138,8 @@ onBeforeUnmount(() => window.clearInterval(pollTimer))
       <BaseButton variant="outline" :loading="refreshing" @click="refreshOrders(false)">刷新状态</BaseButton>
       <span v-if="shouldPoll" class="text-muted">待确认订单会自动同步状态。</span>
     </div>
+
+    <ErrorPanel v-if="orderStore.error" title="订单同步失败" :message="orderStore.error" @retry="refreshOrders(false)" />
 
     <BaseTabs v-model="activeStatus" :tabs="tabs">
       <div class="order-list">

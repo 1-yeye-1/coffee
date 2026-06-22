@@ -20,6 +20,7 @@ server        后端 API，负责鉴权、业务接口和 MySQL 数据访问
 - Node.js、MySQL、mysql2
 - JWT 登录鉴权
 - 本地 Design System CSS 与基础组件
+- GSAP 结构动画、Anime.js 微交互与共享 Motion Runtime
 
 ## 4. 已完成功能
 
@@ -37,6 +38,8 @@ password: admin123456
 生产环境请及时替换默认账号或修改密码。
 
 ## 6. 本地启动步骤
+
+以下命令执行前必须先启动 MySQL，并确认其监听 `.env` 配置的 `DB_HOST:DB_PORT`。首次环境运行 `npm run db:init`；已有数据库可运行 `node server/db/migrate.js` 执行幂等迁移。
 
 ```bash
 npm install
@@ -76,13 +79,18 @@ npm run dev:all
 
 ## 8. Smoke Test
 
-后端启动后执行：
+提交或部署前执行：
 
 ```bash
+npm run build
+npm run check
+npm run check:motion
+npm run smoke:web
 npm run smoke:api
+npm run smoke
 ```
 
-预期结果：所有检查 PASS，并输出 `Smoke API passed`。
+预期结果：构建、Motion 审计、路由 smoke 和真实数据库 API smoke 全部通过。开发调试时可用 `window.__coffeeMotion.status()` 查看 Motion Runtime 状态，并用 `disable()` / `enable()` 临时关闭或恢复复杂动画。
 
 ## 9. 安全注意事项
 

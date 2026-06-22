@@ -217,6 +217,32 @@
   transform: translateY(calc(var(--cb-space-1) * -1));
 }
 
+.dashboard-feed__item {
+  transition: transform var(--cb-duration-fast) var(--cb-ease-emphasized), background var(--cb-duration-fast) var(--cb-ease-standard), border-color var(--cb-duration-fast) var(--cb-ease-standard);
+}
+
+.dashboard-feed__item:hover,
+.dashboard-feed__item:focus-visible {
+  background: color-mix(in srgb, var(--cb-color-gold) 9%, var(--cb-bg-soft));
+  border-color: color-mix(in srgb, var(--cb-color-gold) 38%, var(--cb-border-soft));
+  transform: translateX(var(--cb-space-1));
+}
+
+.dashboard-skeleton-grid .base-skeleton {
+  min-height: 7.5rem;
+}
+
+.dashboard-swap-enter-active,
+.dashboard-swap-leave-active {
+  transition: opacity var(--cb-duration-normal) var(--cb-ease-standard), transform var(--cb-duration-normal) var(--cb-ease-emphasized);
+}
+
+.dashboard-swap-enter-from,
+.dashboard-swap-leave-to {
+  opacity: 0;
+  transform: translateY(var(--cb-space-2));
+}
+
 .admin-ranking {
   display: grid;
   gap: var(--cb-space-3);
@@ -230,23 +256,6 @@
   padding: var(--cb-space-3);
   background: var(--cb-bg-soft);
   border-radius: var(--cb-radius-lg);
-}
-
-.admin-settings {
-  display: grid;
-  gap: var(--cb-space-5);
-}
-
-.admin-switch {
-  display: flex;
-  gap: var(--cb-space-3);
-  align-items: center;
-}
-
-.admin-switch input {
-  width: 1.25rem;
-  height: 1.25rem;
-  accent-color: var(--cb-color-coffee);
 }
 
 .admin-toast {

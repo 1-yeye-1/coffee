@@ -24,6 +24,8 @@ const props = defineProps({
 
 const attrs = useAttrs()
 const isDisabled = computed(() => props.disabled || props.loading)
+const cursorLabel = computed(() => attrs['data-cursor'] || (props.variant === 'danger' ? 'WARN' : undefined))
+const motionType = computed(() => attrs['data-motion'] || (props.size !== 'sm' && props.variant === 'primary' ? 'magnetic' : undefined))
 </script>
 
 <template>
@@ -34,8 +36,10 @@ const isDisabled = computed(() => props.disabled || props.loading)
     :class="[`base-button--${variant}`, `base-button--${size}`]"
     :disabled="isDisabled"
     :aria-busy="loading || undefined"
+    :data-cursor="cursorLabel"
+    :data-motion="motionType"
   >
-    <span v-if="loading" class="base-button__spinner cb-spin" aria-hidden="true" />
+    <span v-if="loading" class="base-button__dots" aria-hidden="true"><i v-for="dot in 3" :key="dot" class="base-button__dot" /></span>
     <span v-else-if="$slots['icon-left']" class="base-button__icon" aria-hidden="true">
       <slot name="icon-left" />
     </span>
@@ -68,6 +72,7 @@ const isDisabled = computed(() => props.disabled || props.loading)
     box-shadow var(--cb-duration-normal) var(--cb-ease-standard),
     transform var(--cb-duration-fast) var(--cb-ease-emphasized);
 }
+.base-button__dots{display:inline-flex;gap:.2rem}.base-button__dot{display:block;width:.28rem;height:.28rem;background:currentcolor;border-radius:50%;animation:cb-button-dot .65s ease-in-out infinite}.base-button__dot:nth-child(2){animation-delay:.09s}.base-button__dot:nth-child(3){animation-delay:.18s}@keyframes cb-button-dot{50%{opacity:.45;transform:translateY(-.22rem)}}
 
 .base-button:hover:not(:disabled) {
   box-shadow: var(--cb-shadow-md);
@@ -149,4 +154,3 @@ const isDisabled = computed(() => props.disabled || props.loading)
   text-overflow: ellipsis;
 }
 </style>
-

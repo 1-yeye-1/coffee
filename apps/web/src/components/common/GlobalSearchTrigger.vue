@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { searchAll } from '@/api/search'
@@ -55,6 +55,11 @@ watch(keyword, (value) => {
     return
   }
   searchTimer = setTimeout(() => submit(), 300)
+})
+
+onBeforeUnmount(() => {
+  clearTimeout(searchTimer)
+  searchSequence += 1
 })
 
 async function visit(group, item) {

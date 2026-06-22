@@ -57,12 +57,37 @@ async function getComments(postId, publishedOnly = true) {
   }))
 }
 
+async function getReports(postId) {
+  const [rows] = await pool.execute(
+    `SELECT r.id, r.post_id AS postId, r.comment_id AS commentId,
+      r.reporter_id AS reporterId, r.reason, r.description, r.status,
+      r.target_previous_status AS targetPreviousStatus, r.resolution,
+      r.handled_by AS handledBy, r.handled_at AS handledAt,
+      r.created_at AS createdAt, r.updated_at AS updatedAt,
+      u.nickname, u.username, u.phone
+     FROM content_reports r
+     INNER JOIN users u ON u.id = r.reporter_id
+     WHERE r.post_id = ?
+     ORDER BY FIELD(r.status, 'pending', 'resolved', 'dismissed'), r.created_at DESC`,
+    [postId],
+  )
+  return rows.map((row) => ({
+    ...row,
+    reporter: {
+      id: row.reporterId,
+      nickname: row.nickname || row.username || `用户${String(row.reporterId).slice(-4)}`,
+      phoneMasked: maskPhone(row.phone),
+    },
+  }))
+}
+
 async function attachComments(posts, publishedOnly = true) {
   return Promise.all(posts.map(async (post) => ({
     ...post,
     status: post.reviewStatus,
     featured: Boolean(post.featured),
     comments: await getComments(post.id, publishedOnly),
+    ...(publishedOnly ? {} : { reports: await getReports(post.id) }),
   })))
 }
 
@@ -232,18 +257,147 @@ export async function listPostLikes(postId) {
   }))
 }
 
-export async function updatePostStatus(id, status, operatorId) {
-  if (!['pending', 'published', 'rejected', 'hidden'].includes(status)) {
+export async function createContentReport(postId, payload, userId) {
+  const commentId = payload.commentId ? Number(payload.commentId) : null
+  const reason = String(payload.reason || '').trim()
+  const description = String(payload.description || '').trim()
+  if (!reason) throw Object.assign(new Error('请选择举报原因'), { statusCode: 400 })
+  if (reason.length > 120 || description.length > 1000) {
+    throw Object.assign(new Error('举报内容长度超出限制'), { statusCode: 400 })
+  }
+
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [[post]] = await connection.execute('SELECT id, status FROM posts WHERE id = ? LIMIT 1 FOR UPDATE', [postId])
+    if (!post) throw Object.assign(new Error('帖子不存在'), { statusCode: 404 })
+    let previousStatus = post.status
+    if (commentId) {
+      const [[comment]] = await connection.execute(
+        'SELECT id, status FROM comments WHERE id = ? AND post_id = ? LIMIT 1 FOR UPDATE',
+        [commentId, postId],
+      )
+      if (!comment) throw Object.assign(new Error('评论不存在'), { statusCode: 404 })
+      previousStatus = comment.status
+    }
+    const [[duplicate]] = await connection.execute(
+      `SELECT id FROM content_reports
+       WHERE post_id = ? AND reporter_id = ? AND status = 'pending'
+         AND ((comment_id IS NULL AND ? IS NULL) OR comment_id = ?) LIMIT 1`,
+      [postId, userId, commentId, commentId],
+    )
+    if (duplicate) throw Object.assign(new Error('该内容已提交举报，请等待处理'), { statusCode: 409 })
+    const [result] = await connection.execute(
+      `INSERT INTO content_reports
+       (post_id, comment_id, reporter_id, reason, description, status, target_previous_status)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+      [postId, commentId, userId, reason, description || null, previousStatus],
+    )
+    if (commentId) {
+      await connection.execute("UPDATE comments SET status = 'pending' WHERE id = ?", [commentId])
+    } else if (!['hidden', 'rejected'].includes(post.status)) {
+      await connection.execute("UPDATE posts SET status = 'reported' WHERE id = ?", [postId])
+    }
+    await writeAudit(userId, 'content.report.create', 'community', { reportId: result.insertId, postId, commentId }, connection)
+    await connection.commit()
+    return { id: result.insertId, postId: Number(postId), commentId, status: 'pending' }
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export async function updateCommentStatus(postId, commentId, status, operatorId, reason = '') {
+  if (!['published', 'pending', 'hidden', 'deleted'].includes(status)) {
+    throw Object.assign(new Error('评论状态无效'), { statusCode: 400 })
+  }
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [result] = await connection.execute(
+      'UPDATE comments SET status = ? WHERE id = ? AND post_id = ?',
+      [status, commentId, postId],
+    )
+    if (!result.affectedRows) throw Object.assign(new Error('评论不存在'), { statusCode: 404 })
+    await connection.execute(`UPDATE posts SET comments_count = (
+      SELECT COUNT(*) FROM comments WHERE post_id = ? AND status = 'published'
+    ) WHERE id = ?`, [postId, postId])
+    await writeAudit(operatorId, 'comment.status.update', 'community', { postId, commentId, status, reason }, connection)
+    await connection.commit()
+    return findPost(postId, true)
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export async function processContentReport(reportId, action, operatorId, note = '') {
+  if (!['dismiss', 'hide', 'delete'].includes(action)) {
+    throw Object.assign(new Error('举报处理动作无效'), { statusCode: 400 })
+  }
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [[report]] = await connection.execute(
+      `SELECT id, post_id AS postId, comment_id AS commentId, status,
+        target_previous_status AS previousStatus
+       FROM content_reports WHERE id = ? LIMIT 1 FOR UPDATE`,
+      [reportId],
+    )
+    if (!report) throw Object.assign(new Error('举报记录不存在'), { statusCode: 404 })
+    if (report.status !== 'pending') throw Object.assign(new Error('举报记录已经处理'), { statusCode: 409 })
+
+    const reportStatus = action === 'dismiss' ? 'dismissed' : 'resolved'
+    await connection.execute(
+      `UPDATE content_reports SET status = ?, resolution = ?, handled_by = ?, handled_at = NOW()
+       WHERE id = ?`,
+      [reportStatus, action, operatorId, reportId],
+    )
+    if (report.commentId) {
+      const nextStatus = action === 'dismiss' ? (report.previousStatus || 'published') : action === 'delete' ? 'deleted' : 'hidden'
+      await connection.execute('UPDATE comments SET status = ? WHERE id = ?', [nextStatus, report.commentId])
+    } else {
+      const nextStatus = action === 'dismiss' ? (report.previousStatus || 'published') : 'hidden'
+      await connection.execute('UPDATE posts SET status = ? WHERE id = ?', [nextStatus, report.postId])
+    }
+    await connection.execute(`UPDATE posts SET comments_count = (
+      SELECT COUNT(*) FROM comments WHERE post_id = ? AND status = 'published'
+    ) WHERE id = ?`, [report.postId, report.postId])
+    await writeAudit(operatorId, 'content.report.process', 'community', { reportId, action, note }, connection)
+    await connection.commit()
+    return findPost(report.postId, true)
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export async function updatePostStatus(id, status, operatorId, reason = '') {
+  const normalizedStatus = status === 'approved' ? 'published' : status === 'review' ? 'reported' : status
+  if (!['pending', 'published', 'rejected', 'reported', 'hidden'].includes(normalizedStatus)) {
     throw Object.assign(new Error('社区内容状态无效'), { statusCode: 400 })
   }
   const [[post]] = await pool.execute('SELECT user_id AS userId, title FROM posts WHERE id = ? LIMIT 1', [id])
-  await pool.execute('UPDATE posts SET status = ? WHERE id = ?', [status, id])
-  await writeAudit(operatorId, 'post.status.update', 'community', { id, status })
+  await pool.execute('UPDATE posts SET status = ? WHERE id = ?', [normalizedStatus, id])
+  if (['published', 'rejected', 'hidden'].includes(normalizedStatus)) {
+    await pool.execute(
+      `UPDATE content_reports SET status = 'resolved', resolution = ?, handled_by = ?, handled_at = NOW()
+       WHERE post_id = ? AND comment_id IS NULL AND status = 'pending'`,
+      [normalizedStatus === 'published' ? 'dismiss' : 'hide', operatorId, id],
+    )
+  }
+  await writeAudit(operatorId, 'post.status.update', 'community', { id, status: normalizedStatus, reason })
   if (post?.userId) {
     await createNotification({
       userId: post.userId,
-      title: status === 'published' ? '帖子审核通过' : '帖子审核未通过',
-      content: status === 'published'
+      title: normalizedStatus === 'published' ? '帖子审核通过' : '帖子状态已更新',
+      content: normalizedStatus === 'published'
         ? `你的帖子《${post.title}》已审核通过并发布。`
         : `你的帖子《${post.title}》未通过审核，请调整内容后再试。`,
       type: 'audit',

@@ -1,7 +1,18 @@
 <script setup>
+import { nextTick, onErrorCaptured, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+
 import AppFooter from '@/components/common/AppFooter.vue'
 import AppHeader from '@/components/common/AppHeader.vue'
 import LayoutShell from '@/components/common/LayoutShell.vue'
+import { BaseSkeleton, ErrorPanel } from '@/components/base'
+import { useGsapReveal } from '@/composables/useGsapReveal'
+
+const route = useRoute()
+const viewError = ref('')
+const renderKey = ref(0)
+const contentRef = ref(null)
+const { revealPage } = useGsapReveal(contentRef)
 
 const menu = [
   { label: '账户概览', to: '/account' },
@@ -21,6 +32,22 @@ const menu = [
 function isActive(path, currentPath) {
   return path === '/account' ? currentPath === path : currentPath.startsWith(path)
 }
+
+function retryView() {
+  viewError.value = ''
+  renderKey.value += 1
+}
+
+onErrorCaptured((error) => {
+  viewError.value = error?.message || '页面组件渲染失败，请重新加载。'
+  return false
+})
+
+watch(() => route.fullPath, async () => {
+  viewError.value = ''
+  await nextTick()
+  revealPage(':scope > *')
+}, { flush: 'post', immediate: true })
 </script>
 
 <template>
@@ -57,8 +84,25 @@ function isActive(path, currentPath) {
             </RouterLink>
           </nav>
         </aside>
-        <main class="member-layout__content">
-          <RouterView />
+        <main ref="contentRef" class="member-layout__content">
+          <ErrorPanel
+            v-if="viewError"
+            title="账户页面加载失败"
+            :message="viewError"
+            @retry="retryView"
+          />
+          <RouterView v-else v-slot="{ Component, route: childRoute }">
+            <Suspense :key="`${childRoute.fullPath}-${renderKey}`">
+              <component :is="Component" />
+              <template #fallback>
+                <div class="member-layout__loading" aria-label="正在加载账户页面">
+                  <BaseSkeleton variant="line" />
+                  <BaseSkeleton variant="card" />
+                  <BaseSkeleton variant="card" />
+                </div>
+              </template>
+            </Suspense>
+          </RouterView>
         </main>
       </div>
     </LayoutShell>
@@ -128,6 +172,8 @@ function isActive(path, currentPath) {
   border-radius: var(--cb-radius-2xl);
   box-shadow: var(--cb-shadow-sm);
 }
+
+.member-layout__loading { display:grid;gap:var(--cb-space-4);min-height:18rem; }
 
 @media (min-width: 64rem) {
   .member-layout__mobile-nav {

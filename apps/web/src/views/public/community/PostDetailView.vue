@@ -5,6 +5,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { getPublicProfile } from '@/api/account'
 import { resolveUploadUrl } from '@/api/upload'
 import { BaseBadge, BaseButton, BaseModal, BaseTextarea, BaseToast, EmptyState } from '@/components/base'
+import CommunityGallery from '@/components/community/CommunityGallery.vue'
+import { useCommunityMotion } from '@/composables/useCommunityMotion'
 import { useCommunityStore } from '@/stores/community'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/pages/engagement.css'
@@ -22,9 +24,16 @@ const likesOpen = ref(false)
 const likeUsers = ref([])
 const likesLoading = ref(false)
 const likesError = ref('')
+const pageRef = ref(null)
+const commentsRef = ref(null)
+const commentsOpen = ref(true)
+const galleryOpen = ref(false)
+const galleryIndex = ref(0)
+const { likeParticle, bookmarkFlight, revealComment, highlightPost } = useCommunityMotion(pageRef)
 const postParam = computed(() => route.params.slug || route.params.id)
 const post = computed(() => communityStore.getPostBySlug(postParam.value))
 const related = computed(() => communityStore.posts.filter((item) => item.id !== post.value?.id).slice(0, 3))
+const galleryImages = computed(() => [post.value, ...related.value].filter((item) => item?.mediaType === 'image' && item.mediaUrl))
 const formatDate = (value) => new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 
 function showToast(title, message) {
@@ -39,6 +48,10 @@ async function submitComment() {
   if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
   await communityStore.addComment(post.value.id, comment.value, isAnonymous.value)
   comment.value = ''
+  commentsOpen.value = true
+  await nextTick()
+  const comments = commentsRef.value?.querySelectorAll('.comment') || []
+  highlightPost(comments[comments.length - 1])
   showToast('评论成功', '你的评论已发布。')
 }
 
@@ -52,15 +65,33 @@ async function openLikes() {
   likesLoading.value = false
 }
 
-async function toggleLike() {
+async function toggleLike(event) {
   if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
-  await communityStore.toggleLike(post.value.id)
+  const result = await communityStore.toggleLike(post.value.id)
+  if (result?.liked) likeParticle(event?.currentTarget)
   if (likesOpen.value) await openLikes()
 }
 
-async function toggleFavorite() {
+async function toggleFavorite(event) {
   if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
   await communityStore.toggleFavorite(post.value.id)
+  bookmarkFlight(event?.currentTarget, document.querySelector('.user-menu__trigger'))
+}
+
+async function toggleComments() {
+  if (commentsOpen.value) {
+    revealComment(commentsRef.value, false, () => { commentsOpen.value = false })
+  } else {
+    commentsOpen.value = true
+    await nextTick()
+    revealComment(commentsRef.value, true)
+  }
+}
+
+function openGallery() {
+  if (post.value?.mediaType !== 'image') return
+  galleryIndex.value = Math.max(0, galleryImages.value.findIndex((item) => item.id === post.value.id))
+  galleryOpen.value = true
 }
 
 async function visitUser(userId) {
@@ -83,7 +114,7 @@ watch(postParam, (value) => {
 </script>
 
 <template>
-  <div class="engagement-page cb-fade-in">
+  <div ref="pageRef" class="engagement-page cb-fade-in">
     <main class="cb-container engagement-content">
       <BaseButton class="detail-back" variant="ghost" size="sm" @click="router.push('/community')">返回社区</BaseButton>
       <template v-if="post">
@@ -100,8 +131,8 @@ watch(postParam, (value) => {
               <BaseBadge variant="neutral">{{ post.topic }}</BaseBadge>
               <h1 class="page-title">{{ post.title }}</h1>
             </div>
-            <div v-if="post.mediaUrl" class="post-media">
-              <img v-if="post.mediaType === 'image'" :src="resolveUploadUrl(post.mediaUrl)" alt="帖子图片" />
+            <div v-if="post.mediaUrl" class="post-media" :class="{ 'is-gallery-trigger': post.mediaType === 'image' }" @click="openGallery">
+              <img v-if="post.mediaType === 'image'" :src="resolveUploadUrl(post.mediaUrl)" alt="帖子图片" decoding="async" />
               <video v-else controls :src="resolveUploadUrl(post.mediaUrl)">当前浏览器不支持视频预览。</video>
             </div>
             <p class="post-article__body">{{ post.content }}</p>
@@ -119,13 +150,14 @@ watch(postParam, (value) => {
           </aside>
         </div>
 
-        <section class="detail-panel section-block">
+        <section id="comments" class="detail-panel section-block">
+          <BaseButton size="sm" variant="outline" :aria-expanded="commentsOpen" @click="toggleComments">{{ commentsOpen ? '收起评论' : '展开评论' }}</BaseButton>
           <label class="anonymous-toggle"><input v-model="isAnonymous" type="checkbox" /> 匿名评论</label>
           <h2 class="section-title">评论 {{ post.comments.length }}</h2>
-          <div class="comment-list">
+          <div v-show="commentsOpen" ref="commentsRef" class="comment-list">
             <div v-for="item in post.comments" :key="item.id" class="comment">
               <button class="comment__avatar" type="button" @click="visitUser(item.user?.id)">
-                <img v-if="item.user?.avatar" :src="resolveUploadUrl(item.user.avatar)" alt="评论者头像" />
+                <img v-if="item.user?.avatar" :src="resolveUploadUrl(item.user.avatar)" alt="评论者头像" loading="lazy" decoding="async" />
                 <span v-else class="avatar">{{ (item.user?.nickname || item.author || '用').slice(0, 1) }}</span>
               </button>
               <div class="comment__body">
@@ -150,7 +182,7 @@ watch(postParam, (value) => {
         <p v-else-if="likesError" class="form-error">{{ likesError }}</p>
         <EmptyState v-else-if="!likeUsers.length" title="暂无点赞" description="成为第一个点赞的人吧。" />
         <button v-for="user in likeUsers" v-else :key="user.userId" class="like-user" type="button" @click="visitUser(user.userId)">
-          <img v-if="user.avatar" :src="resolveUploadUrl(user.avatar)" alt="点赞用户头像" />
+          <img v-if="user.avatar" :src="resolveUploadUrl(user.avatar)" alt="点赞用户头像" loading="lazy" decoding="async" />
           <span v-else class="avatar">{{ (user.nickname || '用').slice(0, 1) }}</span>
           <span>
             <strong>{{ user.nickname }}</strong>
@@ -159,6 +191,8 @@ watch(postParam, (value) => {
         </button>
       </div>
     </BaseModal>
+
+    <CommunityGallery v-model="galleryOpen" :images="galleryImages" :start-index="galleryIndex" />
 
     <div class="page-toast">
       <BaseToast v-model="toastVisible" variant="success" :title="toastTitle">{{ toastMessage }}</BaseToast>
@@ -173,6 +207,7 @@ watch(postParam, (value) => {
   border-radius: var(--cb-radius-xl);
   background: var(--cb-bg-soft);
 }
+.post-media.is-gallery-trigger { cursor: zoom-in; }
 .post-media img,
 .post-media video {
   display: block;
@@ -222,4 +257,7 @@ watch(postParam, (value) => {
   display: block;
   color: var(--cb-text-muted);
 }
+.comment-list { overflow: hidden; }
+.comment.is-new-post { background: color-mix(in srgb, var(--cb-color-gold) 12%, transparent); border-radius: var(--cb-radius-lg); box-shadow: 0 0 0 .2rem color-mix(in srgb, var(--cb-color-gold) 18%, transparent); }
+:global(.community-like-particle),:global(.community-bookmark-flight){position:fixed;z-index:var(--cb-z-toast);color:var(--cb-color-gold);font-weight:var(--cb-font-bold);pointer-events:none;translate:-50% -50%;will-change:transform,opacity}:global(.community-like-particle){color:var(--cb-danger)}
 </style>

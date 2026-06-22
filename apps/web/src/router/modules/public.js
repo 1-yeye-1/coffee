@@ -1,26 +1,27 @@
 import PublicLayout from '@/layouts/PublicLayout.vue'
-import ComponentPreview from '@/views/ComponentPreview.vue'
-import LayoutPreview from '@/views/LayoutPreview.vue'
-import PlaceholderView from '@/views/PlaceholderView.vue'
 import HomeView from '@/views/public/HomeView.vue'
-import BookDetailView from '@/views/public/books/BookDetailView.vue'
-import BooksView from '@/views/public/books/BooksView.vue'
-import CoffeeView from '@/views/public/coffee/CoffeeView.vue'
-import ProductDetailView from '@/views/public/coffee/ProductDetailView.vue'
-import CartView from '@/views/public/cart/CartView.vue'
-import CheckoutView from '@/views/public/checkout/CheckoutView.vue'
-import BookingView from '@/views/public/booking/BookingView.vue'
-import CommunityView from '@/views/public/community/CommunityView.vue'
-import CreatePostView from '@/views/public/community/CreatePostView.vue'
-import PostDetailView from '@/views/public/community/PostDetailView.vue'
-import EventDetailView from '@/views/public/events/EventDetailView.vue'
-import EventsView from '@/views/public/events/EventsView.vue'
-import PublicUserProfileView from '@/views/public/users/PublicUserProfileView.vue'
-import AboutView from '@/views/public/info/AboutView.vue'
-import ContactView from '@/views/public/info/ContactView.vue'
-import HelpView from '@/views/public/info/HelpView.vue'
-import PrivacyView from '@/views/public/info/PrivacyView.vue'
-import TermsView from '@/views/public/info/TermsView.vue'
+
+const ComponentPreview = () => import('@/views/ComponentPreview.vue')
+const LayoutPreview = () => import('@/views/LayoutPreview.vue')
+const PlaceholderView = () => import('@/views/PlaceholderView.vue')
+const BookDetailView = () => import('@/views/public/books/BookDetailView.vue')
+const BooksView = () => import('@/views/public/books/BooksView.vue')
+const CoffeeView = () => import('@/views/public/coffee/CoffeeView.vue')
+const ProductDetailView = () => import('@/views/public/coffee/ProductDetailView.vue')
+const CartView = () => import('@/views/public/cart/CartView.vue')
+const CheckoutView = () => import('@/views/public/checkout/CheckoutView.vue')
+const BookingView = () => import('@/views/public/booking/BookingView.vue')
+const CommunityView = () => import('@/views/public/community/CommunityView.vue')
+const CreatePostView = () => import('@/views/public/community/CreatePostView.vue')
+const PostDetailView = () => import('@/views/public/community/PostDetailView.vue')
+const EventDetailView = () => import('@/views/public/events/EventDetailView.vue')
+const EventsView = () => import('@/views/public/events/EventsView.vue')
+const PublicUserProfileView = () => import('@/views/public/users/PublicUserProfileView.vue')
+const AboutView = () => import('@/views/public/info/AboutView.vue')
+const ContactView = () => import('@/views/public/info/ContactView.vue')
+const HelpView = () => import('@/views/public/info/HelpView.vue')
+const PrivacyView = () => import('@/views/public/info/PrivacyView.vue')
+const TermsView = () => import('@/views/public/info/TermsView.vue')
 
 import { ROUTE_NAMES } from '../route-names'
 

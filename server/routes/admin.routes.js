@@ -15,7 +15,13 @@ import {
 } from '../services/admin.service.js'
 import { listBookings, updateBookingStatus } from '../services/booking.service.js'
 import { createBook, deleteBook, findBookById, updateBook, updateBookStatus } from '../services/books.service.js'
-import { findPost, listPosts, updatePostStatus } from '../services/community.service.js'
+import {
+  findPost,
+  listPosts,
+  processContentReport,
+  updateCommentStatus,
+  updatePostStatus,
+} from '../services/community.service.js'
 import { createEvent, deleteEvent, findEventById, listEvents, updateEvent } from '../services/events.service.js'
 import { createProduct, deleteProduct, findProductById, updateProduct, updateProductStatus } from '../services/products.service.js'
 import {
@@ -238,9 +244,9 @@ export function registerAdminRoutes(router) {
   })
 
   router.patch('/api/admin/posts/:id/status', requireAdmin, async (req, res) => {
-    if (!['pending', 'published', 'rejected', 'hidden'].includes(req.body.status)) return failure(res, 400, '社区内容状态无效')
+    if (!['pending', 'published', 'approved', 'rejected', 'reported', 'review', 'hidden'].includes(req.body.status)) return failure(res, 400, '社区内容状态无效')
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
-    const post = await updatePostStatus(req.params.id, req.body.status, req.user.id)
+    const post = await updatePostStatus(req.params.id, req.body.status, req.user.id, req.body.reason)
     await logAdminAction({
       admin: req.user,
       action: req.body.status === 'published' ? 'approve' : req.body.status === 'rejected' ? 'reject' : 'change_status',
@@ -250,6 +256,24 @@ export function registerAdminRoutes(router) {
       description: `审核社区帖子为 ${req.body.status}`,
       req,
     })
+    return success(res, post)
+  })
+
+  router.get('/api/admin/posts/:id/moderation', requireAdmin, async (req, res) => {
+    const post = await findPost(req.params.id, true)
+    if (!post) return failure(res, 404, '帖子不存在', 404)
+    return success(res, post)
+  })
+
+  router.patch('/api/admin/posts/:id/comments/:commentId/status', requireAdmin, async (req, res) => {
+    if (!['published', 'pending', 'hidden', 'deleted'].includes(req.body.status)) return failure(res, 400, '评论状态无效')
+    const post = await updateCommentStatus(req.params.id, req.params.commentId, req.body.status, req.user.id, req.body.reason)
+    return success(res, post)
+  })
+
+  router.patch('/api/admin/reports/:id', requireAdmin, async (req, res) => {
+    if (!['dismiss', 'hide', 'delete'].includes(req.body.action)) return failure(res, 400, '举报处理动作无效')
+    const post = await processContentReport(req.params.id, req.body.action, req.user.id, req.body.note)
     return success(res, post)
   })
 

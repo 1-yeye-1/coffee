@@ -93,6 +93,17 @@
   animation: cb-spin 0.8s linear infinite;
 }
 
+.coffee-motion-disabled *,
+.coffee-motion-disabled *::before,
+.coffee-motion-disabled *::after {
+  animation: none !important;
+  transition-duration: 0.01ms !important;
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 64rem) {
+  [data-motion="magnetic"], [data-magnetic-group] > .base-button, .admin-quick-action { will-change: transform; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -102,5 +113,7 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-}
 
+
+  [data-motion="magnetic"], [data-magnetic-group] > .base-button, .admin-quick-action { transform: none !important; }
+}

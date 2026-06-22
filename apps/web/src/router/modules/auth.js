@@ -1,8 +1,9 @@
 import AuthLayout from '@/layouts/AuthLayout.vue'
-import LayoutPreview from '@/views/LayoutPreview.vue'
-import PlaceholderView from '@/views/PlaceholderView.vue'
 import LoginView from '@/views/public/auth/LoginView.vue'
-import RegisterView from '@/views/public/auth/RegisterView.vue'
+
+const LayoutPreview = () => import('@/views/LayoutPreview.vue')
+const PlaceholderView = () => import('@/views/PlaceholderView.vue')
+const RegisterView = () => import('@/views/public/auth/RegisterView.vue')
 
 import { ROUTE_NAMES } from '../route-names'
 

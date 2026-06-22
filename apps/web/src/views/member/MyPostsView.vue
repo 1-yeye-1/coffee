@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 
 import { getMyPosts } from '@/api/account'
-import { BaseBadge, BaseTable } from '@/components/base'
+import { BaseBadge, BaseTable, ErrorPanel } from '@/components/base'
 import '@/assets/styles/pages/engagement.css'
 
 const posts = ref([])
@@ -15,15 +15,18 @@ const columns = [
   { key: 'commentsCount', label: '评论' },
   { key: 'createdAt', label: '时间' },
 ]
-const statusText = { pending: '待审核', published: '已发布', rejected: '已拒绝', hidden: '已隐藏' }
+const statusText = { pending: '待审核', published: '已发布', rejected: '已拒绝', reported: '举报待复核', hidden: '已隐藏' }
 
-onMounted(async () => {
+async function load() {
+  error.value = ''
   try {
     posts.value = (await getMyPosts()).data
   } catch (err) {
     error.value = err.message
   }
-})
+}
+
+onMounted(load)
 </script>
 
 <template>
@@ -34,7 +37,7 @@ onMounted(async () => {
       <p class="page-subtitle">仅展示当前登录用户发布的社区帖子。</p>
     </header>
 
-    <p v-if="error" class="form-error">{{ error }}</p>
+    <ErrorPanel v-if="error" :message="error" @retry="load" />
     <BaseTable :columns="columns" :items="posts" empty-text="暂无帖子">
       <template #cell-status="{ value }">
         <BaseBadge :variant="value === 'published' ? 'success' : 'neutral'">{{ statusText[value] || value }}</BaseBadge>

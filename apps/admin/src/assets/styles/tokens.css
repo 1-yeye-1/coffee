@@ -1,27 +1,54 @@
 :root {
+  --coffee-900: #2a1810;
+  --coffee-800: #3b2418;
+  --coffee-700: #5a3825;
+  --coffee-600: #6f4e37;
+  --cream-50: #fff9f1;
+  --cream-100: #f7f0e6;
+  --gold-500: #c8a165;
+  --gold-400: #d9b77a;
+  --text-main: #241a14;
+  --text-muted: #8a7466;
+  --border-soft: rgb(111 78 55 / 0.16);
+  --shadow-card: 0 18px 48px rgb(42 24 16 / 0.12);
+  --shadow-hover: 0 28px 70px rgb(42 24 16 / 0.18);
+  --radius-card: 24px;
+  --radius-pill: 999px;
+  --transition-fast: 160ms ease;
+  --transition-base: 260ms ease;
+  --transition-slow: 420ms cubic-bezier(.16, 1, .3, 1);
   color-scheme: light dark;
 
+  /* Theme-aware semantic surfaces. Keep feature styles on these aliases. */
+  --page-bg: #f7f3ee;
+  --card-bg: #ffffff;
+  --panel-bg: #ffffff;
+  --field-bg: #ffffff;
+  --field-border: #e3dbd1;
+  --table-bg: #ffffff;
+  --modal-bg: #ffffff;
+
   /* Brand palette */
-  --cb-color-coffee: #6f4e37;
-  --cb-color-gold: #c8a165;
-  --cb-color-cream: #efe4d3;
-  --cb-color-ivory: #f7f3ee;
-  --cb-color-espresso: #1e1b18;
+  --cb-color-coffee: var(--coffee-600);
+  --cb-color-gold: var(--gold-500);
+  --cb-color-cream: var(--cream-100);
+  --cb-color-ivory: var(--cream-50);
+  --cb-color-espresso: var(--coffee-900);
   --cb-color-caramel: #b87942;
 
   /* Semantic colors: light defaults, overridden by themes.css */
-  --cb-text-primary: var(--cb-color-espresso);
+  --cb-text-primary: var(--text-main);
   --cb-text-secondary: #625a52;
-  --cb-text-muted: #81776d;
+  --cb-text-muted: var(--text-muted);
   --cb-text-inverse: #ffffff;
 
-  --cb-bg-page: var(--cb-color-ivory);
-  --cb-bg-surface: #ffffff;
+  --cb-bg-page: var(--page-bg);
+  --cb-bg-surface: var(--card-bg);
   --cb-bg-soft: #eee7de;
-  --cb-bg-elevated: #ffffff;
+  --cb-bg-elevated: var(--panel-bg);
   --cb-bg-dark: var(--cb-color-espresso);
 
-  --cb-border-soft: #e3dbd1;
+  --cb-border-soft: var(--field-border);
   --cb-border-strong: #b9aa9b;
 
   --cb-success: #357a52;
@@ -85,15 +112,15 @@
   --cb-radius-md: 0.75rem;
   --cb-radius-lg: 1rem;
   --cb-radius-xl: 1.25rem;
-  --cb-radius-2xl: 1.5rem;
-  --cb-radius-pill: 999rem;
+  --cb-radius-2xl: var(--radius-card);
+  --cb-radius-pill: var(--radius-pill);
 
   /* Elevation */
   --cb-shadow-sm: 0 0.125rem 0.5rem rgb(30 27 24 / 0.06);
   --cb-shadow-md: 0 0.5rem 1.5rem rgb(30 27 24 / 0.08);
   --cb-shadow-lg: 0 1rem 2.5rem rgb(30 27 24 / 0.1);
   --cb-shadow-xl: 0 1.5rem 4rem rgb(30 27 24 / 0.14);
-  --cb-shadow-hover: 0 1.25rem 3rem rgb(30 27 24 / 0.13);
+  --cb-shadow-hover: var(--shadow-hover);
   --cb-shadow-focus: 0 0 0 0.1875rem
     color-mix(in srgb, var(--cb-color-coffee) 18%, transparent);
   --cb-shadow-glow: 0 0 var(--cb-space-12)
@@ -116,5 +143,5 @@
   --cb-container-sm: 40rem;
   --cb-container-md: 48rem;
   --cb-container-lg: 64rem;
-  --cb-container-xl: 80rem;
+  --cb-container-xl: 92rem;
 }

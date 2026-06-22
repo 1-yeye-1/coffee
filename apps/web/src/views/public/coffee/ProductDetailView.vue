@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { useOrderStore } from '@/stores/orders'
 import { useProductsStore } from '@/stores/products'
+import { useAnimeMotion } from '@/composables/useAnimeMotion'
 import '@/assets/styles/pages/catalog.css'
 
 const route = useRoute()
@@ -28,6 +29,8 @@ const reviews = ref([])
 const reviewsLoading = ref(false)
 const reviewSubmitting = ref(false)
 const reviewUploading = ref(false)
+const cartButtonRef = ref(null)
+const { bounceCart, successCheck, shakeError } = useAnimeMotion()
 const reviewForm = reactive({ rating: 5, content: '', mediaUrl: '', mediaType: '' })
 const product = computed(() => productsStore.currentProduct)
 const supportsBrewMethod = computed(() => product.value?.productType === 'coffee' && product.value?.supportsBrewMethod !== false)
@@ -82,8 +85,11 @@ async function addToCart() {
   try {
     await cartStore.addItem(product.value, quantity.value, { brewMethod: supportsBrewMethod.value ? brewMethod.value : null })
     notify('已加入购物车', `已加入 ${quantity.value} 件商品。`)
+    bounceCart(cartButtonRef.value?.$el || cartButtonRef.value)
+    successCheck(document.querySelector('.cart-trigger'))
   } catch (error) {
     notify('加入购物车失败', error.message || '请稍后重试', 'error')
+    shakeError(cartButtonRef.value?.$el || cartButtonRef.value)
   } finally {
     adding.value = false
   }
@@ -168,7 +174,7 @@ onMounted(loadProduct)
     <template v-if="product">
       <section class="cb-container detail-hero">
         <div class="detail-visual">
-          <img v-if="product.imageUrl" class="detail-product-image" :src="resolveUploadUrl(product.imageUrl)" :alt="product.name" />
+          <img v-if="product.imageUrl" class="detail-product-image" :src="resolveUploadUrl(product.imageUrl)" :alt="product.name" decoding="async" />
           <div v-else class="product-art" :class="`tone-${product.tone}`">
             <div class="product-art__cup" />
             <span class="product-art__label">{{ product.origin }}</span>
@@ -207,7 +213,7 @@ onMounted(loadProduct)
             <button type="button" aria-label="增加数量" :disabled="quantity >= product.stock" @click="quantity += 1">+</button>
           </div>
           <div class="detail-actions">
-            <BaseButton :loading="adding" :disabled="product.stock === 0 || adding" @click="addToCart">加入购物车</BaseButton>
+            <BaseButton ref="cartButtonRef" :loading="adding" :disabled="product.stock === 0 || adding" @click="addToCart">加入购物车</BaseButton>
             <BaseButton variant="secondary" :loading="buying" :disabled="product.stock === 0 || buying" @click="buyNow">立即购买</BaseButton>
           </div>
         </div>
@@ -249,7 +255,7 @@ onMounted(loadProduct)
           <EmptyState v-else-if="!reviews.length" title="暂无评价" description="成为第一个分享体验的人。" />
           <div v-else class="review-list">
             <article v-for="review in reviews" :key="review.id" class="review-item">
-              <img v-if="review.user.avatar" class="review-avatar" :src="resolveUploadUrl(review.user.avatar)" alt="用户头像" />
+              <img v-if="review.user.avatar" class="review-avatar" :src="resolveUploadUrl(review.user.avatar)" alt="用户头像" loading="lazy" decoding="async" />
               <span v-else class="avatar">{{ review.user.nickname.slice(0, 1) }}</span>
               <div class="review-item__body">
                 <div class="review-item__top">
@@ -258,7 +264,7 @@ onMounted(loadProduct)
                   <small>{{ formatDate(review.createdAt) }}</small>
                 </div>
                 <p v-if="review.content">{{ review.content }}</p>
-                <img v-if="review.mediaType === 'image'" class="review-media" :src="resolveUploadUrl(review.mediaUrl)" alt="评价图片" />
+                <img v-if="review.mediaType === 'image'" class="review-media" :src="resolveUploadUrl(review.mediaUrl)" alt="评价图片" loading="lazy" decoding="async" />
                 <video v-else-if="review.mediaType === 'video'" class="review-media" controls :src="resolveUploadUrl(review.mediaUrl)">当前浏览器不支持视频预览。</video>
               </div>
             </article>

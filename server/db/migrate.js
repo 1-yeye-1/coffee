@@ -48,9 +48,11 @@ async function migrate() {
     await ensureColumn(connection, databaseName, 'user_notifications', 'related_type', 'VARCHAR(50) NULL AFTER related_id')
     await ensureColumn(connection, databaseName, 'posts', 'media_url', 'VARCHAR(500) NULL AFTER content')
     await ensureColumn(connection, databaseName, 'posts', 'media_type', 'VARCHAR(20) NULL AFTER media_url')
+    await ensureColumn(connection, databaseName, 'posts', 'status', "VARCHAR(30) NOT NULL DEFAULT 'published' AFTER content")
     await ensureColumn(connection, databaseName, 'bookings', 'seat_id', 'BIGINT UNSIGNED NULL AFTER slot_id')
     await ensureColumn(connection, databaseName, 'bookings', 'time_slot', 'VARCHAR(50) NULL AFTER booking_time')
     await ensureColumn(connection, databaseName, 'bookings', 'people_count', 'INT NOT NULL DEFAULT 1 AFTER time_slot')
+    await ensureColumn(connection, databaseName, 'comments', 'status', "VARCHAR(30) NOT NULL DEFAULT 'published' AFTER content")
     await ensureColumn(connection, databaseName, 'comments', 'is_anonymous', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER status')
     await ensureColumn(connection, databaseName, 'seats', 'width', 'INT NOT NULL DEFAULT 64 AFTER y')
     await ensureColumn(connection, databaseName, 'seats', 'height', 'INT NOT NULL DEFAULT 52 AFTER width')
@@ -58,7 +60,9 @@ async function migrate() {
     await connection.query(`ALTER TABLE ${databaseSql}.\`verification_codes\` MODIFY \`expires_at\` DATETIME NOT NULL`)
     await connection.query(`ALTER TABLE ${databaseSql}.\`payments\` MODIFY \`expires_at\` DATETIME NULL`)
     await connection.query(`UPDATE ${databaseSql}.\`user_notifications\` SET is_read = 1 WHERE read_at IS NOT NULL`)
+    await connection.query(`UPDATE ${databaseSql}.\`seats\` SET status = 'maintenance' WHERE status = 'disabled'`)
     await migrateContentStatuses(connection)
+    await ensureContentReports(connection)
     await migrateProductTypes(connection)
     await dropForeignKeyIfExists(connection, databaseName, 'audit_logs', 'fk_audit_logs_operator')
     await dropIndexIfExists(connection, databaseName, 'cart_items', 'uk_cart_items_cart_product')
@@ -70,6 +74,13 @@ async function migrate() {
     await ensureIndex(connection, databaseName, 'user_notifications', 'idx_user_notifications_type', 'KEY idx_user_notifications_type (type)')
     await ensureIndex(connection, databaseName, 'user_notifications', 'idx_user_notifications_is_read', 'KEY idx_user_notifications_is_read (is_read)')
     await ensureIndex(connection, databaseName, 'bookings', 'idx_bookings_seat_date_time', 'KEY idx_bookings_seat_date_time (seat_id, booking_date, time_slot)')
+    await ensureIndex(connection, databaseName, 'posts', 'idx_posts_status', 'KEY idx_posts_status (status)')
+    await ensureIndex(connection, databaseName, 'comments', 'idx_comments_status', 'KEY idx_comments_status (status)')
+    await ensureIndex(connection, databaseName, 'content_reports', 'idx_content_reports_post', 'KEY idx_content_reports_post (post_id)')
+    await ensureIndex(connection, databaseName, 'content_reports', 'idx_content_reports_comment', 'KEY idx_content_reports_comment (comment_id)')
+    await ensureIndex(connection, databaseName, 'content_reports', 'idx_content_reports_status', 'KEY idx_content_reports_status (status)')
+    await ensureIndex(connection, databaseName, 'content_reports', 'idx_content_reports_reporter', 'KEY idx_content_reports_reporter (reporter_id)')
+    await ensureIndex(connection, databaseName, 'content_reports', 'idx_content_reports_target_status', 'KEY idx_content_reports_target_status (post_id, comment_id, reporter_id, status)')
     await ensureSeats(connection)
     await ensureUserAvatars(connection)
     await ensureProductReviews(connection)
@@ -124,12 +135,28 @@ async function ensureSeats(connection) {
 }
 
 async function migrateContentStatuses(connection) {
+  // Older installations may use ENUMs that cannot accept the current workflow states.
+  await connection.query(`ALTER TABLE ${databaseSql}.\`posts\` MODIFY \`status\` VARCHAR(30) NULL`)
+  await connection.query(`ALTER TABLE ${databaseSql}.\`comments\` MODIFY \`status\` VARCHAR(30) NULL`)
   await connection.query(`UPDATE ${databaseSql}.\`posts\` SET status = CASE
     WHEN status IN ('已发布', 'active') THEN 'published'
     WHEN status IN ('待审核', 'reviewing') THEN 'pending'
     WHEN status IN ('已拒绝', 'inactive') THEN 'rejected'
+    WHEN status IN ('被举报', '待复核', 'review') THEN 'reported'
     WHEN status IN ('已隐藏', 'deleted') THEN 'hidden'
-    ELSE status END`)
+    WHEN status IN ('pending', 'published', 'rejected', 'reported', 'hidden') THEN status
+    ELSE 'published' END`)
+  await connection.query(`UPDATE ${databaseSql}.\`comments\` SET status = CASE
+    WHEN status IN ('正常', '已发布', 'active', 'approved') THEN 'published'
+    WHEN status IN ('待审核', 'reviewing', 'review') THEN 'pending'
+    WHEN status IN ('已隐藏', 'inactive') THEN 'hidden'
+    WHEN status IN ('已删除', 'removed') THEN 'deleted'
+    WHEN status IN ('published', 'pending', 'hidden', 'deleted') THEN status
+    ELSE 'published' END`)
+  await connection.query(`ALTER TABLE ${databaseSql}.\`posts\`
+    MODIFY \`status\` VARCHAR(30) NOT NULL DEFAULT 'pending'`)
+  await connection.query(`ALTER TABLE ${databaseSql}.\`comments\`
+    MODIFY \`status\` VARCHAR(30) NOT NULL DEFAULT 'published'`)
   await connection.query(`UPDATE ${databaseSql}.\`books\` SET status = CASE
     WHEN status IN ('可借阅', '少量馆藏', 'active') THEN 'available'
     WHEN status IN ('暂不可借', 'inactive') THEN 'unavailable'
@@ -143,6 +170,49 @@ async function migrateContentStatuses(connection) {
     WHEN status IN ('现货', '少量库存') THEN 'active'
     WHEN status IN ('暂时售罄', 'sold_out') THEN 'inactive'
     ELSE status END`)
+}
+
+async function ensureContentReports(connection) {
+  await connection.query(`CREATE TABLE IF NOT EXISTS ${databaseSql}.\`content_reports\` (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    post_id BIGINT UNSIGNED NOT NULL,
+    comment_id BIGINT UNSIGNED NULL,
+    reporter_id BIGINT UNSIGNED NOT NULL,
+    reason VARCHAR(120) NOT NULL,
+    description VARCHAR(1000) NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+    target_previous_status VARCHAR(30) NULL,
+    resolution VARCHAR(30) NULL,
+    handled_by BIGINT UNSIGNED NULL,
+    handled_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_content_reports_post (post_id),
+    KEY idx_content_reports_comment (comment_id),
+    KEY idx_content_reports_status (status),
+    KEY idx_content_reports_reporter (reporter_id),
+    KEY idx_content_reports_target_status (post_id, comment_id, reporter_id, status),
+    CONSTRAINT fk_content_reports_post FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    CONSTRAINT fk_content_reports_comment FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+    CONSTRAINT fk_content_reports_reporter FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB`)
+  await ensureColumn(connection, databaseName, 'content_reports', 'comment_id', 'BIGINT UNSIGNED NULL AFTER post_id')
+  await ensureColumn(connection, databaseName, 'content_reports', 'description', 'VARCHAR(1000) NULL AFTER reason')
+  await ensureColumn(connection, databaseName, 'content_reports', 'status', "VARCHAR(30) NOT NULL DEFAULT 'pending' AFTER description")
+  await ensureColumn(connection, databaseName, 'content_reports', 'target_previous_status', 'VARCHAR(30) NULL AFTER status')
+  await ensureColumn(connection, databaseName, 'content_reports', 'resolution', 'VARCHAR(30) NULL AFTER target_previous_status')
+  await ensureColumn(connection, databaseName, 'content_reports', 'handled_by', 'BIGINT UNSIGNED NULL AFTER resolution')
+  await ensureColumn(connection, databaseName, 'content_reports', 'handled_at', 'DATETIME NULL AFTER handled_by')
+  await ensureColumn(connection, databaseName, 'content_reports', 'created_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER handled_at')
+  await ensureColumn(connection, databaseName, 'content_reports', 'updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at')
+  await connection.query(`UPDATE ${databaseSql}.\`content_reports\` SET status = CASE
+    WHEN status IN ('resolved', 'processed', 'handled') THEN 'resolved'
+    WHEN status IN ('dismissed', 'rejected') THEN 'dismissed'
+    WHEN status = 'pending' THEN 'pending'
+    ELSE 'pending' END`)
+  await connection.query(`ALTER TABLE ${databaseSql}.\`content_reports\`
+    MODIFY \`status\` VARCHAR(30) NOT NULL DEFAULT 'pending'`)
 }
 
 async function ensureProductReviews(connection) {

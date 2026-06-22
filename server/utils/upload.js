@@ -240,6 +240,24 @@ export function buildUploadedFileMeta(file) {
   }
 }
 
+export async function assertUploadedFileSignature(file) {
+  const handle = await fs.promises.open(file.path, 'r')
+  const header = Buffer.alloc(16)
+  try { await handle.read(header, 0, header.length, 0) } finally { await handle.close() }
+  const hex = header.toString('hex')
+  const ascii = header.toString('ascii')
+  const signatures = {
+    'image/jpeg': hex.startsWith('ffd8ff'),
+    'image/png': hex.startsWith('89504e470d0a1a0a'),
+    'image/gif': ascii.startsWith('GIF87a') || ascii.startsWith('GIF89a'),
+    'image/webp': ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WEBP',
+    'video/mp4': ascii.slice(4, 8) === 'ftyp',
+    'video/quicktime': ascii.slice(4, 8) === 'ftyp',
+    'video/webm': hex.startsWith('1a45dfa3'),
+  }
+  if (!signatures[file.mimetype]) throw createUploadError('文件内容与声明类型不匹配')
+}
+
 export function assertUploadedFileSize(file) {
   const target = file.uploadTarget
   if (file.size > target.maxSize) {

@@ -1,5 +1,6 @@
 <script setup>
 import { nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { useGsapReveal } from '@/composables/useGsapReveal'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -22,6 +23,9 @@ const emit = defineEmits(['update:modelValue', 'close'])
 const drawerRef = ref(null)
 const titleId = `cb-drawer-title-${useId()}`
 let previousActiveElement = null
+const { revealDrawer } = useGsapReveal()
+const enter = (element, done) => revealDrawer(element, done, false, props.side)
+const leave = (element, done) => revealDrawer(element, done, true, props.side)
 
 function close() {
   emit('update:modelValue', false)
@@ -61,7 +65,7 @@ onBeforeUnmount(restorePage)
 
 <template>
   <Teleport to="body">
-    <Transition :name="`base-drawer-${side}`">
+    <Transition :css="false" @enter="enter" @leave="leave">
       <div
         v-if="modelValue"
         class="base-drawer"

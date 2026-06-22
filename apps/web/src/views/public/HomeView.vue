@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseBadge, BaseButton, BaseCard, BaseToast } from '@/components/base'
@@ -7,6 +7,10 @@ import { useCommunityStore } from '@/stores/community'
 import { useBooksStore } from '@/stores/books'
 import { useEventsStore } from '@/stores/events'
 import { useProductsStore } from '@/stores/products'
+import { useAnimeMotion } from '@/composables/useAnimeMotion'
+import { useGsapNumber } from '@/composables/useGsapNumber'
+import { useGsapReveal } from '@/composables/useGsapReveal'
+import { useTiltCard } from '@/composables/useTiltCard'
 
 const router = useRouter()
 const communityStore = useCommunityStore()
@@ -16,10 +20,10 @@ const productsStore = useProductsStore()
 const databasePosts = computed(() => communityStore.posts.slice(0, 3))
 const homeRef = ref(null)
 const toastVisible = ref(false)
-const animatedStats = ref([0, 0, 0, 0])
-let revealObserver
-let statsObserver
-let animationFrame
+const { revealCards, revealOnScroll, floatVisual, bindParallax } = useGsapReveal(homeRef)
+const { animateCounts } = useGsapNumber()
+const { wiggleIcon } = useAnimeMotion()
+const { bindTiltCards } = useTiltCard(homeRef)
 
 const books = computed(() => booksStore.items.slice(0, 4).map((book) => ({ ...book, description: book.summary || book.description, tone: book.coverTone || 'forest' })))
 const coffees = computed(() => productsStore.items.slice(0, 4).map((product) => ({ ...product, flavor: Array.isArray(product.flavor) ? product.flavor.join('、') : product.flavor, price: `¥${product.price}`, stock: product.stock > 0 ? '现货' : '售罄', badge: product.stock > 0 ? 'success' : 'neutral', tone: product.tone || 'floral' })))
@@ -45,65 +49,26 @@ function formatNumber(value) {
   return new Intl.NumberFormat('zh-CN').format(Math.round(value))
 }
 
-function animateStats() {
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    animatedStats.value = stats.value.map((item) => item.value)
-    return
-  }
-  const start = performance.now()
-  const duration = 1100
-  const update = (now) => {
-    const progress = Math.min((now - start) / duration, 1)
-    const eased = 1 - Math.pow(1 - progress, 3)
-    animatedStats.value = stats.value.map((item) => item.value * eased)
-    if (progress < 1) animationFrame = requestAnimationFrame(update)
-  }
-  animationFrame = requestAnimationFrame(update)
+async function animateHome() {
+  await nextTick()
+  revealCards('.hero__stagger', { key: 'hero', y: 26, duration: 0.72, stagger: 0.1 })
+  revealOnScroll('[data-reveal]', { limit: 20 })
+  floatVisual('.hero-art')
+  bindParallax('.hero', '.hero-art')
+  animateCounts(homeRef.value?.querySelectorAll('[data-count]') || [], stats.value.map((item) => item.value), { suffix: '+' })
+  bindTiltCards()
 }
 
-onMounted(() => {
-  booksStore.fetchBooks({ page: 1, pageSize: 4 })
-  productsStore.fetchProducts({ page: 1, pageSize: 4 })
-  eventsStore.fetchEvents({ page: 1, pageSize: 3 })
-  communityStore.fetchPosts({ status: 'published', pageSize: 3, sort: 'hot' })
-  const revealElements = homeRef.value?.querySelectorAll('[data-reveal]') ?? []
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  if (reduced || !('IntersectionObserver' in window)) {
-    revealElements.forEach((element) => element.classList.add('is-visible'))
-  } else {
-    revealObserver = new IntersectionObserver(
-      (entries) => entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('is-visible')
-          revealObserver.unobserve(entry.target)
-        }
-      }),
-      { threshold: 0.12 },
-    )
-    revealElements.forEach((element) => revealObserver.observe(element))
-  }
-
-  const statsElement = homeRef.value?.querySelector('[data-stats]')
-  if (!statsElement || !('IntersectionObserver' in window)) animateStats()
-  else {
-    statsObserver = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          animateStats()
-          statsObserver.disconnect()
-        }
-      },
-      { threshold: 0.35 },
-    )
-    statsObserver.observe(statsElement)
-  }
+onMounted(async () => {
+  await Promise.all([
+    booksStore.fetchBooks({ page: 1, pageSize: 4 }),
+    productsStore.fetchProducts({ page: 1, pageSize: 4 }),
+    eventsStore.fetchEvents({ page: 1, pageSize: 3 }),
+    communityStore.fetchPosts({ status: 'published', pageSize: 3, sort: 'hot' }),
+  ])
+  animateHome()
 })
 
-onBeforeUnmount(() => {
-  revealObserver?.disconnect()
-  statsObserver?.disconnect()
-  cancelAnimationFrame(animationFrame)
-})
 </script>
 
 <template>
@@ -121,12 +86,12 @@ onBeforeUnmount(() => {
           <p class="hero__description hero__stagger">
             在这里发现精选图书、精品咖啡、文化活动与城市阅读空间。
           </p>
-          <div class="hero__actions hero__stagger">
+          <div class="hero__actions hero__stagger" data-magnetic-group>
             <BaseButton size="lg" @click="navigate('/books')">进入图书中心</BaseButton>
             <BaseButton size="lg" variant="outline" @click="navigate('/coffee')">探索咖啡商城</BaseButton>
           </div>
           <div class="hero__note hero__stagger">
-            <span aria-hidden="true">✦</span>
+            <span aria-hidden="true" @pointerenter="wiggleIcon($event.currentTarget)">✦</span>
             <span>Curated for slow mornings and thoughtful evenings.</span>
           </div>
         </div>
@@ -151,8 +116,8 @@ onBeforeUnmount(() => {
 
     <section class="stats-section" data-stats>
       <div class="cb-container stats-grid">
-        <article v-for="(item, index) in stats" :key="item.label" class="stat-item">
-          <strong>{{ formatNumber(animatedStats[index]) }}+</strong>
+        <article v-for="item in stats" :key="item.label" class="stat-item">
+          <strong data-count>{{ formatNumber(item.value) }}+</strong>
           <span>{{ item.label }}</span>
         </article>
       </div>
@@ -165,11 +130,11 @@ onBeforeUnmount(() => {
           <p>从文学经典到现代思考，为每一种好奇心挑选值得停留的文字。</p>
         </header>
         <div class="book-grid">
-          <BaseCard v-for="book in books" :key="book.title" class="book-card" variant="hover" data-reveal>
-            <div class="book-card__cover" :class="`book-card__cover--${book.tone}`">
+          <BaseCard v-for="book in books" :key="book.title" class="book-card" variant="hover" data-reveal data-cursor="READ" data-tilt-card>
+            <div class="book-card__cover" :class="`book-card__cover--${book.tone}`" data-tilt-layer="1.4">
               <span>{{ book.category }}</span><strong>{{ book.title }}</strong><small>COFFEE BOOK EDITION</small>
             </div>
-            <div class="book-card__content">
+            <div class="book-card__content" data-tilt-layer="0.7">
               <div class="card-topline"><BaseBadge variant="neutral">{{ book.category }}</BaseBadge><span>★ {{ book.rating }}</span></div>
               <h3>{{ book.title }}</h3><small>{{ book.author }}</small><p>{{ book.description }}</p>
               <BaseButton variant="ghost" size="sm" @click="navigate('/books')">查看详情　→</BaseButton>
@@ -186,13 +151,13 @@ onBeforeUnmount(() => {
           <p>从产地风味到杯中香气，每一款咖啡都有清晰而独特的表达。</p>
         </header>
         <div class="coffee-grid">
-          <BaseCard v-for="coffee in coffees" :key="coffee.name" class="coffee-card" variant="hover" data-reveal>
-            <div class="coffee-card__visual" :class="`coffee-card__visual--${coffee.tone}`">
+          <BaseCard v-for="coffee in coffees" :key="coffee.name" class="coffee-card" variant="hover" data-reveal data-cursor="BUY" data-tilt-card>
+            <div class="coffee-card__visual" :class="`coffee-card__visual--${coffee.tone}`" data-tilt-layer="1.4">
               <div class="coffee-card__cup"><span /></div>
               <span class="coffee-card__bean coffee-card__bean--one" />
               <span class="coffee-card__bean coffee-card__bean--two" />
             </div>
-            <div class="coffee-card__content">
+            <div class="coffee-card__content" data-tilt-layer="0.7">
               <div class="card-topline"><BaseBadge :variant="coffee.badge">{{ coffee.stock }}</BaseBadge><strong>{{ coffee.price }}</strong></div>
               <h3>{{ coffee.name }}</h3><p>{{ coffee.flavor }}</p>
               <BaseButton size="sm" variant="outline" @click="navigate('/coffee')">查看详情</BaseButton>
@@ -209,9 +174,9 @@ onBeforeUnmount(() => {
           <p>让阅读从书页延伸到人与人的相遇，在城市里共享真实的灵感。</p>
         </header>
         <div class="event-grid">
-          <BaseCard v-for="event in events" :key="event.title" class="event-card" variant="hover" data-reveal>
-            <div class="event-card__date"><strong>{{ event.date }}</strong><span>{{ event.weekday }}</span></div>
-            <div class="event-card__body">
+          <BaseCard v-for="event in events" :key="event.title" class="event-card" variant="hover" data-reveal data-cursor="JOIN" data-tilt-card>
+            <div class="event-card__date" data-tilt-layer="1.2"><strong>{{ event.date }}</strong><span>{{ event.weekday }}</span></div>
+            <div class="event-card__body" data-tilt-layer="0.6">
               <BaseBadge :variant="event.badge">{{ event.status }}</BaseBadge><h3>{{ event.title }}</h3>
               <dl><div><dt>地点</dt><dd>{{ event.location }}</dd></div><div><dt>报名</dt><dd>{{ event.attendees }}</dd></div></dl>
               <BaseButton variant="outline" size="sm" @click="navigate('/events')">查看活动</BaseButton>
@@ -231,7 +196,7 @@ onBeforeUnmount(() => {
           <BaseButton @click="navigate('/community')">进入社区</BaseButton>
         </BaseCard>
         <div class="post-list" data-reveal>
-          <article v-for="post in databasePosts" :key="post.id" class="post-item" role="link" tabindex="0" @click="navigate(`/community/${post.id}`)" @keydown.enter="navigate(`/community/${post.id}`)">
+          <article v-for="post in databasePosts" :key="post.id" class="post-item" role="link" tabindex="0" data-cursor="VIEW" @click="navigate(`/community/${post.id}`)" @keydown.enter="navigate(`/community/${post.id}`)">
             <span class="post-item__avatar">{{ post.avatar }}</span>
             <div><h3>{{ post.title }}</h3><div class="post-item__meta"><span>{{ post.author }} · {{ new Date(post.createdAt).toLocaleDateString('zh-CN') }}</span><span>♡ {{ post.likes }}　☵ {{ post.commentsCount }}</span></div></div>
             <span class="post-item__arrow" aria-hidden="true">→</span>
@@ -338,11 +303,10 @@ onBeforeUnmount(() => {
 .benefit-card { position: relative; display: flex; min-height: 15rem; padding: var(--cb-space-7); flex-direction: column; justify-content: flex-end; gap: var(--cb-space-3); }.benefit-card__index { position: absolute; top: var(--cb-space-5); right: var(--cb-space-5); color: color-mix(in srgb,var(--cb-color-coffee) 25%,transparent); font-family: var(--cb-font-display); font-size: var(--cb-font-size-5xl); font-weight: var(--cb-font-bold); }
 .cta-section { padding-top: 0; }.cta-panel { display: flex; padding: clamp(var(--cb-space-8),8vw,var(--cb-space-20)); flex-direction: column; align-items: center; gap: var(--cb-space-5); color: var(--cb-color-ivory); text-align: center; background: radial-gradient(circle at 20% 10%,color-mix(in srgb,var(--cb-color-gold) 28%,transparent),transparent 35%),linear-gradient(135deg,var(--cb-color-coffee),var(--cb-bg-dark)); border-radius: var(--cb-radius-2xl); box-shadow: var(--cb-shadow-xl); }.cta-panel h2 { max-width: 18ch; color: var(--cb-color-ivory); font-size: clamp(var(--cb-font-size-3xl),6vw,var(--cb-font-size-5xl)); }.cta-panel p { max-width: 38rem; color: var(--cb-color-cream); }
 .home-toast { position: fixed; z-index: var(--cb-z-toast); right: var(--cb-space-4); bottom: var(--cb-space-4); width: min(calc(100% - (var(--cb-space-4)*2)),24rem); }
-[data-reveal] { opacity: 0; transform: translateY(var(--cb-space-5)); transition: opacity var(--cb-duration-slow) var(--cb-ease-standard),transform var(--cb-duration-slow) var(--cb-ease-emphasized); }[data-reveal].is-visible { opacity: 1; transform: translateY(0); }
 @keyframes hero-enter { from { opacity: 0; transform: translateY(var(--cb-space-5)); } to { opacity: 1; transform: translateY(0); } }@keyframes gentle-float { from { transform: translateY(0) rotate(-.4deg); } to { transform: translateY(calc(var(--cb-space-3)*-1)) rotate(.4deg); } }
 @media (min-width:40rem) { .book-grid,.coffee-grid,.benefit-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.event-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.section-heading { grid-template-columns: minmax(0,1fr) minmax(16rem,.8fr); align-items: end; }.section-heading--center { grid-template-columns: 1fr; } }
 @media (min-width:64rem) { .hero__grid { grid-template-columns: minmax(0,1.05fr) minmax(25rem,.95fr); padding-block: var(--cb-space-16); }.stats-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }.stat-item+.stat-item { border-left: .0625rem solid var(--cb-border-soft); }.community-grid,.booking-panel { grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr); }.booking-panel { align-items: center; } }
 @media (min-width:80rem) { .book-grid,.coffee-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }.event-grid,.benefit-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
 @media (max-width:39.999rem) { .hero__grid { min-height: auto; padding-block: var(--cb-space-10) var(--cb-space-16); }.hero__actions,.hero__actions :deep(.base-button) { width: 100%; }.hero-art__card { min-height: 25rem; padding: var(--cb-space-5); }.hero-art__book--back { left: 10%; }.hero-art__book--front { left: 24%; }.hero-art__cup { right: 8%; width: 6.5rem; height: 5.5rem; }.hero-art__saucer { right: 3%; width: 9.5rem; }.event-card { grid-template-columns: 4.5rem minmax(0,1fr); }.post-item { grid-template-columns: auto minmax(0,1fr); }.post-item__arrow { display: none; }.community-intro__metrics { gap: var(--cb-space-5); }.cta-panel { width: calc(100% - (var(--cb-space-4)*2)); } }
-@media (prefers-reduced-motion:reduce) { .hero__stagger,.hero-art { opacity: 1; animation: none; }[data-reveal] { opacity: 1; transform: none; transition: none; } }
+@media (prefers-reduced-motion:reduce) { .hero__stagger,.hero-art { opacity: 1; animation: none; } }
 </style>

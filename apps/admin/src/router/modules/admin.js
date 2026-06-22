@@ -1,16 +1,17 @@
 ﻿import AdminLayout from '@/layouts/AdminLayout.vue'
-import AdminBookingsView from '@/views/admin/AdminBookingsView.vue'
-import AdminBooksView from '@/views/admin/AdminBooksView.vue'
-import AdminCommunityView from '@/views/admin/AdminCommunityView.vue'
-import AdminEventsView from '@/views/admin/AdminEventsView.vue'
-import AdminOrdersView from '@/views/admin/AdminOrdersView.vue'
-import AdminProductsView from '@/views/admin/AdminProductsView.vue'
-import AdminLogsView from '@/views/admin/AdminLogsView.vue'
-import UploadFilesView from '@/views/admin/UploadFilesView.vue'
-import AdminUsersView from '@/views/admin/AdminUsersView.vue'
-import AdminSeatsView from '@/views/admin/AdminSeatsView.vue'
 import DashboardView from '@/views/admin/DashboardView.vue'
-import PlaceholderView from '@/views/PlaceholderView.vue'
+
+const AdminBookingsView = () => import('@/views/admin/AdminBookingsView.vue')
+const AdminBooksView = () => import('@/views/admin/AdminBooksView.vue')
+const AdminCommunityView = () => import('@/views/admin/AdminCommunityView.vue')
+const AdminEventsView = () => import('@/views/admin/AdminEventsView.vue')
+const AdminOrdersView = () => import('@/views/admin/AdminOrdersView.vue')
+const AdminProductsView = () => import('@/views/admin/AdminProductsView.vue')
+const AdminLogsView = () => import('@/views/admin/AdminLogsView.vue')
+const UploadFilesView = () => import('@/views/admin/UploadFilesView.vue')
+const AdminUsersView = () => import('@/views/admin/AdminUsersView.vue')
+const AdminSeatsView = () => import('@/views/admin/AdminSeatsView.vue')
+const PlaceholderView = () => import('@/views/PlaceholderView.vue')
 
 import { ROUTE_NAMES } from '../route-names'
 

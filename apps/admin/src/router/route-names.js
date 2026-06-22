@@ -44,7 +44,5 @@ export const ROUTE_NAMES = Object.freeze({
   ADMIN_UPLOAD_FILES: 'admin-upload-files',
   ADMIN_LOGS: 'admin-logs',
   ADMIN_USERS: 'admin-users',
-  ADMIN_FINANCE: 'admin-finance',
-  ADMIN_SETTINGS: 'admin-settings',
   NOT_FOUND: 'not-found',
 })

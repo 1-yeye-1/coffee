@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { resolveUploadUrl } from '@/api/upload'
 
@@ -17,6 +17,10 @@ import {
 import { useBooksStore } from '@/stores/books'
 import { useAuthStore } from '@/stores/auth'
 import { useMembershipStore } from '@/stores/membership'
+import { debounce } from '@/utils'
+import { useAnimeMotion } from '@/composables/useAnimeMotion'
+import { useGsapReveal } from '@/composables/useGsapReveal'
+import { useTiltCard } from '@/composables/useTiltCard'
 import '@/assets/styles/pages/catalog.css'
 
 const router = useRouter()
@@ -28,7 +32,10 @@ const category = ref('全部')
 const sort = ref('recommended')
 const page = ref(1)
 const pageSize = 8
-let requestTimer
+const pageRef = ref(null)
+const { revealCards } = useGsapReveal(pageRef)
+const { popLike, floatEmpty } = useAnimeMotion()
+const { bindTiltCards } = useTiltCard(pageRef)
 
 const categories = ['全部', '文学', '商业', '艺术', '生活', '心理', '设计'].map((item) => ({
   label: item,
@@ -60,13 +67,15 @@ function loadBooks() {
   })
 }
 
+const scheduleLoad = debounce(loadBooks, 250)
+
 watch([keyword, category, sort], () => {
   page.value = 1
-  clearTimeout(requestTimer)
-  requestTimer = setTimeout(loadBooks, 250)
+  scheduleLoad()
 })
 watch(page, loadBooks)
 onMounted(async () => { await loadBooks(); if (authStore.isAuthenticated) await membershipStore.fetchFavorites() })
+onBeforeUnmount(scheduleLoad.cancel)
 
 function clearFilters() {
   keyword.value = ''
@@ -74,14 +83,22 @@ function clearFilters() {
   sort.value = 'recommended'
 }
 
-async function toggleFavorite(id) {
+async function toggleFavorite(id, event) {
   if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: '/books' } })
   await membershipStore.toggleFavorite('book', id)
+  popLike(event?.currentTarget)
 }
+
+watch(() => visibleBooks.value.map((book) => book.id).join(','), async () => {
+  await nextTick()
+  revealCards('.catalog-card', { key: 'books', limit: 20 })
+  bindTiltCards()
+  floatEmpty(pageRef.value?.querySelector('.catalog-empty'))
+}, { flush: 'post' })
 </script>
 
 <template>
-  <div class="catalog-page catalog-enter">
+  <div ref="pageRef" class="catalog-page catalog-enter">
     <section class="catalog-hero">
       <div class="cb-container catalog-hero__grid">
         <div class="catalog-hero__copy">
@@ -123,24 +140,24 @@ async function toggleFavorite(id) {
 
       <div class="catalog-grid">
         <BaseSkeleton v-if="booksStore.loading" v-for="index in pageSize" :key="`book-loading-${index}`" variant="card" />
-        <BaseCard v-for="book in visibleBooks" :key="book.id" class="catalog-card" variant="hover">
-          <div class="catalog-card__visual">
+        <BaseCard v-for="book in visibleBooks" :key="book.id" class="catalog-card" variant="hover" data-cursor="READ" data-tilt-card>
+          <div class="catalog-card__visual" data-tilt-layer="1.35">
             <button
               class="catalog-card__favorite"
               :class="{ 'is-active': membershipStore.isFavorite('book', book.id) }"
               type="button"
               :aria-label="membershipStore.isFavorite('book', book.id) ? `取消收藏《${book.title}》` : `收藏《${book.title}》`"
               :aria-pressed="membershipStore.isFavorite('book', book.id)"
-              @click="toggleFavorite(book.id)"
+              @click="toggleFavorite(book.id, $event)"
             >
               {{ membershipStore.isFavorite('book', book.id) ? '♥' : '♡' }}
             </button>
-            <img v-if="book.coverUrl" class="catalog-content-image" :src="resolveUploadUrl(book.coverUrl)" :alt="book.title" />
+            <img v-if="book.coverUrl" class="catalog-content-image" :src="resolveUploadUrl(book.coverUrl)" :alt="book.title" loading="lazy" decoding="async" />
             <div v-else class="book-cover catalog-card__visual-inner" :class="`tone-${book.coverTone}`">
               <span>{{ book.category }}</span><strong>{{ book.title }}</strong><small>Coffee Book Edition</small>
             </div>
           </div>
-          <div class="catalog-card__body">
+          <div class="catalog-card__body" data-tilt-layer="0.65">
             <div class="catalog-card__topline">
               <BaseBadge variant="neutral">{{ book.category }}</BaseBadge>
               <span class="catalog-card__rating">★ {{ book.rating }}</span>

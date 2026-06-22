@@ -1,5 +1,8 @@
 <script setup>
-defineProps({
+import { nextTick, ref, watch } from 'vue'
+import { useGsapReveal } from '@/composables/useGsapReveal'
+
+const props = defineProps({
   columns: {
     type: Array,
     default: () => [],
@@ -26,10 +29,17 @@ defineProps({
     default: '',
   },
 })
+const tableRef = ref(null)
+const { revealList } = useGsapReveal(tableRef)
+watch(() => [props.loading, props.items], async () => {
+  if (props.loading) return
+  await nextTick()
+  revealList('tbody tr', { key: 'table-rows', y: 10, duration: 0.36, stagger: 0.025, limit: 20 })
+}, { flush: 'post' })
 </script>
 
 <template>
-  <div class="base-table-wrap">
+  <div ref="tableRef" class="base-table-wrap" :aria-busy="loading || undefined">
     <table class="base-table">
       <caption v-if="caption" class="base-table__caption">
         {{ caption }}
@@ -53,6 +63,7 @@ defineProps({
           <tr
             v-for="(item, rowIndex) in items"
             :key="item[rowKey] ?? rowIndex"
+            :data-row-key="item[rowKey] ?? rowIndex"
             :class="{ 'base-table__row--hover': hover }"
           >
             <td v-for="column in columns" :key="column.key" :data-label="column.label">

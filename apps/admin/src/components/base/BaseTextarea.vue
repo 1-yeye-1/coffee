@@ -24,6 +24,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  success: {
+    type: [String, Boolean],
+    default: false,
+  },
   disabled: Boolean,
   maxlength: {
     type: Number,
@@ -47,7 +51,7 @@ const currentLength = computed(() => props.modelValue.length)
 <template>
   <div
     class="base-textarea"
-    :class="{ 'base-textarea--error': error, 'base-textarea--disabled': disabled }"
+    :class="{ 'base-textarea--error': error, 'base-textarea--success': success && !error, 'base-textarea--disabled': disabled }"
   >
     <label v-if="label" class="base-textarea__label" :for="textareaId">{{ label }}</label>
     <textarea
@@ -59,12 +63,12 @@ const currentLength = computed(() => props.modelValue.length)
       :maxlength="maxlength"
       :disabled="disabled"
       :aria-invalid="error ? 'true' : undefined"
-      :aria-describedby="hint || error || showCount ? messageId : undefined"
+      :aria-describedby="hint || error || success || showCount ? messageId : undefined"
       @input="emit('update:modelValue', $event.target.value)"
     />
-    <div v-if="hint || error || showCount" :id="messageId" class="base-textarea__meta">
-      <p :class="{ 'base-textarea__error': error }" :role="error ? 'alert' : undefined">
-        {{ error || hint }}
+    <div v-if="hint || error || success || showCount" :id="messageId" class="base-textarea__meta">
+      <p :class="{ 'base-textarea__error': error, 'base-textarea__success': success && !error }" :role="error ? 'alert' : undefined">
+        {{ error || (typeof success === 'string' ? success : hint) }}
       </p>
       <small v-if="showCount" class="base-textarea__count">
         {{ currentLength }}<template v-if="maxlength"> / {{ maxlength }}</template>
@@ -130,6 +134,9 @@ const currentLength = computed(() => props.modelValue.length)
 .base-textarea--error .base-textarea__control {
   border-color: var(--cb-danger);
 }
+
+.base-textarea--success .base-textarea__control { border-color: var(--cb-success); }
+.base-textarea__success { color: var(--cb-success); }
 
 .base-textarea--disabled {
   opacity: 0.6;

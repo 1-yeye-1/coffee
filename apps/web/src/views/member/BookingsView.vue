@@ -1,14 +1,22 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { BaseBadge, BaseButton, EmptyState } from '@/components/base'
+import { BaseBadge, BaseButton, BaseSkeleton, EmptyState, ErrorPanel } from '@/components/base'
 import { useBookingStore } from '@/stores/booking'
 import '@/assets/styles/pages/engagement.css'
 
 const router = useRouter()
 const bookingStore = useBookingStore()
-onMounted(() => bookingStore.fetchMyBookings())
+const loading = ref(false)
+async function load() {
+  loading.value = true
+  bookingStore.apiError = ''
+  try { await bookingStore.fetchMyBookings() }
+  catch (error) { bookingStore.apiError = error.message || '预约记录加载失败。' }
+  finally { loading.value = false }
+}
+onMounted(load)
 </script>
 
 <template>
@@ -17,7 +25,9 @@ onMounted(() => bookingStore.fetchMyBookings())
       <span class="section-eyebrow">我的预约</span>
       <h2 class="page-title">我的预约</h2>
     </header>
-    <div class="record-list">
+    <ErrorPanel v-if="bookingStore.apiError" :message="bookingStore.apiError" @retry="load" />
+    <BaseSkeleton v-else-if="loading" variant="card" />
+    <div v-else class="record-list">
       <article v-for="booking in bookingStore.bookings" :key="booking.id" class="record-row">
         <div>
           <div class="record-row__header">

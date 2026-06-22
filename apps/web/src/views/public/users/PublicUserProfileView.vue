@@ -56,7 +56,7 @@ watch(() => route.params.id, load)
 
       <template v-else-if="profile">
         <section class="detail-panel public-profile">
-          <img v-if="profile.avatar" :src="resolveUploadUrl(profile.avatar)" alt="用户头像" />
+          <img v-if="profile.avatar" :src="resolveUploadUrl(profile.avatar)" alt="用户头像" decoding="async" />
           <span v-else class="avatar">{{ (profile.nickname || '用').slice(0, 1) }}</span>
           <div>
             <h1 class="page-title">{{ profile.nickname }}</h1>

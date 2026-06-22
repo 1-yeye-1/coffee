@@ -4,7 +4,8 @@ import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
 import { writeAudit } from './admin.service.js'
 import { createNotification } from './notifications.service.js'
-import { createUser, findUserByIdentifier, normalizePhone, verifyCode } from './auth.service.js'
+import { createUser, findUserByIdentifier, normalizePhone } from './auth.service.js'
+import { verifyCaptcha } from './captcha.service.js'
 import { assertBookingDateAndTime } from './seats.service.js'
 
 const spaceColumns = `
@@ -102,7 +103,7 @@ async function insertBooking(payload, userId, connection) {
     if (!seatId) throw Object.assign(new Error('请选择座位'), { statusCode: 400 })
     const [[seat]] = await connection.execute('SELECT id, code, capacity, status FROM seats WHERE id = ? FOR UPDATE', [seatId])
     if (!seat) throw Object.assign(new Error('座位不存在'), { statusCode: 404 })
-    if (seat.status === 'disabled') throw Object.assign(new Error('该座位已停用'), { statusCode: 409 })
+    if (['disabled', 'maintenance'].includes(seat.status)) throw Object.assign(new Error('该座位正在维护'), { statusCode: 409 })
     if (peopleCount > Number(seat.capacity)) throw Object.assign(new Error('预约人数超过座位容量'), { statusCode: 400 })
     const [reserved] = await connection.execute(`SELECT id FROM bookings
       WHERE seat_id = ? AND booking_date = ? AND COALESCE(time_slot, REPLACE(booking_time, ' ', '')) = ?
@@ -163,10 +164,10 @@ export async function createBooking(payload, userId) {
 
 export async function createGuestBooking(payload) {
   const phone = normalizePhone(payload.phone)
+  await verifyCaptcha(payload.captchaId, payload.captchaCode)
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
-    await verifyCode(phone, 'booking_guest', payload.code, connection)
     let user = await findUserByIdentifier(phone, connection)
     let created = false
     if (!user) {

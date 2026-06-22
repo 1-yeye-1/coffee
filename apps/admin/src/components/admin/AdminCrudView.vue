@@ -203,7 +203,7 @@ watch(() => route.query.keyword, (value) => { keyword.value = String(value || ''
       <div class="admin-panel__header"><h2>{{ singular }}列表</h2><span class="text-muted">{{ filteredItems.length }} 条记录</span></div>
       <BaseTable :columns="columns" :items="filteredItems" :loading="loading" :empty-text="`暂无匹配${singular}`">
         <template #cell-visual="{ item }">
-          <img v-if="item.imageUrl" class="admin-table-image" :src="resolveAssetUrl(item.imageUrl)" :alt="item.title || item.name" />
+          <img v-if="item.imageUrl" class="admin-table-image" :src="resolveAssetUrl(item.imageUrl)" :alt="item.title || item.name" loading="lazy" decoding="async" />
           <span v-else class="admin-table-visual">{{ (item.title || item.name).slice(0, 1) }}</span>
         </template>
         <template #cell-primary="{ item }"><div class="admin-cell-primary"><strong>{{ item.title || item.name }}</strong><small>{{ item.author || item.origin || item.location }}</small></div></template>
@@ -221,7 +221,7 @@ watch(() => route.query.keyword, (value) => { keyword.value = String(value || ''
           <BaseSelect v-else-if="field.type === 'select'" v-model="form[field.key]" :label="field.label" :options="field.options" />
           <div v-else-if="field.type === 'image'" class="admin-image-field">
             <BaseInput v-model="form[field.key]" :label="field.label" placeholder="填写图片 URL，或上传一张示例图" />
-            <img v-if="form[field.key]" :src="resolveAssetUrl(form[field.key])" alt="商品示例图预览" />
+            <img v-if="form[field.key]" :src="resolveAssetUrl(form[field.key])" alt="商品示例图预览" decoding="async" />
             <label class="admin-upload-button">
               <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" @change="uploadImageField(field, $event)" />
               <span>{{ uploadingField === field.key ? '上传中...' : '上传图片' }}</span>

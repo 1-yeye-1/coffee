@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAdminStore } from '@/stores/admin'
 import { useAuthStore } from '@/stores/auth'
@@ -76,6 +76,11 @@ watch(keyword, (value) => {
     return
   }
   searchTimer = setTimeout(runSearch, 300)
+})
+
+onBeforeUnmount(() => {
+  clearTimeout(searchTimer)
+  searchSequence += 1
 })
 
 async function openResult(item) {

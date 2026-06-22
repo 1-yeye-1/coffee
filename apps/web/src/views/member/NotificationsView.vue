@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 
-import { BaseButton } from '@/components/base'
+import { BaseButton, ErrorPanel } from '@/components/base'
 import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue'
 import { useNotificationsStore } from '@/stores/notifications'
 import '@/assets/styles/pages/engagement.css'
@@ -22,7 +22,8 @@ onMounted(() => {
       <p class="page-subtitle">消息中心已改为右上角小喇叭入口，旧链接会继续保留。</p>
     </header>
 
-    <section class="member-panel notifications-lite__panel">
+    <ErrorPanel v-if="notificationsStore.error" :message="notificationsStore.error" @retry="notificationsStore.fetchUnreadCount" />
+    <section v-else class="member-panel notifications-lite__panel">
       <div>
         <h3 class="section-title">当前未读消息</h3>
         <strong>{{ notificationsStore.unreadCount }}</strong>

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { BaseBadge, BaseButton, BaseTabs, EmptyState } from '@/components/base'
+import { BaseBadge, BaseButton, BaseSkeleton, BaseTabs, EmptyState, ErrorPanel } from '@/components/base'
 import { useMembershipStore } from '@/stores/membership'
 import '@/assets/styles/pages/engagement.css'
 
@@ -22,7 +22,8 @@ onMounted(() => membershipStore.fetchFavorites())
 <template>
   <div class="member-page">
     <header><span class="section-eyebrow">Favorites</span><h2 class="page-title">我的收藏</h2></header>
-    <p v-if="membershipStore.error" class="form-error">{{ membershipStore.error }}</p>
+    <ErrorPanel v-if="membershipStore.error" :message="membershipStore.error" @retry="membershipStore.fetchFavorites" />
+    <BaseSkeleton v-else-if="membershipStore.loading" variant="card" />
     <BaseTabs v-model="type" :tabs="tabs"><div class="favorite-grid">
       <article v-for="item in items" :key="item.id" class="favorite-card">
         <BaseBadge variant="neutral">{{ item.category }}</BaseBadge><h3>{{ item.title }}</h3><p>{{ item.meta }}</p>

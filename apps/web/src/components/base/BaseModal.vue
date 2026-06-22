@@ -1,5 +1,6 @@
 <script setup>
 import { nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { useGsapReveal } from '@/composables/useGsapReveal'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -21,6 +22,9 @@ const emit = defineEmits(['update:modelValue', 'close'])
 const dialogRef = ref(null)
 const titleId = `cb-modal-title-${useId()}`
 let previousActiveElement = null
+const { revealModal } = useGsapReveal()
+const enter = (element, done) => revealModal(element, done)
+const leave = (element, done) => revealModal(element, done, true)
 
 function close() {
   emit('update:modelValue', false)
@@ -60,7 +64,7 @@ onBeforeUnmount(restorePage)
 
 <template>
   <Teleport to="body">
-    <Transition name="base-modal">
+    <Transition :css="false" @enter="enter" @leave="leave">
       <div
         v-if="modelValue"
         class="base-modal"

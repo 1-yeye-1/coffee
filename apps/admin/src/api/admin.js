@@ -6,7 +6,6 @@ export function fetchDashboard() {
 export const fetchDashboardSummary = () => request('/admin/dashboard/summary')
 export const fetchDashboardTrends = () => request('/admin/dashboard/trends')
 export const fetchDashboardRecent = () => request('/admin/dashboard/recent')
-export const fetchFinanceDashboard = () => request('/admin/dashboard/finance')
 
 export const searchAdmin = (keyword) => request(`/admin/search${toQuery({ keyword })}`)
 
@@ -41,7 +40,11 @@ export const updateEvent = (id, payload) => request(`/admin/events/${id}`, { met
 export const updateEventStatus = (id, status) => request(`/admin/events/${id}/status`, { method: 'PATCH', body: { status } })
 export const deleteEvent = (id) => request(`/admin/events/${id}`, { method: 'DELETE' })
 export const fetchAdminPosts = (params = {}) => request(`/admin/posts${toQuery(params)}`)
-export const updateAdminPostStatus = (id, status) => request(`/admin/posts/${id}/status`, { method: 'PATCH', body: { status } })
+export const fetchPostLikeUsers = (id) => request(`/posts/${id}/likes`)
+export const fetchPostModeration = (id) => request(`/admin/posts/${id}/moderation`)
+export const updateAdminPostStatus = (id, status, reason = '') => request(`/admin/posts/${id}/status`, { method: 'PATCH', body: { status, reason } })
+export const updateAdminCommentStatus = (postId, commentId, status, reason = '') => request(`/admin/posts/${postId}/comments/${commentId}/status`, { method: 'PATCH', body: { status, reason } })
+export const processAdminReport = (id, action, note = '') => request(`/admin/reports/${id}`, { method: 'PATCH', body: { action, note } })
 export const fetchAdminBookings = (params = {}) => request(`/admin/bookings${toQuery(params)}`)
 export const updateAdminBookingStatus = (id, status) => request(`/admin/bookings/${id}/status`, { method: 'PATCH', body: { status } })
 export const fetchUploadFiles = (params = {}) => request(`/upload/files${toQuery(params)}`)

@@ -18,12 +18,20 @@
     "db:init": "node server/db/migrate.js && node server/db/seed.js && node scripts/check-db-schema.js",
     "db:seed": "node server/db/seed.js",
     "db:check": "node scripts/check-db-schema.js",
-    "smoke:api": "node scripts/smoke-api.js"
+    "test:request": "node scripts/test-request.js",
+    "test:chunk": "node scripts/test-chunk-recovery.js",
+    "check:motion": "node scripts/check-motion.js",
+    "check": "npm run build && node scripts/check-project.js && npm run check:motion",
+    "smoke:web": "node scripts/smoke-web.js",
+    "smoke:api": "node scripts/run-api-smoke.js",
+    "smoke": "npm run check && npm run test:request && npm run test:chunk && npm run smoke:web && npm run smoke:api"
   },
   "dependencies": {
+    "animejs": "^4.4.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "gsap": "^3.15.0",
     "multer": "^2.2.0",
     "mysql2": "^3.22.5",
     "pinia": "^3.0.3",

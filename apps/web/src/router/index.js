@@ -4,6 +4,7 @@ import { registerRouterGuards } from './guards'
 import { authRoutes } from './modules/auth'
 import { memberRoutes } from './modules/member'
 import { publicRoutes } from './modules/public'
+import { installChunkRecovery } from '../../../shared/chunk-recovery.js'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -12,5 +13,6 @@ const router = createRouter({
 })
 
 registerRouterGuards(router)
+installChunkRecovery(router, 'web')
 
 export default router

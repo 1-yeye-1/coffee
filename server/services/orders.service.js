@@ -332,6 +332,10 @@ export async function payOrder(id, userId) {
     const [rows] = await connection.execute('SELECT * FROM orders WHERE id = ? AND user_id = ? FOR UPDATE', [id, userId])
     const order = rows[0]
     if (!order) throw Object.assign(new Error('订单不存在'), { statusCode: 404 })
+    if (order.status === 'pending_review') {
+      await connection.commit()
+      return getOrderDetail(id, userId)
+    }
     if (order.status !== 'pending_payment') throw Object.assign(new Error('当前订单状态不允许支付'), { statusCode: 400 })
 
     const [payments] = await connection.execute(

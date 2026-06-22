@@ -112,7 +112,7 @@ onMounted(() => load(1))
 
     <BaseTable :columns="columns" :items="rows" :loading="loading" empty-text="暂无上传文件">
       <template #cell-preview="{ item }">
-        <img v-if="item.fileType === 'image'" class="upload-thumb" :src="assetUrl(item.url)" alt="上传图片缩略图" />
+        <img v-if="item.fileType === 'image'" class="upload-thumb" :src="assetUrl(item.url)" alt="上传图片缩略图" loading="lazy" decoding="async" />
         <a v-else class="upload-link" :href="assetUrl(item.url)" target="_blank" rel="noreferrer">查看视频</a>
       </template>
       <template #cell-scene="{ value }">

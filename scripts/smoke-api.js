@@ -20,13 +20,14 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-async function request(method, path, { token, body, expectedStatus } = {}) {
-  const headers = { 'Content-Type': 'application/json' }
+async function request(method, path, { token, body, formData, expectedStatus } = {}) {
+  const headers = {}
   if (token) headers.Authorization = `Bearer ${token}`
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
   const response = await fetch(`${baseURL}${path}`, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: formData || (body === undefined ? undefined : JSON.stringify(body)),
   })
   const payload = await response.json().catch(() => null)
   if (expectedStatus && response.status !== expectedStatus) {
@@ -40,6 +41,7 @@ async function request(method, path, { token, body, expectedStatus } = {}) {
 
 async function cleanup() {
   await pool.query('DELETE FROM verification_codes WHERE phone IN (?, ?)', [smokePhone, guestPhone])
+  await pool.query("DELETE FROM image_captchas WHERE created_at < CURRENT_TIMESTAMP OR used_at IS NOT NULL")
   if (createdPostSlugs.length) await pool.query('DELETE FROM posts WHERE slug IN (?)', [createdPostSlugs])
   if (createdSeatIds.length) await pool.query('DELETE FROM seats WHERE id IN (?)', [createdSeatIds])
   if (createdEventIds.length) await pool.query('DELETE FROM events WHERE id IN (?)', [createdEventIds])
@@ -159,6 +161,9 @@ async function main() {
   assert(me.payload.data.phone === smokePhone, 'auth/me should return normal user')
   logPass('auth/me')
 
+  await request('GET', '/auth/me', { token: 'invalid.smoke.token', expectedStatus: 401 })
+  logPass('invalid token rejected')
+
   const presetAvatar = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="#6f4e37"/></svg>')}`
   await request('POST', '/users/me/avatar/select', { token: userToken, body: { avatarUrl: presetAvatar } })
   const avatars = await request('GET', '/users/me/avatars', { token: userToken })
@@ -168,7 +173,12 @@ async function main() {
 
   const notifications = await request('GET', '/account/notifications', { token: userToken })
   assert(Array.isArray(notifications.payload.data), 'notifications should return list')
-  logPass('notifications list')
+  const unreadNotifications = await request('GET', '/account/notifications/unread-count', { token: userToken })
+  assert(Number.isFinite(Number(unreadNotifications.payload.data.count)), 'notification unread count invalid')
+  await request('PATCH', '/account/notifications/read-all', { token: userToken })
+  const unreadAfterReadAll = await request('GET', '/account/notifications/unread-count', { token: userToken })
+  assert(Number(unreadAfterReadAll.payload.data.count) === 0, 'notifications should be read after read-all')
+  logPass('notifications list count and read-all')
 
   const books = await request('GET', '/books?page=1&pageSize=3')
   assert(books.payload.data.length > 0, 'books list empty')
@@ -178,6 +188,25 @@ async function main() {
   const product = products.payload.data.find((item) => Number(item.stock) > 1)
   assert(product, 'no product with stock for smoke test')
   logPass('products list')
+
+  for (const resource of ['books', 'products', 'users', 'orders', 'bookings', 'posts']) {
+    const result = await request('GET', `/admin/${resource}?page=1&pageSize=3`, { token: adminToken })
+    assert(Array.isArray(result.payload.data), `admin ${resource} list invalid`)
+  }
+  logPass('admin core resource lists')
+
+  const pngBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
+  const validUpload = new FormData()
+  validUpload.append('file', new Blob([pngBytes], { type: 'image/png' }), 'smoke.png')
+  const uploaded = await request('POST', '/upload/community', { token: userToken, formData: validUpload })
+  assert(uploaded.payload.data.file?.id, 'valid upload record missing')
+  assert(uploaded.payload.data.url, 'valid upload URL missing')
+
+  const forgedUpload = new FormData()
+  forgedUpload.append('file', new Blob(['not-a-real-png'], { type: 'image/png' }), 'forged.png')
+  const forged = await request('POST', '/upload/community', { token: userToken, formData: forgedUpload, expectedStatus: 400 })
+  assert(/类型|内容|文件/.test(forged.payload.message), 'forged upload error message unclear')
+  logPass('upload signature validation')
 
   const recommendations = await request('GET', `/products/recommendations?limit=3&exclude=${product.id}`)
   assert(recommendations.payload.data.every((item) => Number(item.id) !== Number(product.id) && item.status === 'active' && Number(item.stock) > 0), 'product recommendations invalid')
@@ -223,6 +252,8 @@ async function main() {
   assert(buyNow.payload.data.source === 'buy_now', 'buy-now order source invalid')
   const pay = await request('PATCH', `/orders/${buyNow.payload.data.id}/pay`, { token: userToken })
   assert(pay.payload.data.status === 'pending_review', 'paid order should wait for review')
+  const duplicatePay = await request('PATCH', `/orders/${buyNow.payload.data.id}/pay`, { token: userToken })
+  assert(duplicatePay.payload.data.status === 'pending_review', 'duplicate payment submission must be idempotent')
   const confirmPayment = await request('PATCH', `/admin/orders/${buyNow.payload.data.id}/confirm-payment`, { token: adminToken })
   assert(confirmPayment.payload.data.status === 'paid', 'admin confirm should mark paid')
   logPass('buy-now payment review flow')
@@ -230,20 +261,86 @@ async function main() {
   const posts = await request('GET', '/posts?page=1&pageSize=3')
   const post = posts.payload.data[0]
   assert(post, 'posts list empty')
-  const submittedPost = await request('POST', '/posts', { token: userToken, body: { title: `Smoke community ${stamp}`, content: '社区审核同步测试内容' } })
+  const submittedPost = await request('POST', '/posts', {
+    token: userToken,
+    body: {
+      title: `Smoke community ${stamp}`,
+      content: '社区审核同步测试内容',
+      mediaUrl: uploaded.payload.data.url,
+      mediaType: 'image',
+    },
+  })
   createdPostSlugs.push(submittedPost.payload.data.slug)
+  assert(submittedPost.payload.data.id && submittedPost.payload.data.slug && submittedPost.payload.data.createdAt, 'new post insertion payload incomplete')
+  assert(submittedPost.payload.data.mediaUrl === uploaded.payload.data.url && submittedPost.payload.data.mediaType === 'image', 'new post gallery media missing')
   await request('GET', `/posts/${submittedPost.payload.data.id}`, { expectedStatus: 404 })
+  let moderationDetail = await request('GET', `/admin/posts/${submittedPost.payload.data.id}/moderation`, { token: adminToken })
+  assert(moderationDetail.payload.data.reviewStatus === 'pending', 'admin should see pending posts')
+  await request('PATCH', `/admin/posts/${submittedPost.payload.data.id}/status`, { token: adminToken, body: { status: 'rejected', reason: 'smoke reject' } })
+  await request('GET', `/posts/${submittedPost.payload.data.id}`, { expectedStatus: 404 })
+  moderationDetail = await request('GET', `/admin/posts/${submittedPost.payload.data.id}/moderation`, { token: adminToken })
+  assert(moderationDetail.payload.data.reviewStatus === 'rejected', 'admin should see rejected posts')
   await request('PATCH', `/admin/posts/${submittedPost.payload.data.id}/status`, { token: adminToken, body: { status: 'published' } })
+  const publishedPost = await request('GET', `/posts/${submittedPost.payload.data.id}`)
+  assert(publishedPost.payload.data.mediaUrl === uploaded.payload.data.url && publishedPost.payload.data.mediaType === 'image', 'published post gallery data missing')
+  const publicPostList = await request('GET', '/posts?page=1&pageSize=100')
+  assert(publicPostList.payload.data.some((item) => Number(item.id) === Number(submittedPost.payload.data.id) && item.mediaUrl === uploaded.payload.data.url), 'new published post missing from public list')
+  const postFavorite = await request('POST', '/users/me/favorites', {
+    token: userToken,
+    body: { targetType: 'post', targetId: submittedPost.payload.data.id },
+  })
+  const postFavorites = await request('GET', '/users/me/favorites', { token: userToken })
+  assert(postFavorites.payload.data.some((item) => Number(item.id) === Number(postFavorite.payload.data.id) && item.targetType === 'post'), 'community bookmark add/list failed')
+  await request('DELETE', `/users/me/favorites/${postFavorite.payload.data.id}`, { token: userToken })
+  const moderationCommentPost = await request('POST', `/posts/${submittedPost.payload.data.id}/comments`, {
+    token: userToken,
+    body: { content: `moderation comment ${stamp}` },
+  })
+  const moderationComment = moderationCommentPost.payload.data.comments.find((item) => item.content === `moderation comment ${stamp}`)
+  assert(moderationComment?.id && moderationComment.status === 'published' && moderationComment.createdAt, 'comment reveal data incomplete')
+  const commentDetail = await request('GET', `/posts/${submittedPost.payload.data.id}`)
+  assert(commentDetail.payload.data.comments.some((item) => Number(item.id) === Number(moderationComment.id) && item.content === moderationComment.content), 'published comment missing from post detail')
+  const commentReport = await request('POST', `/posts/${submittedPost.payload.data.id}/reports`, {
+    token: userToken,
+    body: { commentId: moderationComment.id, reason: 'spam', description: '评论审核联动测试' },
+  })
+  moderationDetail = await request('GET', `/admin/posts/${submittedPost.payload.data.id}/moderation`, { token: adminToken })
+  assert(moderationDetail.payload.data.comments.find((item) => Number(item.id) === Number(moderationComment.id))?.status === 'pending', 'reported comment should become pending')
+  await request('PATCH', `/admin/reports/${commentReport.payload.data.id}`, { token: adminToken, body: { action: 'dismiss', note: 'smoke dismiss' } })
+  moderationDetail = await request('GET', `/admin/posts/${submittedPost.payload.data.id}/moderation`, { token: adminToken })
+  assert(moderationDetail.payload.data.comments.find((item) => Number(item.id) === Number(moderationComment.id))?.status === 'published', 'dismissed comment report should restore status')
+  await request('PATCH', `/admin/posts/${submittedPost.payload.data.id}/comments/${moderationComment.id}/status`, { token: adminToken, body: { status: 'hidden', reason: 'smoke hide' } })
+  let publicModeratedPost = await request('GET', `/posts/${submittedPost.payload.data.id}`)
+  assert(!publicModeratedPost.payload.data.comments.some((item) => Number(item.id) === Number(moderationComment.id)), 'hidden comment leaked to frontend')
+  moderationDetail = await request('GET', `/admin/posts/${submittedPost.payload.data.id}/moderation`, { token: adminToken })
+  assert(moderationDetail.payload.data.comments.find((item) => Number(item.id) === Number(moderationComment.id))?.status === 'hidden', 'admin should see hidden comments')
+  await request('PATCH', `/admin/posts/${submittedPost.payload.data.id}/comments/${moderationComment.id}/status`, { token: adminToken, body: { status: 'published', reason: 'smoke restore' } })
+  publicModeratedPost = await request('GET', `/posts/${submittedPost.payload.data.id}`)
+  assert(publicModeratedPost.payload.data.comments.some((item) => Number(item.id) === Number(moderationComment.id)), 'restored comment missing from frontend')
+  await request('PATCH', `/admin/posts/${submittedPost.payload.data.id}/comments/${moderationComment.id}/status`, { token: adminToken, body: { status: 'deleted', reason: 'smoke delete' } })
+  publicModeratedPost = await request('GET', `/posts/${submittedPost.payload.data.id}`)
+  assert(!publicModeratedPost.payload.data.comments.some((item) => Number(item.id) === Number(moderationComment.id)), 'deleted comment leaked to frontend')
+  moderationDetail = await request('GET', `/admin/posts/${submittedPost.payload.data.id}/moderation`, { token: adminToken })
+  assert(moderationDetail.payload.data.comments.find((item) => Number(item.id) === Number(moderationComment.id))?.status === 'deleted', 'admin should see deleted comments')
+  const postReport = await request('POST', `/posts/${submittedPost.payload.data.id}/reports`, {
+    token: userToken,
+    body: { reason: 'review', description: '帖子审核联动测试' },
+  })
+  await request('GET', `/posts/${submittedPost.payload.data.id}`, { expectedStatus: 404 })
+  moderationDetail = await request('GET', `/admin/posts/${submittedPost.payload.data.id}/moderation`, { token: adminToken })
+  assert(moderationDetail.payload.data.reviewStatus === 'reported' && moderationDetail.payload.data.reports.some((item) => Number(item.id) === Number(postReport.payload.data.id)), 'reported post moderation detail invalid')
+  await request('PATCH', `/admin/reports/${postReport.payload.data.id}`, { token: adminToken, body: { action: 'dismiss', note: 'smoke restore' } })
   await request('GET', `/posts/${submittedPost.payload.data.id}`)
   await request('PATCH', `/admin/posts/${submittedPost.payload.data.id}/status`, { token: adminToken, body: { status: 'hidden' } })
   await request('GET', `/posts/${submittedPost.payload.data.id}`, { expectedStatus: 404 })
-  logPass('community moderation synchronization')
+  logPass('community moderation and report synchronization')
   const unauthLike = await request('POST', `/posts/${post.id}/like`, { expectedStatus: 401 })
   assert(unauthLike.payload.code === 401, 'unauth like should return 401')
   await request('POST', `/posts/${post.id}/like`, { token: userToken })
   const postLikes = await request('GET', `/posts/${post.id}/likes`)
   assert(postLikes.payload.data.items.some((item) => item.nickname === 'Smoke User'), 'post like users missing')
-  logPass('post like permission flow')
+  logPass('community like, bookmark, gallery, new post and comment data')
+  await request('DELETE', `/upload/files/${uploaded.payload.data.file.id}`, { token: adminToken })
 
   await request('POST', `/posts/${post.id}/comments`, { token: userToken, body: { content: `anonymous smoke ${stamp}`, isAnonymous: true } })
   const publicPost = await request('GET', `/posts/${post.id}`)
@@ -277,22 +374,38 @@ async function main() {
 
   const bookingNow = new Date()
   const bookingDate = `${bookingNow.getFullYear()}-${String(bookingNow.getMonth() + 1).padStart(2, '0')}-${String(bookingNow.getDate()).padStart(2, '0')}`
+  const seatList = await request('GET', '/seats')
+  assert(seatList.payload.data.length > 0, 'seat list empty')
+  assert(seatList.payload.data.every((seat) => seat.id && seat.code && seat.name && Number.isFinite(Number(seat.capacity))
+    && Number.isFinite(Number(seat.x)) && Number.isFinite(Number(seat.y)) && ['available', 'maintenance'].includes(seat.status)), 'seat tooltip fields incomplete')
   const availability = await request('GET', `/seats/availability?date=${bookingDate}&timeSlot=09%3A00-11%3A00`)
+  assert(availability.payload.data.every((seat) => seat.seatId && seat.code && seat.name && 'area' in seat
+    && Number.isFinite(Number(seat.capacity)) && Number.isFinite(Number(seat.x)) && Number.isFinite(Number(seat.y))
+    && ['available', 'reserved', 'maintenance'].includes(seat.status)), 'seat availability tooltip fields incomplete')
   const freeSeats = availability.payload.data.filter((item) => item.status === 'available')
   assert(freeSeats.length >= 2, 'not enough available seats')
-  await request('POST', '/bookings', { token: userToken, body: { date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[0].seatId, peopleCount: 1, contactName: 'Wrong Name', phone: '13800138000' } })
+  const memberBooking = await request('POST', '/bookings', { token: userToken, body: { date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[0].seatId, peopleCount: 1, contactName: 'Wrong Name', phone: '13800138000' } })
+  assert(memberBooking.payload.data.bookingNo && memberBooking.payload.data.date === bookingDate
+    && memberBooking.payload.data.timeSlot === '09:00-11:00' && memberBooking.payload.data.seatCode === freeSeats[0].code
+    && memberBooking.payload.data.createdAt, 'member reservation card fields incomplete')
+  await request('POST', '/bookings', { token: userToken, body: { date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[0].seatId, peopleCount: 1 }, expectedStatus: 409 })
   const myBookings = await request('GET', '/bookings/my', { token: userToken })
   assert(myBookings.payload.data.length && myBookings.payload.data.every((item) => item.phone === smokePhone), 'member booking must use token user phone')
   const occupied = await request('GET', `/seats/availability?date=${bookingDate}&timeSlot=09%3A00-11%3A00`)
   assert(occupied.payload.data.find((item) => item.seatId === freeSeats[0].seatId)?.status === 'reserved', 'seat should be reserved')
   logPass('member seat booking flow')
 
-  await request('POST', '/auth/send-code', { body: { phone: guestPhone, scene: 'booking_guest' } })
-  const guestCode = '654321'
+  const captcha = await request('GET', '/auth/captcha')
+  assert(captcha.payload.data.captchaId && captcha.payload.data.image.startsWith('data:image/svg+xml;base64,'), 'dynamic captcha payload invalid')
+  const guestCode = 'A7K9P'
   const { hashPassword: hashGuestCode } = await import('../server/utils/crypto.js')
-  await pool.query(`UPDATE verification_codes SET code_hash = ? WHERE phone = ? AND scene = 'booking_guest' ORDER BY id DESC LIMIT 1`, [await hashGuestCode(guestCode), guestPhone])
-  const guestBooking = await request('POST', '/bookings/guest', { body: { phone: guestPhone, code: guestCode, name: '游客测试', date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[1].seatId, peopleCount: 1 } })
+  await pool.query('UPDATE image_captchas SET code_hash = ? WHERE captcha_id = ?', [await hashGuestCode(guestCode), captcha.payload.data.captchaId])
+  const guestBooking = await request('POST', '/bookings/guest', { body: { phone: guestPhone, captchaId: captcha.payload.data.captchaId, captchaCode: guestCode, name: '游客测试', date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[1].seatId, peopleCount: 1 } })
   assert(guestBooking.payload.data.accountCreated === true, 'guest account should be created')
+  assert(guestBooking.payload.data.user?.nickname && guestBooking.payload.data.booking?.bookingNo
+    && guestBooking.payload.data.booking.date === bookingDate && guestBooking.payload.data.booking.timeSlot === '09:00-11:00'
+    && guestBooking.payload.data.booking.seatCode === freeSeats[1].code && guestBooking.payload.data.booking.createdAt, 'guest reservation card fields incomplete')
+  await request('POST', '/bookings/guest', { body: { phone: guestPhone, captchaId: captcha.payload.data.captchaId, captchaCode: guestCode, name: '游客测试', date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[1].seatId, peopleCount: 1 }, expectedStatus: 400 })
   await request('POST', '/auth/send-code', { body: { phone: guestPhone, scene: 'login' } })
   const guestLoginCode = '654322'
   await pool.query(`UPDATE verification_codes SET code_hash = ? WHERE phone = ? AND scene = 'login' ORDER BY id DESC LIMIT 1`, [await hashGuestCode(guestLoginCode), guestPhone])
@@ -313,7 +426,7 @@ async function main() {
   const editedSeat = await request('PATCH', `/admin/seats/${createdSeat.payload.data.id}`, { token: adminToken, body: { ...createdSeat.payload.data, name: 'Smoke Seat Edited', x: 45, y: 65, status: 'available' } })
   assert(editedSeat.payload.data.name === 'Smoke Seat Edited' && Number(editedSeat.payload.data.x) === 45, 'seat edit not persisted')
   const disabledSeat = await request('PATCH', `/admin/seats/${createdSeat.payload.data.id}/status`, { token: adminToken, body: { status: 'disabled' } })
-  assert(disabledSeat.payload.data.status === 'disabled', 'seat disable failed')
+  assert(disabledSeat.payload.data.status === 'maintenance', 'seat maintenance status failed')
   await request('DELETE', `/admin/seats/${createdSeat.payload.data.id}`, { token: adminToken })
   createdSeatIds.splice(createdSeatIds.indexOf(createdSeat.payload.data.id), 1)
   logPass('admin seat CRUD flow')

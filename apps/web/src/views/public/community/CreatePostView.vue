@@ -35,7 +35,8 @@ async function publish() {
     mediaUrl: uploadedMedia.value?.url || '',
     mediaType: uploadedMedia.value?.file?.fileType || '',
   })
-  router.push(`/community/${post.slug}`)
+  sessionStorage.setItem('coffee-book:new-post', String(post.id))
+  router.push({ path: '/community', query: { new: String(post.id) } })
 }
 
 function validateMedia(file) {
@@ -93,7 +94,7 @@ async function selectMedia(event) {
           <BaseButton type="button" variant="outline" :loading="mediaUploading" @click="mediaInput?.click()">选择并上传</BaseButton>
         </div>
         <div v-if="uploadedMedia" class="media-preview">
-          <img v-if="uploadedMedia.file.fileType === 'image'" :src="resolveUploadUrl(uploadedMedia.url)" alt="帖子图片预览" />
+          <img v-if="uploadedMedia.file.fileType === 'image'" :src="resolveUploadUrl(uploadedMedia.url)" alt="帖子图片预览" decoding="async" />
           <video v-else controls :src="resolveUploadUrl(uploadedMedia.url)">当前浏览器不支持视频预览。</video>
         </div>
         <p class="policy-hint">

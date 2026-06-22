@@ -7,6 +7,7 @@ import { BaseBadge, BaseButton, BaseCard, EmptyState } from '@/components/base'
 import { useBooksStore } from '@/stores/books'
 import { useAuthStore } from '@/stores/auth'
 import { useMembershipStore } from '@/stores/membership'
+import { useAnimeMotion } from '@/composables/useAnimeMotion'
 import '@/assets/styles/pages/catalog.css'
 
 const route = useRoute()
@@ -15,6 +16,7 @@ const booksStore = useBooksStore()
 const authStore = useAuthStore()
 const membershipStore = useMembershipStore()
 const favorite = computed(() => membershipStore.isFavorite('book', book.value?.id))
+const { popLike } = useAnimeMotion()
 const book = computed(() => booksStore.currentBook)
 const recommendations = computed(() => {
   if (!book.value) return []
@@ -33,9 +35,10 @@ async function loadBook() {
   if (authStore.isAuthenticated) await membershipStore.fetchFavorites()
 }
 
-async function toggleFavorite() {
+async function toggleFavorite(event) {
   if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
   await membershipStore.toggleFavorite('book', book.value.id)
+  popLike(event?.currentTarget)
 }
 
 watch(() => route.params.slug, loadBook)
@@ -53,7 +56,7 @@ onMounted(loadBook)
     <template v-if="book">
       <section class="cb-container detail-hero">
         <div class="detail-visual">
-          <img v-if="book.coverUrl" class="detail-content-image" :src="resolveUploadUrl(book.coverUrl)" :alt="book.title" />
+          <img v-if="book.coverUrl" class="detail-content-image" :src="resolveUploadUrl(book.coverUrl)" :alt="book.title" decoding="async" />
           <div v-else class="book-cover" :class="`tone-${book.coverTone}`">
             <span>{{ book.category }}</span><strong>{{ book.title }}</strong><small>Coffee Book Edition</small>
           </div>
@@ -68,7 +71,7 @@ onMounted(loadBook)
           <span class="detail-rating">★ {{ book.rating }} · {{ book.favorites.toLocaleString('zh-CN') }} 人收藏</span>
           <p class="page-subtitle">{{ book.summary }}</p>
           <div class="detail-actions">
-            <BaseButton :variant="favorite ? 'secondary' : 'outline'" @click="toggleFavorite">
+            <BaseButton :variant="favorite ? 'secondary' : 'outline'" @click="toggleFavorite($event)">
               {{ favorite ? '已收藏' : '加入收藏' }}
             </BaseButton>
             <BaseButton :disabled="book.stock === 0">预约阅读 / 查看馆藏</BaseButton>

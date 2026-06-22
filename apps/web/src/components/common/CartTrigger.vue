@@ -1,11 +1,20 @@
 <script setup>
+import { nextTick, ref, watch } from 'vue'
 import { useCartStore } from '@/stores/cart'
+import { useAnimeMotion } from '@/composables/useAnimeMotion'
 
 const cartStore = useCartStore()
+const triggerRef = ref(null)
+const { bounceCart } = useAnimeMotion()
+watch(() => cartStore.itemCount, async (value, previous) => {
+  if (value === previous) return
+  await nextTick()
+  bounceCart(triggerRef.value?.$el || triggerRef.value)
+})
 </script>
 
 <template>
-  <RouterLink class="cart-trigger" to="/cart" aria-label="购物车">
+  <RouterLink ref="triggerRef" class="cart-trigger" to="/cart" aria-label="购物车">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L20 8H6" />
       <circle cx="9.5" cy="20" r="1" />

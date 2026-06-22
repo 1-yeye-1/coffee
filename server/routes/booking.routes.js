@@ -45,7 +45,7 @@ export function registerBookingRoutes(router) {
   })
 
   router.post('/api/bookings/guest', async (req, res) => {
-    if (!requireBodyFields(res, req.body, ['phone', 'code', 'name', 'date', 'timeSlot', 'seatId', 'peopleCount'])) return false
+    if (!requireBodyFields(res, req.body, ['phone', 'captchaId', 'captchaCode', 'name', 'date', 'timeSlot', 'seatId', 'peopleCount'])) return false
     const result = await createGuestBooking(req.body)
     return success(res, result, result.accountCreated
       ? '预约成功，系统已为你创建账号，可使用手机号验证码登录查看预约'

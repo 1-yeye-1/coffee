@@ -3,7 +3,7 @@ import { onMounted, reactive, ref } from 'vue'
 
 import { getAccountOverview, getAvatarHistory, reuseAvatar, selectPresetAvatar, updatePrivacy, updateProfile } from '@/api/account'
 import { resolveUploadUrl, uploadAvatar } from '@/api/upload'
-import { BaseBadge, BaseButton, BaseInput, BaseToast } from '@/components/base'
+import { BaseBadge, BaseButton, BaseInput, BaseToast, ErrorPanel } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/pages/engagement.css'
 
@@ -144,13 +144,14 @@ onMounted(load)
       <p class="page-subtitle">管理你的昵称、头像和个人主页可见性。</p>
     </header>
 
-    <p v-if="error" class="form-error">{{ error }}</p>
+    <ErrorPanel v-if="error" :message="error" @retry="load" />
     <section v-if="user" class="member-panel profile-card">
       <img
         v-if="avatarPreview || user.avatar"
         class="profile-avatar"
-        :src="avatarPreview || resolveUploadUrl(user.avatar)"
-        alt="用户头像"
+          :src="avatarPreview || resolveUploadUrl(user.avatar)"
+          alt="用户头像"
+          decoding="async"
       />
       <span v-else class="avatar">{{ (user.nickname || user.username || '用').slice(0, 1) }}</span>
       <div>
@@ -177,9 +178,9 @@ onMounted(load)
 
     <section class="member-panel avatar-manager">
       <h3 class="section-title">系统头像</h3>
-      <div class="avatar-list"><button v-for="avatar in presetAvatars" :key="avatar" type="button" @click="chooseAvatar(avatar)"><img :src="avatar" alt="系统头像" /></button></div>
+      <div class="avatar-list"><button v-for="avatar in presetAvatars" :key="avatar" type="button" @click="chooseAvatar(avatar)"><img :src="avatar" alt="系统头像" loading="lazy" decoding="async" /></button></div>
       <h3 class="section-title">历史头像</h3>
-      <div class="avatar-list"><button v-for="item in avatarHistory" :key="item.id" type="button" :class="{ 'is-current': item.isCurrent }" @click="chooseHistory(item)"><img :src="resolveUploadUrl(item.avatarUrl)" alt="历史头像" /><small v-if="item.isCurrent">当前</small></button></div>
+      <div class="avatar-list"><button v-for="item in avatarHistory" :key="item.id" type="button" :class="{ 'is-current': item.isCurrent }" @click="chooseHistory(item)"><img :src="resolveUploadUrl(item.avatarUrl)" alt="历史头像" loading="lazy" decoding="async" /><small v-if="item.isCurrent">当前</small></button></div>
     </section>
 
     <section class="member-panel privacy-panel">

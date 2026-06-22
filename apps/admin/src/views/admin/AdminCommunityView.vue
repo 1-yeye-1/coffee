@@ -1,16 +1,25 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-import { BaseBadge, BaseButton, BaseInput, BaseModal, BaseSelect, BaseTable, EmptyState } from '@/components/base'
+import { BaseBadge, BaseButton, BaseInput, BaseModal, BaseSelect, BaseTable, BaseTextarea, EmptyState, ErrorPanel } from '@/components/base'
 import { useAdminStore } from '@/stores/admin'
+import { fetchPostLikeUsers, fetchPostModeration, processAdminReport, updateAdminCommentStatus } from '@/api/admin'
+import { useAnimeMotion } from '@/composables/useAnimeMotion'
+import { useGsapReveal } from '@/composables/useGsapReveal'
 import '@/assets/styles/pages/admin-management.css'
 
 const adminStore = useAdminStore()
 const route = useRoute()
-const deleting = ref(null)
-const rejecting = ref(null)
 const detail = ref(null)
+const detailTab = ref('preview')
+const likeUsers = ref([])
+const actionTarget = ref(null)
+const actionReason = ref('')
+const actionLoading = ref(false)
+const pageRef = ref(null)
+const { revealCards, revealTab } = useGsapReveal(pageRef)
+const { pulseBadge, flashRow } = useAnimeMotion()
 const filters = reactive({ keyword: String(route.query.keyword || ''), status: 'all', featured: 'all', media: 'all' })
 
 const columns = [
@@ -29,6 +38,7 @@ const statusOptions = [
   { label: '待审核', value: 'pending' },
   { label: '已发布', value: 'published' },
   { label: '已拒绝', value: 'rejected' },
+  { label: '举报待复核', value: 'reported' },
   { label: '已隐藏', value: 'hidden' },
 ]
 
@@ -49,6 +59,7 @@ const statusMap = {
   pending: { label: '待审核', variant: 'warning' },
   published: { label: '已发布', variant: 'success' },
   rejected: { label: '已拒绝', variant: 'danger' },
+  reported: { label: '举报待复核', variant: 'warning' },
   hidden: { label: '已隐藏', variant: 'neutral' },
 }
 
@@ -99,27 +110,56 @@ async function refresh() {
   await adminStore.fetchAdminCollection('posts')
 }
 
-async function approve(item) {
-  await adminStore.reviewPost(item.id, 'published')
+async function openDetail(item) {
+  detail.value = item
+  detailTab.value = 'preview'
+  try {
+    const [moderation, likes] = await Promise.all([fetchPostModeration(item.id), fetchPostLikeUsers(item.id)])
+    detail.value = { ...moderation.data, status: moderation.data.reviewStatus || moderation.data.status }
+    likeUsers.value = likes.data?.items || []
+  }
+  catch { likeUsers.value = [] }
 }
 
-async function reject(item) {
-  rejecting.value = null
-  await adminStore.reviewPost(item.id, 'rejected')
+function askAction(type, item, status = '') {
+  actionReason.value = ''
+  actionTarget.value = { type, item, status }
 }
 
-async function remove() {
-  if (!deleting.value) return
-  await adminStore.remove('posts', deleting.value.id)
-  deleting.value = null
+async function confirmAction() {
+  if (!actionTarget.value) return
+  actionLoading.value = true
+  const { type, item, status } = actionTarget.value
+  try {
+    if (type === 'post') await adminStore.reviewPost(item.id, status, actionReason.value)
+    if (type === 'comment') await updateAdminCommentStatus(detail.value.id, item.id, status, actionReason.value)
+    if (type === 'report') await processAdminReport(item.id, status, actionReason.value)
+    const detailId = detail.value?.id
+    await refresh()
+    if (detailId) await openDetail({ id: detailId })
+    await nextTick()
+    flashRow(pageRef.value?.querySelector(`[data-row-key="${item.id}"]`))
+    pulseBadge(document.querySelector('.post-detail .base-badge'))
+    actionTarget.value = null
+  } finally {
+    actionLoading.value = false
+  }
 }
 
-onMounted(refresh)
+onMounted(async () => {
+  await refresh()
+  await nextTick()
+  revealCards('.community-stat', { key: 'community-stats', stagger: 0.055 })
+})
 watch(() => route.query.keyword, (value) => { filters.keyword = String(value || '') })
+watch(detailTab, async () => {
+  await nextTick()
+  revealTab('.moderation-list article,.post-detail > header,.detail-media')
+})
 </script>
 
 <template>
-  <div class="admin-page community-admin">
+  <div ref="pageRef" class="admin-page community-admin">
     <header class="admin-page__header community-hero">
       <div class="admin-page__title">
         <span class="section-eyebrow">Moderation</span>
@@ -129,7 +169,7 @@ watch(() => route.query.keyword, (value) => { filters.keyword = String(value || 
       <BaseButton variant="outline" :loading="adminStore.apiLoading" @click="refresh">刷新</BaseButton>
     </header>
 
-    <p v-if="adminStore.apiError" class="form-error">{{ adminStore.apiError }}</p>
+    <ErrorPanel v-if="adminStore.apiError" :message="adminStore.apiError" @retry="refresh" />
 
     <section class="community-stats" aria-label="社区内容统计">
       <article v-for="item in stats" :key="item.label" class="community-stat">
@@ -174,14 +214,14 @@ watch(() => route.query.keyword, (value) => { filters.keyword = String(value || 
 
       <template #cell-media="{ item }">
         <div v-if="item.mediaUrl" class="media-cell">
-          <img v-if="item.mediaType === 'image'" :src="assetUrl(item.mediaUrl)" alt="帖子图片" />
+          <img v-if="item.mediaType === 'image'" :src="assetUrl(item.mediaUrl)" alt="帖子图片" loading="lazy" decoding="async" />
           <a v-else :href="assetUrl(item.mediaUrl)" target="_blank" rel="noreferrer">视频</a>
         </div>
         <span v-else class="text-muted">无媒体</span>
       </template>
 
       <template #cell-status="{ item }">
-        <BaseSelect :model-value="item.status" :aria-label="`修改${item.title}状态`" :options="statusOptions.filter((option) => option.value !== 'all')" @update:model-value="adminStore.reviewPost(item.id, $event)" />
+        <BaseBadge :variant="statusMeta(item.status).variant">{{ statusMeta(item.status).label }}</BaseBadge>
       </template>
 
       <template #cell-featured="{ item }">
@@ -197,11 +237,13 @@ watch(() => route.query.keyword, (value) => { filters.keyword = String(value || 
       <template #cell-actions="{ item }">
         <div class="action-stack">
           <div class="action-group">
-            <BaseButton size="sm" variant="outline" @click="detail = item">详情</BaseButton>
+            <BaseButton size="sm" variant="outline" @click="openDetail(item)">详情</BaseButton>
           </div>
           <div class="action-group">
-            <BaseButton size="sm" variant="ghost" :disabled="item.status === 'published'" @click="approve(item)">通过</BaseButton>
-            <BaseButton size="sm" variant="ghost" :disabled="item.status === 'rejected'" @click="rejecting = item">拒绝</BaseButton>
+            <BaseButton size="sm" variant="ghost" :disabled="item.status === 'published'" @click="askAction('post', item, 'published')">通过</BaseButton>
+            <BaseButton size="sm" variant="ghost" :disabled="item.status === 'rejected'" @click="askAction('post', item, 'rejected')">拒绝</BaseButton>
+            <BaseButton size="sm" variant="ghost" :disabled="item.status === 'hidden'" @click="askAction('post', item, 'hidden')">隐藏</BaseButton>
+            <BaseButton v-if="item.status === 'hidden'" size="sm" variant="outline" @click="askAction('post', item, 'published')">恢复</BaseButton>
           </div>
           <div class="action-group">
             <BaseButton size="sm" variant="ghost" @click="adminStore.toggleFeaturedPost(item.id)">
@@ -209,7 +251,7 @@ watch(() => route.query.keyword, (value) => { filters.keyword = String(value || 
             </BaseButton>
           </div>
           <div class="action-group action-group--danger">
-            <BaseButton size="sm" variant="danger" @click="deleting = item">删除</BaseButton>
+            <BaseButton size="sm" variant="danger" @click="askAction('post', item, 'hidden')">删除（软隐藏）</BaseButton>
           </div>
         </div>
       </template>
@@ -227,6 +269,8 @@ watch(() => route.query.keyword, (value) => { filters.keyword = String(value || 
 
     <BaseModal :model-value="Boolean(detail)" title="内容详情" @update:model-value="(value) => { if (!value) detail = null }">
       <article v-if="detail" class="post-detail">
+        <nav class="moderation-tabs" aria-label="审核详情"><button v-for="tab in [{key:'preview',label:'帖子预览'},{key:'comments',label:`评论 ${detail.commentsCount || 0}`},{key:'likes',label:`点赞 ${detail.likes || 0}`},{key:'reports',label:`举报 ${(detail.reports || []).length}`}]" :key="tab.key" type="button" :class="{ 'is-active': detailTab === tab.key }" @click="detailTab = tab.key">{{ tab.label }}</button></nav>
+        <template v-if="detailTab === 'preview'">
         <header>
           <BaseBadge :variant="statusMeta(detail.status).variant">{{ statusMeta(detail.status).label }}</BaseBadge>
           <BaseBadge :variant="detail.featured ? 'premium' : 'neutral'">{{ detail.featured ? '精选' : '普通' }}</BaseBadge>
@@ -234,7 +278,7 @@ watch(() => route.query.keyword, (value) => { filters.keyword = String(value || 
           <p>作者：{{ detail.author || 'Coffee Reader' }} · {{ formatDate(detail.createdAt) }}</p>
         </header>
         <div v-if="detail.mediaUrl" class="detail-media">
-          <img v-if="detail.mediaType === 'image'" :src="assetUrl(detail.mediaUrl)" alt="帖子图片" />
+          <img v-if="detail.mediaType === 'image'" :src="assetUrl(detail.mediaUrl)" alt="帖子图片" decoding="async" />
           <video v-else controls :src="assetUrl(detail.mediaUrl)">当前浏览器不支持视频预览。</video>
         </div>
         <p>{{ detail.content || detail.excerpt }}</p>
@@ -243,34 +287,28 @@ watch(() => route.query.keyword, (value) => { filters.keyword = String(value || 
           <span>评论 {{ detail.commentsCount }}</span>
         </footer>
         <div class="detail-actions">
-          <BaseButton size="sm" variant="outline" @click="approve(detail)">通过</BaseButton>
-          <BaseButton size="sm" variant="ghost" @click="rejecting = detail">拒绝</BaseButton>
+          <BaseButton size="sm" variant="outline" @click="askAction('post', detail, 'published')">通过</BaseButton>
+          <BaseButton size="sm" variant="ghost" @click="askAction('post', detail, 'rejected')">拒绝</BaseButton>
+          <BaseButton size="sm" variant="danger" @click="askAction('post', detail, 'hidden')">隐藏</BaseButton>
           <BaseButton size="sm" variant="ghost" @click="adminStore.toggleFeaturedPost(detail.id)">
             {{ detail.featured ? '取消精选' : '标记精选' }}
           </BaseButton>
         </div>
+        </template>
+        <section v-else-if="detailTab === 'comments'" class="moderation-list"><article v-for="comment in detail.comments || []" :key="comment.id"><header><strong>{{ comment.user?.nickname || comment.author || '匿名用户' }}</strong><BaseBadge :variant="comment.status === 'published' ? 'success' : comment.status === 'pending' ? 'warning' : 'neutral'">{{ { published:'正常', pending:'待审核', hidden:'已隐藏', deleted:'已删除' }[comment.status] || comment.status }}</BaseBadge></header><p>{{ comment.content }}</p><small>{{ formatDate(comment.createdAt) }}</small><footer><BaseButton v-if="comment.status !== 'published'" size="sm" variant="outline" @click="askAction('comment', comment, 'published')">恢复</BaseButton><BaseButton v-if="comment.status !== 'hidden'" size="sm" variant="ghost" @click="askAction('comment', comment, 'hidden')">隐藏</BaseButton><BaseButton v-if="comment.status !== 'deleted'" size="sm" variant="danger" @click="askAction('comment', comment, 'deleted')">删除</BaseButton></footer></article><EmptyState v-if="!detail.comments?.length" title="暂无评论" /></section>
+        <section v-else-if="detailTab === 'likes'" class="moderation-list"><article v-for="user in likeUsers" :key="user.userId"><strong>{{ user.nickname || user.username }}</strong><p>{{ user.phoneMasked || '隐私号码' }}</p><small>{{ formatDate(user.likedAt) }}</small></article><p v-if="!likeUsers.length" class="text-muted">暂无点赞用户</p></section>
+        <section v-else class="moderation-list"><article v-for="report in detail.reports || []" :key="report.id"><header><strong>{{ report.reason || '内容举报' }}</strong><BaseBadge :variant="report.status === 'pending' ? 'warning' : report.status === 'resolved' ? 'success' : 'neutral'">{{ report.status === 'pending' ? '待处理' : report.status === 'resolved' ? '已处理' : '已驳回' }}</BaseBadge></header><p>{{ report.description || '未填写补充说明' }}</p><small>{{ report.reporter?.nickname }} · {{ formatDate(report.createdAt) }}</small><footer v-if="report.status === 'pending'"><BaseButton size="sm" variant="outline" @click="askAction('report', report, 'dismiss')">驳回举报</BaseButton><BaseButton size="sm" variant="ghost" @click="askAction('report', report, 'hide')">隐藏内容</BaseButton><BaseButton v-if="report.commentId" size="sm" variant="danger" @click="askAction('report', report, 'delete')">删除评论</BaseButton></footer></article><EmptyState v-if="!detail.reports?.length" title="暂无举报记录" /></section>
       </article>
     </BaseModal>
 
-    <BaseModal :model-value="Boolean(rejecting)" title="确认拒绝内容" @update:model-value="(value) => { if (!value) rejecting = null }">
-      <div class="confirm-panel">
-        <p>确认拒绝帖子“{{ rejecting?.title }}”吗？该内容将不会在前台社区展示。</p>
-        <div>
-          <BaseButton variant="ghost" @click="rejecting = null">取消</BaseButton>
-          <BaseButton variant="danger" @click="reject(rejecting)">确认拒绝</BaseButton>
-        </div>
+    <BaseModal :model-value="Boolean(actionTarget)" title="确认审核操作" @update:model-value="(value) => { if (!value) actionTarget = null }">
+      <div class="confirm-panel moderation-confirm">
+        <p>此操作会立即更新前台可见状态，并记录审核日志。请确认处理理由。</p>
+        <BaseTextarea v-model="actionReason" label="审核理由" placeholder="请输入处理依据或补充说明" :rows="5" />
+        <div><BaseButton variant="ghost" @click="actionTarget = null">取消</BaseButton><BaseButton :variant="['hidden','deleted','delete','rejected'].includes(actionTarget?.status) ? 'danger' : 'primary'" :loading="actionLoading" @click="confirmAction">确认处理</BaseButton></div>
       </div>
     </BaseModal>
 
-    <BaseModal :model-value="Boolean(deleting)" title="确认删除内容" @update:model-value="(value) => { if (!value) deleting = null }">
-      <div class="confirm-panel">
-        <p>确认删除帖子“{{ deleting?.title }}”吗？删除后将无法在当前列表中恢复。</p>
-        <div>
-          <BaseButton variant="ghost" @click="deleting = null">取消</BaseButton>
-          <BaseButton variant="danger" @click="remove">确认删除</BaseButton>
-        </div>
-      </div>
-    </BaseModal>
   </div>
 </template>
 
@@ -442,6 +480,15 @@ watch(() => route.query.keyword, (value) => { filters.keyword = String(value || 
   flex-wrap: wrap;
   gap: var(--cb-space-3);
 }
+
+.moderation-tabs{display:flex;gap:var(--cb-space-2);padding:var(--cb-space-1);background:var(--cb-bg-soft);border-radius:var(--cb-radius-pill)}
+.moderation-tabs button{padding:var(--cb-space-2) var(--cb-space-4);color:var(--cb-text-secondary);background:transparent;border:0;border-radius:var(--cb-radius-pill)}
+.moderation-tabs button.is-active{color:var(--cb-text-inverse);background:var(--cb-color-coffee);box-shadow:var(--cb-shadow-sm)}
+.moderation-list{display:grid;gap:var(--cb-space-3)}
+.moderation-list article{padding:var(--cb-space-4);border:1px solid var(--cb-border-soft);border-radius:var(--cb-radius-lg);background:var(--cb-bg-soft)}
+.moderation-list article header,.moderation-list article footer{display:flex;flex-wrap:wrap;gap:var(--cb-space-2);align-items:center;justify-content:space-between}
+.moderation-list small{color:var(--cb-text-muted)}
+.moderation-confirm :deep(.base-textarea),.moderation-confirm :deep(textarea){width:100%;min-height:8rem}
 
 .confirm-panel div {
   justify-content: flex-end;

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { resolveUploadUrl } from '@/api/upload'
@@ -15,6 +15,10 @@ import {
   EmptyState,
 } from '@/components/base'
 import { useProductsStore } from '@/stores/products'
+import { debounce } from '@/utils'
+import { useAnimeMotion } from '@/composables/useAnimeMotion'
+import { useGsapReveal } from '@/composables/useGsapReveal'
+import { useTiltCard } from '@/composables/useTiltCard'
 import '@/assets/styles/pages/catalog.css'
 
 const router = useRouter()
@@ -24,7 +28,10 @@ const productType = ref('all')
 const sort = ref('recommended')
 const page = ref(1)
 const pageSize = 8
-let requestTimer
+const pageRef = ref(null)
+const { revealCards } = useGsapReveal(pageRef)
+const { floatEmpty, pulseBadge } = useAnimeMotion()
+const { bindTiltCards } = useTiltCard(pageRef)
 
 const productTypes = [
   { label: '全部', value: 'all' },
@@ -62,6 +69,8 @@ function loadProducts() {
   })
 }
 
+const scheduleLoad = debounce(loadProducts, 250)
+
 function clearFilters() {
   keyword.value = ''
   productType.value = 'all'
@@ -83,15 +92,22 @@ async function openTodayRecommendation() {
 
 watch([keyword, productType, sort], () => {
   page.value = 1
-  clearTimeout(requestTimer)
-  requestTimer = setTimeout(loadProducts, 250)
+  scheduleLoad()
 })
 watch(page, loadProducts)
 onMounted(loadProducts)
+onBeforeUnmount(scheduleLoad.cancel)
+watch(() => visibleProducts.value.map((product) => product.id).join(','), async () => {
+  await nextTick()
+  revealCards('.catalog-card', { key: 'products', limit: 20 })
+  bindTiltCards()
+  pulseBadge(pageRef.value?.querySelector('.today-recommendation .base-badge'))
+  floatEmpty(pageRef.value?.querySelector('.catalog-empty'))
+}, { flush: 'post' })
 </script>
 
 <template>
-  <div class="catalog-page catalog-enter">
+  <div ref="pageRef" class="catalog-page catalog-enter">
     <section class="catalog-hero">
       <div class="cb-container catalog-hero__grid">
         <div class="catalog-hero__copy">
@@ -146,15 +162,15 @@ onMounted(loadProducts)
 
       <div id="coffee-products" class="catalog-grid">
         <BaseSkeleton v-if="productsStore.loading" v-for="index in pageSize" :key="`product-loading-${index}`" variant="card" />
-        <BaseCard v-for="product in visibleProducts" :key="product.id" class="catalog-card" variant="hover">
-          <div class="catalog-card__visual">
-            <img v-if="product.imageUrl" class="catalog-card__image" :src="resolveUploadUrl(product.imageUrl)" :alt="product.name" />
+        <BaseCard v-for="product in visibleProducts" :key="product.id" class="catalog-card" variant="hover" data-cursor="BUY" data-tilt-card>
+          <div class="catalog-card__visual" data-tilt-layer="1.35">
+            <img v-if="product.imageUrl" class="catalog-card__image" :src="resolveUploadUrl(product.imageUrl)" :alt="product.name" loading="lazy" decoding="async" />
             <div v-else class="product-art catalog-card__visual-inner" :class="`tone-${product.tone}`">
               <div class="product-art__cup" />
               <span class="product-art__label">{{ product.origin }}</span>
             </div>
           </div>
-          <div class="catalog-card__body">
+          <div class="catalog-card__body" data-tilt-layer="0.65">
             <div class="catalog-card__topline">
               <BaseBadge variant="neutral">{{ product.category }}</BaseBadge>
               <BaseBadge :variant="product.stock > 0 ? 'success' : 'danger'">{{ product.stock > 0 ? '有库存' : '已售罄' }}</BaseBadge>

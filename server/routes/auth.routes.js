@@ -11,6 +11,7 @@ import {
 } from '../services/auth.service.js'
 import { signUserToken } from '../utils/jwt.js'
 import { failure, success } from '../utils/response.js'
+import { issueCaptcha } from '../services/captcha.service.js'
 
 function serializeSession(user) {
   return {
@@ -25,6 +26,11 @@ async function sendCode(req, res) {
 }
 
 export function registerAuthRoutes(router) {
+  router.get('/api/auth/captcha', async (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store')
+    return success(res, await issueCaptcha())
+  })
+
   router.post('/api/auth/send-code', sendCode)
   router.post('/api/auth/sms-code', sendCode)
 

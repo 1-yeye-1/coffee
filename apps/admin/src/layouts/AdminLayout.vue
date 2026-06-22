@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { BaseDrawer } from '@/components/base'
 import AdminBreadcrumb from '@/components/common/AdminBreadcrumb.vue'
@@ -7,9 +8,19 @@ import AdminHeader from '@/components/common/AdminHeader.vue'
 import AdminSidebar from '@/components/common/AdminSidebar.vue'
 import LayoutShell from '@/components/common/LayoutShell.vue'
 import { useAdminStore } from '@/stores/admin'
+import { useGsapReveal } from '@/composables/useGsapReveal'
+import { useMagnetic } from '@/composables/useMagnetic'
 
 const adminStore = useAdminStore()
 const mobileOpen = ref(false)
+const route = useRoute()
+const viewRef = ref(null)
+const { revealPage } = useGsapReveal(viewRef)
+useMagnetic(viewRef)
+watch(() => route.fullPath, async () => {
+  await nextTick()
+  revealPage(':scope > *')
+}, { flush: 'post', immediate: true })
 </script>
 
 <template>
@@ -29,8 +40,12 @@ const mobileOpen = ref(false)
       />
       <LayoutShell class="admin-layout__content">
         <AdminBreadcrumb />
-        <main class="admin-layout__view">
-          <RouterView />
+        <main ref="viewRef" class="admin-layout__view">
+          <RouterView v-slot="{ Component, route }">
+            <Transition name="route-page" mode="out-in">
+              <component :is="Component" :key="route.path" />
+            </Transition>
+          </RouterView>
         </main>
       </LayoutShell>
     </div>

@@ -8,6 +8,10 @@ export function sendCode(payload) {
   return request('/auth/sms-code', { method: 'POST', body: payload })
 }
 
+export function getCaptcha() {
+  return request('/auth/captcha')
+}
+
 export function login(payload) {
   return request('/auth/login', { method: 'POST', body: payload })
 }

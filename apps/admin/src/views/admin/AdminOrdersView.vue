@@ -103,6 +103,8 @@ watch(() => route.query.keyword, (value) => { keyword.value = String(value || ''
       </div>
     </header>
 
+    <p v-if="adminStore.apiError" class="form-error" role="alert">{{ adminStore.apiError }}</p>
+
     <section class="admin-stat-grid">
       <div v-for="item in stats" :key="item[0]" class="admin-stat"><span>{{ item[0] }}</span><strong>{{ item[1] }}</strong></div>
     </section>
@@ -112,7 +114,7 @@ watch(() => route.query.keyword, (value) => { keyword.value = String(value || ''
       <BaseSelect v-model="status" aria-label="订单状态" :options="statusOptions" />
     </section>
 
-    <BaseTable :columns="columns" :items="filtered" empty-text="暂无匹配订单">
+    <BaseTable :columns="columns" :items="filtered" :loading="adminStore.apiLoading" empty-text="暂无匹配订单">
       <template #cell-id="{ item }"><strong>{{ item.orderNo || item.id }}</strong></template>
       <template #cell-amount="{ value }">¥{{ value }}</template>
       <template #cell-status="{ value }"><BaseBadge :variant="badgeVariant[value] || 'warning'">{{ statusText[value] || value }}</BaseBadge></template>

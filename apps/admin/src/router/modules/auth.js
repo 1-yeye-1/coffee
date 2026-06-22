@@ -1,6 +1,7 @@
 import AuthLayout from '@/layouts/AuthLayout.vue'
-import PlaceholderView from '@/views/PlaceholderView.vue'
 import LoginView from '@/views/admin/LoginView.vue'
+
+const PlaceholderView = () => import('@/views/PlaceholderView.vue')
 
 import { ROUTE_NAMES } from '../route-names'
 

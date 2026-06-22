@@ -43,7 +43,5 @@ export const ROUTE_NAMES = Object.freeze({
   ADMIN_COMMUNITY: 'admin-community',
   ADMIN_BOOKINGS: 'admin-bookings',
   ADMIN_USERS: 'admin-users',
-  ADMIN_FINANCE: 'admin-finance',
-  ADMIN_SETTINGS: 'admin-settings',
   NOT_FOUND: 'not-found',
 })

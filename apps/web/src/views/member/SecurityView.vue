@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 import { sendCode } from '@/api/auth'
 import { changePhone, getSecuritySettings, verifyCurrentPhone } from '@/api/account'
-import { BaseBadge, BaseButton, BaseInput, BaseToast } from '@/components/base'
+import { BaseBadge, BaseButton, BaseInput, BaseToast, ErrorPanel } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/pages/engagement.css'
 
@@ -180,7 +180,7 @@ onBeforeUnmount(() => {
       <p class="page-subtitle">更换手机号需要先验证当前手机号，再验证新手机号。</p>
     </header>
 
-    <p v-if="error" class="form-error">{{ error }}</p>
+    <ErrorPanel v-if="error" :message="error" @retry="load" />
     <p v-if="success" class="form-success">{{ success }}</p>
 
     <section v-if="settings" class="member-panel">

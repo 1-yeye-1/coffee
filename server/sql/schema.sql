@@ -51,6 +51,19 @@ CREATE TABLE IF NOT EXISTS verification_codes (
   KEY idx_verification_codes_created_at (created_at)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS image_captchas (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  captcha_id CHAR(36) NOT NULL,
+  code_hash VARCHAR(255) NOT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_image_captchas_id (captcha_id),
+  KEY idx_image_captchas_expiry (expires_at, used_at)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS user_points (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id BIGINT UNSIGNED NOT NULL,
@@ -428,6 +441,31 @@ CREATE TABLE IF NOT EXISTS post_likes (
   KEY idx_post_likes_user (user_id),
   CONSTRAINT fk_post_likes_post FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
   CONSTRAINT fk_post_likes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS content_reports (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  post_id BIGINT UNSIGNED NOT NULL,
+  comment_id BIGINT UNSIGNED NULL,
+  reporter_id BIGINT UNSIGNED NOT NULL,
+  reason VARCHAR(120) NOT NULL,
+  description VARCHAR(1000) NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'pending',
+  target_previous_status VARCHAR(30) NULL,
+  resolution VARCHAR(30) NULL,
+  handled_by BIGINT UNSIGNED NULL,
+  handled_at DATETIME NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_content_reports_post (post_id),
+  KEY idx_content_reports_comment (comment_id),
+  KEY idx_content_reports_status (status),
+  KEY idx_content_reports_reporter (reporter_id),
+  KEY idx_content_reports_target_status (post_id, comment_id, reporter_id, status),
+  CONSTRAINT fk_content_reports_post FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+  CONSTRAINT fk_content_reports_comment FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+  CONSTRAINT fk_content_reports_reporter FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS product_reviews (

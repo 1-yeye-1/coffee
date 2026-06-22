@@ -25,9 +25,10 @@ watch(() => route.query.keyword, (value) => { phone.value = String(value || '') 
 </script>
 <template>
   <div class="admin-page">
+    <p v-if="adminStore.apiError" class="form-error" role="alert">{{ adminStore.apiError }}</p>
     <header class="admin-page__header"><div class="admin-page__title"><span class="section-eyebrow">Space</span><h1>预约管理</h1><p>管理空间座位预约和到店状态。</p></div></header>
     <section class="admin-stat-grid"><div v-for="item in stats" :key="item[0]" class="admin-stat"><span>{{ item[0] }}</span><strong>{{ item[1] }}</strong></div></section>
     <section class="admin-filter-bar"><BaseInput v-model="phone" search placeholder="搜索手机号" /><BaseInput v-model="date" type="date" aria-label="预约日期" /><BaseSelect v-model="status" aria-label="预约状态" :options="statusOptions" /></section>
-    <BaseTable :columns="columns" :items="visible" empty-text="暂无匹配预约"><template #cell-status="{ item }"><BaseSelect :model-value="item.status" :aria-label="`修改预约 ${item.id} 状态`" :options="editableStatusOptions" @update:model-value="update(item.id,$event)" /></template><template #cell-actions="{ item }"><BaseBadge :variant="item.status==='confirmed'?'success':item.status==='pending'?'warning':'neutral'">{{ statusText[item.status] || item.status }}</BaseBadge></template></BaseTable>
+    <BaseTable :columns="columns" :items="visible" :loading="adminStore.apiLoading" empty-text="暂无匹配预约"><template #cell-status="{ item }"><BaseSelect :model-value="item.status" :aria-label="`修改预约 ${item.id} 状态`" :options="editableStatusOptions" @update:model-value="update(item.id,$event)" /></template><template #cell-actions="{ item }"><BaseBadge :variant="item.status==='confirmed'?'success':item.status==='pending'?'warning':'neutral'">{{ statusText[item.status] || item.status }}</BaseBadge></template></BaseTable>
   </div>
 </template>

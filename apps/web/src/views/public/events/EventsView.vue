@@ -1,16 +1,21 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { resolveUploadUrl } from '@/api/upload'
 
 import { BaseBadge, BaseButton, BaseCard, BaseTabs } from '@/components/base'
 import { useEventsStore } from '@/stores/events'
+import { useGsapReveal } from '@/composables/useGsapReveal'
+import { useTiltCard } from '@/composables/useTiltCard'
 import '@/assets/styles/pages/engagement.css'
 
 const router = useRouter()
 const eventsStore = useEventsStore()
 const category = ref('全部')
 const view = ref('list')
+const pageRef = ref(null)
+const { revealCards, revealTab } = useGsapReveal(pageRef)
+const { bindTiltCards } = useTiltCard(pageRef)
 const categories = ['全部', '读书会', '咖啡课', '文化沙龙', '创意工作坊', '亲子阅读'].map((item) => ({ label: item, value: item }))
 const visibleEvents = computed(() =>
   category.value === '全部' ? eventsStore.items : eventsStore.items.filter((event) => event.category === category.value),
@@ -18,10 +23,16 @@ const visibleEvents = computed(() =>
 onMounted(() => {
   eventsStore.fetchEvents()
 })
+watch([visibleEvents, view], async () => {
+  await nextTick()
+  revealCards('.event-card', { key: 'events', limit: 20 })
+  bindTiltCards()
+  revealTab('.event-grid,.event-timeline')
+}, { flush: 'post' })
 </script>
 
 <template>
-  <div class="engagement-page cb-fade-in">
+  <div ref="pageRef" class="engagement-page cb-fade-in">
     <section class="engagement-hero">
       <div class="cb-container engagement-hero__grid">
         <div class="engagement-hero__copy">
@@ -51,12 +62,12 @@ onMounted(() => {
         </div>
 
         <div v-if="view === 'list'" class="event-grid">
-          <BaseCard v-for="event in visibleEvents" :key="event.id" class="event-card" variant="hover">
-            <div class="event-card__visual">
-              <img v-if="event.coverUrl" class="event-card__image" :src="resolveUploadUrl(event.coverUrl)" :alt="event.title" />
+          <BaseCard v-for="event in visibleEvents" :key="event.id" class="event-card" variant="hover" data-cursor="JOIN" data-tilt-card>
+            <div class="event-card__visual" data-tilt-layer="1.3">
+              <img v-if="event.coverUrl" class="event-card__image" :src="resolveUploadUrl(event.coverUrl)" :alt="event.title" loading="lazy" decoding="async" />
               <template v-else><span>{{ event.category }}</span><strong>{{ event.date.slice(5).replace('-', '.') }}</strong></template>
             </div>
-            <div class="event-card__meta">
+            <div class="event-card__meta" data-tilt-layer="0.65">
               <BaseBadge variant="neutral">{{ event.category }}</BaseBadge>
               <BaseBadge :variant="event.attendees >= event.capacity - 2 ? 'warning' : 'success'">{{ event.status }}</BaseBadge>
             </div>

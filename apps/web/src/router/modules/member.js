@@ -1,18 +1,19 @@
 import MemberLayout from '@/layouts/MemberLayout.vue'
-import LayoutPreview from '@/views/LayoutPreview.vue'
-import AccountOverviewView from '@/views/member/AccountOverviewView.vue'
-import ActivitiesView from '@/views/member/ActivitiesView.vue'
-import AddressesView from '@/views/member/AddressesView.vue'
-import BookingsView from '@/views/member/BookingsView.vue'
-import FavoritesView from '@/views/member/FavoritesView.vue'
-import MembershipView from '@/views/member/MembershipView.vue'
-import MyPostsView from '@/views/member/MyPostsView.vue'
-import NotificationsView from '@/views/member/NotificationsView.vue'
-import OrderDetailView from '@/views/member/orders/OrderDetailView.vue'
-import OrdersView from '@/views/member/orders/OrdersView.vue'
-import PointsView from '@/views/member/PointsView.vue'
-import ProfileView from '@/views/member/ProfileView.vue'
-import SecurityView from '@/views/member/SecurityView.vue'
+
+const LayoutPreview = () => import('@/views/LayoutPreview.vue')
+const AccountOverviewView = () => import('@/views/member/AccountOverviewView.vue')
+const ActivitiesView = () => import('@/views/member/ActivitiesView.vue')
+const AddressesView = () => import('@/views/member/AddressesView.vue')
+const BookingsView = () => import('@/views/member/BookingsView.vue')
+const FavoritesView = () => import('@/views/member/FavoritesView.vue')
+const MembershipView = () => import('@/views/member/MembershipView.vue')
+const MyPostsView = () => import('@/views/member/MyPostsView.vue')
+const NotificationsView = () => import('@/views/member/NotificationsView.vue')
+const OrderDetailView = () => import('@/views/member/orders/OrderDetailView.vue')
+const OrdersView = () => import('@/views/member/orders/OrdersView.vue')
+const PointsView = () => import('@/views/member/PointsView.vue')
+const ProfileView = () => import('@/views/member/ProfileView.vue')
+const SecurityView = () => import('@/views/member/SecurityView.vue')
 
 import { ROUTE_NAMES } from '../route-names'
 

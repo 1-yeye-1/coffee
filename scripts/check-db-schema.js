@@ -12,6 +12,7 @@ const requiredColumns = {
   posts: ['id', 'slug', 'user_id', 'status', 'media_url', 'media_type', 'likes_count', 'comments_count'],
   comments: ['id', 'post_id', 'user_id', 'status', 'is_anonymous'],
   post_likes: ['id', 'post_id', 'user_id'],
+  content_reports: ['id', 'post_id', 'comment_id', 'reporter_id', 'reason', 'status', 'target_previous_status', 'resolution', 'handled_by', 'handled_at'],
   seats: ['id', 'code', 'area', 'capacity', 'x', 'y', 'width', 'height', 'status', 'sort_order'],
   bookings: ['id', 'booking_no', 'user_id', 'phone', 'seat_id', 'time_slot', 'people_count', 'status'],
   user_avatars: ['id', 'user_id', 'avatar_url', 'source', 'is_current', 'created_at'],
@@ -22,12 +23,16 @@ const requiredColumns = {
   orders: ['id', 'order_no', 'user_id', 'source', 'total_amount', 'status', 'paid_at'],
   order_items: ['id', 'order_id', 'product_id', 'brew_method', 'price', 'quantity', 'subtotal'],
   payments: ['id', 'payment_no', 'order_id', 'amount', 'status', 'paid_at', 'expires_at'],
+  image_captchas: ['id', 'captcha_id', 'code_hash', 'attempts', 'expires_at', 'used_at'],
 }
 
 const requiredIndexes = {
   users: ['uk_users_phone'],
   event_registrations: ['uk_event_registrations_event_user'],
   post_likes: ['uk_post_likes_post_user'],
+  posts: ['idx_posts_status'],
+  comments: ['idx_comments_status'],
+  content_reports: ['idx_content_reports_post', 'idx_content_reports_comment', 'idx_content_reports_status', 'idx_content_reports_reporter', 'idx_content_reports_target_status'],
   seats: ['uk_seats_code'],
   bookings: ['uk_bookings_booking_no', 'idx_bookings_seat_date_time'],
   user_favorites: ['uk_user_favorites_target'],
@@ -59,6 +64,23 @@ async function checkStructure() {
   const paymentExpiry = columns.get('payments').get('expires_at')
   assert(verificationExpiry.dataType === 'datetime' && verificationExpiry.isNullable === 'NO', 'verification_codes.expires_at must be DATETIME NOT NULL')
   assert(paymentExpiry.dataType === 'datetime' && paymentExpiry.isNullable === 'YES', 'payments.expires_at must be DATETIME NULL')
+
+  const [[statusDefaults]] = await pool.query(`SELECT
+    (SELECT COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'posts' AND COLUMN_NAME = 'status') AS postDefault,
+    (SELECT COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'comments' AND COLUMN_NAME = 'status') AS commentDefault,
+    (SELECT COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'content_reports' AND COLUMN_NAME = 'status') AS reportDefault`,
+  [env.db.name, env.db.name, env.db.name])
+  assert(statusDefaults.postDefault === 'pending', 'posts.status default must be pending for new posts')
+  assert(statusDefaults.commentDefault === 'published', 'comments.status default must be published')
+  assert(statusDefaults.reportDefault === 'pending', 'content_reports.status default must be pending')
+
+  const [[invalidStatuses]] = await pool.query(`SELECT
+    (SELECT COUNT(*) FROM posts WHERE status NOT IN ('pending','published','rejected','reported','hidden') OR status IS NULL) AS posts,
+    (SELECT COUNT(*) FROM comments WHERE status NOT IN ('published','pending','hidden','deleted') OR status IS NULL) AS comments,
+    (SELECT COUNT(*) FROM content_reports WHERE status NOT IN ('pending','resolved','dismissed') OR status IS NULL) AS reports`)
+  assert(Number(invalidStatuses.posts) === 0, 'posts contain unsupported statuses')
+  assert(Number(invalidStatuses.comments) === 0, 'comments contain unsupported statuses')
+  assert(Number(invalidStatuses.reports) === 0, 'content_reports contain unsupported statuses')
 
   const [indexRows] = await pool.execute(
     'SELECT TABLE_NAME AS tableName, INDEX_NAME AS indexName FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ?',

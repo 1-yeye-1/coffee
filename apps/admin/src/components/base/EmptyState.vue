@@ -1,5 +1,7 @@
 <script setup>
+import { onMounted, ref } from 'vue'
 import BaseButton from './BaseButton.vue'
+import { useAnimeMotion } from '@/composables/useAnimeMotion'
 
 defineProps({
   title: {
@@ -17,10 +19,13 @@ defineProps({
 })
 
 const emit = defineEmits(['action'])
+const emptyRef = ref(null)
+const { floatEmpty } = useAnimeMotion()
+onMounted(() => floatEmpty(emptyRef.value?.querySelector('.empty-state__icon') || emptyRef.value))
 </script>
 
 <template>
-  <section class="empty-state" aria-live="polite">
+  <section ref="emptyRef" class="empty-state" aria-live="polite">
     <div v-if="$slots.icon" class="empty-state__icon" aria-hidden="true">
       <slot name="icon" />
     </div>
