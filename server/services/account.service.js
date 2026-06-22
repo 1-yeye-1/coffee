@@ -1,4 +1,5 @@
 import { pool } from '../db/mysql.js'
+import { shanghaiDateString } from '../utils/date.js'
 import { assertPhone, normalizePhone, phoneExists, verifyCode } from './auth.service.js'
 import { createNotification, listNotifications as listUserNotifications, markAsRead } from './notifications.service.js'
 import { writeAudit } from './admin.service.js'
@@ -116,7 +117,7 @@ export async function updateProfile(userId, payload) {
   if (!nickname) throw Object.assign(new Error('昵称必填'), { statusCode: 400 })
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Object.assign(new Error('邮箱格式不正确'), { statusCode: 400 })
   if (gender && !['female', 'male', 'other', 'private'].includes(gender)) throw Object.assign(new Error('性别选项无效'), { statusCode: 400 })
-  if (birthday && (!/^\d{4}-\d{2}-\d{2}$/.test(birthday) || birthday > new Date().toISOString().slice(0, 10))) throw Object.assign(new Error('生日日期无效'), { statusCode: 400 })
+  if (birthday && (!/^\d{4}-\d{2}-\d{2}$/.test(birthday) || birthday > shanghaiDateString())) throw Object.assign(new Error('生日日期无效'), { statusCode: 400 })
   if (bio && bio.length > 500) throw Object.assign(new Error('个人简介不能超过 500 字'), { statusCode: 400 })
   await pool.execute('UPDATE users SET nickname = ?, email = ?, gender = ?, birthday = ?, bio = ? WHERE id = ? AND role = "user"', [nickname, email, gender, birthday, bio, userId])
   await writeAudit(userId, 'user.profile.update', 'account', { userId, changes: { nickname, emailChanged: payload.email !== undefined, gender, birthday, bioLength: bio?.length || 0 } })

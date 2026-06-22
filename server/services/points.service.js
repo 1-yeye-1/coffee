@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { pool } from '../db/mysql.js'
+import { isBirthdayOnDate, shanghaiDateString } from '../utils/date.js'
 import { recordAudit } from './audit.service.js'
 import { createNotification } from './notifications.service.js'
 
@@ -18,13 +19,16 @@ function mapCoupon(row) {
   }
 }
 
-export async function issueBirthdayCoupon(userId) {
+export async function issueBirthdayCoupon(userId, { date = shanghaiDateString() } = {}) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new TypeError('生日优惠券发放日期格式无效')
+  const issueYear = Number(date.slice(0, 4))
+  const todayMd = date.slice(5)
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
     const [[user]] = await connection.execute(
-      `SELECT id, username, nickname, birthday, DATE_FORMAT(birthday, '%m-%d') AS birthdayMd,
-        DATE_FORMAT(CURRENT_DATE, '%m-%d') AS todayMd, YEAR(CURRENT_DATE) AS issueYear
+      `SELECT id, username, nickname, birthday, DATE_FORMAT(birthday, '%Y-%m-%d') AS birthdayDate,
+        DATE_FORMAT(birthday, '%m-%d') AS birthdayMd
        FROM users WHERE id = ? AND role = 'user' FOR UPDATE`,
       [userId],
     )
@@ -32,24 +36,24 @@ export async function issueBirthdayCoupon(userId) {
       await connection.commit()
       return { status: 'unset', message: '设置生日后可在生日当天领取专享优惠券。' }
     }
-    if (user.birthdayMd !== user.todayMd) {
+    if (!isBirthdayOnDate(user.birthdayDate, date)) {
       await connection.commit()
-      return { status: 'upcoming', message: user.birthdayMd < user.todayMd ? '今年生日已过，将在下一次生日当天自动发放。' : '生日当天登录或进入积分中心即可自动领取。' }
+      return { status: 'upcoming', message: user.birthdayMd < todayMd ? '今年生日已过，将在下一次生日当天自动发放。' : '生日当天登录或进入积分中心即可自动领取。' }
     }
     const [[coupon]] = await connection.execute("SELECT * FROM coupons WHERE coupon_type = 'birthday' AND status = 'active' LIMIT 1")
     if (!coupon) {
       await connection.commit()
       return { status: 'unavailable', message: '生日福利暂未开放。' }
     }
-    const code = `BDAY-${user.issueYear}-${user.id}`
+    const code = `BDAY-${issueYear}-${user.id}`
     const [result] = await connection.execute(
       `INSERT IGNORE INTO user_coupons
         (user_id, coupon_id, coupon_code, source, issue_year, points_cost, expires_at)
        VALUES (?, ?, ?, 'birthday', ?, 0, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? DAY))`,
-      [user.id, coupon.id, code, user.issueYear, coupon.valid_days],
+      [user.id, coupon.id, code, issueYear, coupon.valid_days],
     )
     if (result.affectedRows) {
-      await recordAudit({ operatorId: user.id, operatorType: 'user', actor: user, action: 'coupon.issue', module: 'coupons', targetType: 'coupon', targetId: coupon.id, description: `发放 ${user.issueYear} 年生日优惠券`, payload: { couponId: coupon.id, source: 'birthday', issueYear: user.issueYear }, connection })
+      await recordAudit({ operatorId: user.id, operatorType: 'user', actor: user, action: 'coupon.issue', module: 'coupons', targetType: 'coupon', targetId: coupon.id, description: `发放 ${issueYear} 年生日优惠券`, payload: { couponId: coupon.id, source: 'birthday', issueYear }, connection })
       await createNotification({ userId: user.id, title: '生日福利已到账', content: `${coupon.name} 已放入你的优惠券账户。`, type: 'coupon', relatedId: coupon.id, relatedType: 'coupon' }, connection)
     }
     await connection.commit()

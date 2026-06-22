@@ -195,8 +195,8 @@ onBeforeUnmount(scheduleRefresh.cancel)
     <section class="seat-occupancy" aria-label="当前时段占用率"><div><strong>当前时段占用率</strong><span>{{ occupancyRate }}%</span></div><progress :value="occupancyRate" max="100">{{ occupancyRate }}%</progress></section>
     <p v-if="error" class="form-error">{{ error }}</p>
     <section class="admin-panel">
-      <div ref="mapRef" class="admin-seat-map" aria-label="可拖拽座位地图">
-        <button v-for="seat in seats" :key="seat.seatId" type="button" :title="`${seat.code} ${seat.status}，拖拽可调整位置，点击可编辑`" :aria-label="`${seat.code}，拖拽调整位置，点击编辑`" :class="[`is-${seat.status}`, { 'is-dragging': draggingSeatId === seat.seatId }]" :style="{ left: `${seat.x}%`, top: `${seat.y}%`, width: `${seat.width || 64}px`, height: `${seat.height || 52}px` }" @pointerdown="startSeatDrag(seat, $event)" @pointermove="moveSeat" @pointerup="finishSeatDrag" @pointercancel="finishSeatDrag($event, true)" @click="handleSeatClick(seat, $event)"><strong>{{ seat.code }}</strong><small>{{ seat.status === 'available' ? '空闲' : seat.status === 'reserved' ? '已预约' : '停用' }}</small></button>
+      <div ref="mapRef" class="admin-seat-map" data-cursor="drag" data-draggable="true" aria-label="可拖拽座位地图">
+        <button v-for="seat in seats" :key="seat.seatId" type="button" data-cursor="drag" data-draggable="true" :title="`${seat.code} ${seat.status}，拖拽可调整位置，点击可编辑`" :aria-label="`${seat.code}，拖拽调整位置，点击编辑`" :class="[`is-${seat.status}`, { 'is-dragging': draggingSeatId === seat.seatId }]" :style="{ left: `${seat.x}%`, top: `${seat.y}%`, width: `${seat.width || 64}px`, height: `${seat.height || 52}px` }" @pointerdown="startSeatDrag(seat, $event)" @pointermove="moveSeat" @pointerup="finishSeatDrag" @pointercancel="finishSeatDrag($event, true)" @click="handleSeatClick(seat, $event)"><strong>{{ seat.code }}</strong><small>{{ seat.status === 'available' ? '空闲' : seat.status === 'reserved' ? '已预约' : '停用' }}</small></button>
       </div>
       <BaseTable :columns="columns" :items="seats" :loading="loading" empty-text="暂无座位">
         <template #cell-capacity="{ value }">{{ value }} 人</template>

@@ -1,6 +1,8 @@
 ﻿import { pool } from '../server/db/mysql.js'
 
 import { env } from '../server/config/env.js'
+import { issueBirthdayCoupon } from '../server/services/points.service.js'
+import { isBirthdayOnDate, shanghaiDateString } from '../server/utils/date.js'
 
 const baseURL = String(process.env.SMOKE_API_BASE_URL || `http://127.0.0.1:${process.env.SERVER_PORT || 4173}/api`).replace(/\/$/, '')
 const adminUsername = process.env.SMOKE_ADMIN_USERNAME || 'admin'
@@ -161,7 +163,7 @@ async function main() {
   assert(me.payload.data.phone === smokePhone, 'auth/me should return normal user')
   logPass('auth/me')
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = shanghaiDateString()
   const profile = await request('PATCH', '/account/profile', {
     token: userToken,
     body: { nickname: 'Smoke Profile', email: `smoke-${stamp}@example.test`, gender: 'private', birthday: today, bio: 'Phase 17 smoke profile' },
@@ -188,6 +190,24 @@ async function main() {
   const birthdayAgain = await request('GET', '/account/points-center', { token: userToken })
   assert(birthdayAgain.payload.data.redemptions.filter((item) => item.source === 'birthday').length === 1, 'birthday coupon was issued more than once')
   logPass('points redemption idempotency and annual birthday coupon')
+
+  await pool.query("DELETE FROM user_coupons WHERE user_id = ? AND source = 'birthday' AND issue_year >= 2098", [me.payload.data.id])
+  await pool.query("UPDATE users SET birthday = '2000-01-15' WHERE id = ?", [me.payload.data.id])
+  const nonBirthday = await issueBirthdayCoupon(me.payload.data.id, { date: '2098-01-14' })
+  assert(nonBirthday.status === 'upcoming', 'birthday coupon must not be issued on a non-birthday')
+  const firstAnnualIssue = await issueBirthdayCoupon(me.payload.data.id, { date: '2098-01-15' })
+  const duplicateAnnualIssue = await issueBirthdayCoupon(me.payload.data.id, { date: '2098-01-15' })
+  const nextAnnualIssue = await issueBirthdayCoupon(me.payload.data.id, { date: '2099-01-15' })
+  assert(firstAnnualIssue.issued === true, 'birthday coupon should be issued on the birthday')
+  assert(duplicateAnnualIssue.issued === false, 'birthday coupon must not be issued twice in one year')
+  assert(nextAnnualIssue.issued === true, 'birthday coupon should be issued again in a new year')
+  const [[annualIssues]] = await pool.query("SELECT COUNT(*) AS count FROM user_coupons WHERE user_id = ? AND source = 'birthday' AND issue_year IN (2098, 2099)", [me.payload.data.id])
+  assert(Number(annualIssues.count) === 2, 'annual birthday coupon uniqueness is invalid')
+  assert(isBirthdayOnDate('2000-02-29', '2099-02-28'), 'February 29 birthday should fall on February 28 in a non-leap year')
+  assert(isBirthdayOnDate('2000-02-29', '2096-02-29'), 'February 29 birthday should remain February 29 in a leap year')
+  await pool.query("DELETE FROM user_coupons WHERE user_id = ? AND source = 'birthday' AND issue_year >= 2098", [me.payload.data.id])
+  await pool.query('UPDATE users SET birthday = ? WHERE id = ?', [today, me.payload.data.id])
+  logPass('birthday coupon date, non-birthday, annual renewal and leap-year rules')
 
   const adminUsers = await request('GET', `/admin/users?keyword=${encodeURIComponent(smokePhone)}`, { token: adminToken })
   const adminUser = adminUsers.payload.data.find((item) => Number(item.id) === Number(me.payload.data.id))

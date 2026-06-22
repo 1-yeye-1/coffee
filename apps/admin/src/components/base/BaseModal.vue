@@ -82,7 +82,7 @@ onBeforeUnmount(restorePage)
         >
           <header class="base-modal__header">
             <h2 v-if="title" :id="titleId" class="base-modal__title">{{ title }}</h2>
-            <button class="base-modal__close" type="button" aria-label="关闭弹窗" @click="close">
+            <button class="base-modal__close" type="button" data-cursor="close" aria-label="关闭弹窗" @click="close">
               ×
             </button>
           </header>

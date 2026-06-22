@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import NotificationBell from '@/components/notifications/NotificationBell.vue'
 
 import CartTrigger from './CartTrigger.vue'
+import CursorSettings from './CursorSettings.vue'
 import GlobalSearchTrigger from './GlobalSearchTrigger.vue'
 import LayoutShell from './LayoutShell.vue'
 import MobileNavigation from './MobileNavigation.vue'
@@ -47,6 +48,7 @@ function isActive(path, currentPath) {
       <div class="app-header__actions">
         <GlobalSearchTrigger />
         <ThemeToggle />
+        <CursorSettings />
         <CartTrigger />
         <NotificationBell />
         <UserMenu />
