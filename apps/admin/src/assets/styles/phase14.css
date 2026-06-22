@@ -23,7 +23,7 @@ body{color:var(--text-main);background-color:var(--page-bg);background-image:lin
 .base-button:not(.base-button--outline):not(.base-button--ghost):not(.base-button--danger){background-image:linear-gradient(110deg,var(--coffee-800),var(--coffee-600),var(--gold-500))!important}
 .base-button:hover:not(:disabled){background-position:100%;transform:translateY(-2px);box-shadow:0 10px 22px rgb(42 24 16 / .16)!important}.base-button:active:not(:disabled){transform:scale(.97)!important}
 input,select,textarea{border-radius:12px!important;border-color:var(--border-soft)!important}input:focus,select:focus,textarea:focus{border-color:var(--gold-500)!important;box-shadow:0 0 0 4px rgb(200 161 101 / .14)!important}
-.base-modal__dialog{border-radius:var(--radius-card)!important;box-shadow:0 32px 90px rgb(20 12 8 / .28)!important;animation:p14-admin-scale var(--transition-slow)}
+.base-modal__dialog{border-radius:var(--radius-card)!important;box-shadow:0 32px 90px rgb(20 12 8 / .28)!important}
 .base-drawer__panel{box-shadow:-24px 0 70px rgb(20 12 8 / .2)!important}
 .admin-panel{border-color:var(--field-border)!important;border-radius:var(--radius-card)!important;background:color-mix(in srgb,var(--panel-bg) 88%,transparent)!important;box-shadow:var(--shadow-card)!important}
 .admin-chart{border:1px solid var(--field-border)!important;border-radius:var(--radius-card)!important;background:color-mix(in srgb,var(--panel-bg) 90%,transparent)!important;box-shadow:var(--shadow-card)!important}

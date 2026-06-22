@@ -1,4 +1,5 @@
 import { pool } from '../db/mysql.js'
+import { recordAudit } from './audit.service.js'
 import { parsePagination } from '../utils/pagination.js'
 import { listBooks } from './books.service.js'
 import { listProducts } from './products.service.js'
@@ -134,6 +135,8 @@ function mapUser(row) {
     role: row.role,
     status: row.status,
     points: Number(row.points || 0),
+    birthday: row.birthday,
+    couponCount: Number(row.couponCount || 0),
     level: row.level,
     orders: Number(row.orders || 0),
     bookings: Number(row.bookings || 0),
@@ -174,14 +177,16 @@ export async function listAdminUsers(query = {}) {
   )
   const [rows] = await pool.execute(
     `SELECT u.id, u.username, u.nickname, u.email, u.phone, u.avatar, u.role, u.status,
-      u.points, u.level, u.created_at AS createdAt, u.updated_at AS updatedAt,
+      u.points, u.level, DATE_FORMAT(u.birthday, '%Y-%m-%d') AS birthday, u.created_at AS createdAt, u.updated_at AS updatedAt,
       COUNT(DISTINCT o.id) AS orders,
       COUNT(DISTINCT b.id) AS bookings,
-      COUNT(DISTINCT p.id) AS posts
+      COUNT(DISTINCT p.id) AS posts,
+      COUNT(DISTINCT uc.id) AS couponCount
      FROM users u
      LEFT JOIN orders o ON o.user_id = u.id
      LEFT JOIN bookings b ON b.user_id = u.id
      LEFT JOIN posts p ON p.user_id = u.id
+     LEFT JOIN user_coupons uc ON uc.user_id = u.id
      ${whereSql}
      GROUP BY u.id
      ORDER BY u.created_at DESC, u.id DESC
@@ -196,6 +201,9 @@ export async function listAdminUsers(query = {}) {
 }
 
 export async function updateAdminUser(id, payload, operatorId) {
+  if (payload.points !== undefined && (!Number.isInteger(Number(payload.points)) || Number(payload.points) < 0)) {
+    throw Object.assign(new Error('积分必须是非负整数'), { statusCode: 400 })
+  }
   const fields = []
   const params = []
   const allowed = {
@@ -219,18 +227,33 @@ export async function updateAdminUser(id, payload, operatorId) {
     throw Object.assign(new Error('用户状态无效'), { statusCode: 400 })
   }
 
-  params.push(id)
-  const [result] = await pool.execute(
-    `UPDATE users SET ${fields.join(', ')} WHERE id = ? AND role = 'user'`,
-    params,
-  )
-  if (!result.affectedRows) return null
-
-  await writeAudit(operatorId, 'user.admin.update', 'users', { id, changes: payload, operatorType: 'admin' })
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [[before]] = await connection.execute('SELECT id, points FROM users WHERE id = ? AND role = "user" FOR UPDATE', [id])
+    if (!before) { await connection.rollback(); return null }
+    params.push(id)
+    await connection.execute(`UPDATE users SET ${fields.join(', ')} WHERE id = ? AND role = 'user'`, params)
+    const nextPoints = payload.points === undefined ? Number(before.points) : Number(payload.points) || 0
+    const delta = nextPoints - Number(before.points)
+    if (delta) {
+      await connection.execute(`INSERT INTO user_points (user_id, points, type, source, description)
+        VALUES (?, ?, 'adjust', 'admin_adjust', '后台调整积分')`, [id, delta])
+      await writeAudit(operatorId, 'points.change', 'points', { id, userId: id, points: delta, balance: nextPoints, source: 'admin_adjust', operatorType: 'admin' }, connection)
+    }
+    await writeAudit(operatorId, 'user.admin.update', 'users', { id, fields: Object.keys(payload), operatorType: 'admin' }, connection)
+    await connection.commit()
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
   const [[row]] = await pool.execute(
     `SELECT u.id, u.username, u.nickname, u.email, u.phone, u.avatar, u.role, u.status,
-      u.points, u.level, u.created_at AS createdAt, u.updated_at AS updatedAt,
-      0 AS orders, 0 AS bookings, 0 AS posts
+      u.points, u.level, DATE_FORMAT(u.birthday, '%Y-%m-%d') AS birthday, u.created_at AS createdAt, u.updated_at AS updatedAt,
+      0 AS orders, 0 AS bookings, 0 AS posts,
+      (SELECT COUNT(*) FROM user_coupons uc WHERE uc.user_id = u.id) AS couponCount
      FROM users u WHERE u.id = ? AND u.role = 'user' LIMIT 1`,
     [id],
   )
@@ -238,12 +261,9 @@ export async function updateAdminUser(id, payload, operatorId) {
 }
 
 export async function writeAudit(operatorId, action, module, payload = null, connection = pool) {
-  const adminActionPrefixes = ['book.', 'product.', 'event.', 'post.status', 'booking.status', 'order.status', 'order.payment', 'user.admin.']
-  const operatorType = payload?.operatorType || (adminActionPrefixes.some((prefix) => action.startsWith(prefix)) ? 'admin' : 'user')
+  const userActionPrefixes = ['user.', 'order.create', 'order.pay', 'order.cancel', 'order.completed', 'booking.create', 'booking.cancel', 'event.register', 'event.unregister', 'post.create', 'post.like', 'post.unlike', 'comment.create', 'comment.delete', 'content.report.create', 'points.', 'coupon.']
+  const operatorType = payload?.operatorType || (userActionPrefixes.some((prefix) => action.startsWith(prefix)) ? 'user' : 'admin')
   const safePayload = payload?.operatorType ? { ...payload } : payload
   if (safePayload?.operatorType) delete safePayload.operatorType
-  await connection.execute(
-    'INSERT INTO audit_logs (operator_id, operator_type, action, module, payload) VALUES (?, ?, ?, ?, ?)',
-    [operatorId || null, operatorType, action, module, safePayload ? JSON.stringify(safePayload) : null],
-  )
+  await recordAudit({ operatorId, operatorType, action, module, payload: safePayload, connection })
 }

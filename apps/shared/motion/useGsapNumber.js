@@ -23,7 +23,7 @@ export function useGsapNumber() {
     const state = { value: options.from ?? 0 }
     const tween = gsap.to(state, {
       value: numeric,
-      duration: options.duration ?? 1,
+      duration: Math.min(options.duration ?? 0.6, 0.6),
       ease: 'power2.out',
       onUpdate: () => { element.textContent = `${prefix}${format(state.value)}${suffix}` },
       onComplete: () => tweens.delete(element),

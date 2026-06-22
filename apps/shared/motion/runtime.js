@@ -1,5 +1,7 @@
 const controllers = new Set()
 let disabled = false
+let preferenceQuery = null
+let preferenceHandler = null
 
 export function isMotionEnabled() {
   return !disabled
@@ -35,6 +37,14 @@ function status() {
 
 export function installMotionDevTools() {
   if (typeof window === 'undefined') return null
+  if (!preferenceQuery) {
+    preferenceQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    preferenceHandler = (event) => {
+      if (event.matches) controllers.forEach((controller) => controller.disable?.())
+      else controllers.forEach((controller) => controller.enable?.())
+    }
+    preferenceQuery.addEventListener('change', preferenceHandler)
+  }
   const api = Object.freeze({ disable, enable, status })
   Object.defineProperty(window, '__coffeeMotion', { configurable: true, value: api })
   return api

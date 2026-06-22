@@ -117,6 +117,7 @@ function isActive(path, currentPath) {
 }
 
 .admin-sidebar__nav a {
+  position: relative;
   display: flex;
   min-height: 2.75rem;
   padding: var(--cb-space-2) var(--cb-space-3);
@@ -128,13 +129,36 @@ function isActive(path, currentPath) {
   border-radius: var(--cb-radius-md);
   transition:
     color var(--cb-duration-fast) var(--cb-ease-standard),
-    background-color var(--cb-duration-fast) var(--cb-ease-standard);
+    background-color var(--cb-duration-fast) var(--cb-ease-standard),
+    transform var(--cb-duration-normal) var(--cb-ease-emphasized);
+}
+
+.admin-sidebar__nav a::before {
+  position: absolute;
+  left: 0;
+  width: 0.2rem;
+  height: 1.25rem;
+  content: "";
+  background: var(--cb-color-gold);
+  border-radius: var(--cb-radius-pill);
+  opacity: 0;
+  transform: scaleY(0.35);
+  transition: opacity var(--cb-duration-fast) var(--cb-ease-standard), transform var(--cb-duration-normal) var(--cb-ease-emphasized);
 }
 
 .admin-sidebar__nav a:hover,
 .admin-sidebar__nav a.is-active {
   color: var(--cb-color-coffee);
   background: var(--cb-bg-soft);
+}
+
+.admin-sidebar__nav a:hover {
+  transform: translateX(0.15rem);
+}
+
+.admin-sidebar__nav a.is-active::before {
+  opacity: 1;
+  transform: scaleY(1);
 }
 
 .admin-sidebar__icon {
@@ -169,5 +193,15 @@ function isActive(path, currentPath) {
 .admin-sidebar--collapsed .admin-sidebar__nav a {
   justify-content: center;
   padding-inline: var(--cb-space-2);
+}
+
+.admin-sidebar--collapsed .admin-sidebar__nav a::before {
+  left: -0.15rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-sidebar__nav a,
+  .admin-sidebar__nav a::before { transition-duration: 0.01ms !important; }
+  .admin-sidebar__nav a:hover { transform: none; }
 }
 </style>

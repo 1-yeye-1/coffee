@@ -140,7 +140,7 @@ watch(() => visibleBooks.value.map((book) => book.id).join(','), async () => {
 
       <div class="catalog-grid">
         <BaseSkeleton v-if="booksStore.loading" v-for="index in pageSize" :key="`book-loading-${index}`" variant="card" />
-        <BaseCard v-for="book in visibleBooks" :key="book.id" class="catalog-card" variant="hover" data-cursor="READ" data-tilt-card>
+        <BaseCard v-for="book in visibleBooks" :key="book.id" class="catalog-card" variant="interactive" data-cursor="READ" data-tilt-card @click="router.push(`/books/${book.slug}`)">
           <div class="catalog-card__visual" data-tilt-layer="1.35">
             <button
               class="catalog-card__favorite"
@@ -167,7 +167,7 @@ watch(() => visibleBooks.value.map((book) => book.id).join(','), async () => {
             <BaseBadge :variant="book.stock > 0 ? 'success' : 'danger'">{{ book.status }}</BaseBadge>
             <p>{{ book.summary }}</p>
             <div class="catalog-card__actions">
-              <BaseButton size="sm" @click="router.push(`/books/${book.slug}`)">查看详情</BaseButton>
+              <BaseButton size="sm" @click.stop="router.push(`/books/${book.slug}`)">查看详情</BaseButton>
             </div>
           </div>
         </BaseCard>

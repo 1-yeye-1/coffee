@@ -62,7 +62,7 @@ watch([visibleEvents, view], async () => {
         </div>
 
         <div v-if="view === 'list'" class="event-grid">
-          <BaseCard v-for="event in visibleEvents" :key="event.id" class="event-card" variant="hover" data-cursor="JOIN" data-tilt-card>
+          <BaseCard v-for="event in visibleEvents" :key="event.id" class="event-card" variant="interactive" data-cursor="JOIN" data-tilt-card @click="router.push(`/events/${event.slug}`)">
             <div class="event-card__visual" data-tilt-layer="1.3">
               <img v-if="event.coverUrl" class="event-card__image" :src="resolveUploadUrl(event.coverUrl)" :alt="event.title" loading="lazy" decoding="async" />
               <template v-else><span>{{ event.category }}</span><strong>{{ event.date.slice(5).replace('-', '.') }}</strong></template>
@@ -78,7 +78,7 @@ watch([visibleEvents, view], async () => {
               <div><span>地点</span><strong>{{ event.location.split(' · ')[0] }}</strong></div>
               <div><span>人数</span><strong>{{ event.attendees }} / {{ event.capacity }}</strong></div>
             </div>
-            <BaseButton variant="outline" @click="router.push(`/events/${event.slug}`)">查看活动</BaseButton>
+            <BaseButton variant="outline" @click.stop="router.push(`/events/${event.slug}`)">查看活动</BaseButton>
           </BaseCard>
         </div>
 

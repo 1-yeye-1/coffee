@@ -19,6 +19,7 @@ import {
   verifyCurrentPhone,
 } from '../services/account.service.js'
 import { failure, success } from '../utils/response.js'
+import { getPointsCenter, redeemCoupon } from '../services/points.service.js'
 
 export function registerAccountRoutes(router) {
   router.get('/api/account/overview', requireUser, async (req, res) => {
@@ -68,6 +69,14 @@ export function registerAccountRoutes(router) {
 
   router.get('/api/account/points', requireUser, async (req, res) => {
     return success(res, await listPointRecords(req.user.id))
+  })
+
+  router.get('/api/account/points-center', requireUser, async (req, res) => {
+    return success(res, await getPointsCenter(req.user.id))
+  })
+
+  router.post('/api/account/points-center/redeem/:couponId', requireUser, async (req, res) => {
+    return success(res, await redeemCoupon(req.user.id, req.params.couponId, req.body.requestKey), '兑换成功')
   })
 
   router.get('/api/account/addresses', requireUser, async (req, res) => {

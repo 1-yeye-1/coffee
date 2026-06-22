@@ -13,8 +13,9 @@ const detailOpen = ref(false)
 const exportMessage = ref('')
 const meta = reactive({ page: 1, pageSize: 15, total: 0 })
 const filters = reactive({
-  adminName: '',
-  adminId: '',
+  userName: '',
+  userId: '',
+  role: 'all',
   module: 'all',
   action: 'all',
   startDate: '',
@@ -24,7 +25,8 @@ const filters = reactive({
 
 const columns = [
   { key: 'createdAt', label: '时间' },
-  { key: 'adminName', label: '管理员' },
+  { key: 'userName', label: '用户' },
+  { key: 'role', label: '角色' },
   { key: 'module', label: '模块' },
   { key: 'action', label: '操作' },
   { key: 'target', label: '目标' },
@@ -36,24 +38,37 @@ const columns = [
 const moduleOptions = [
   { label: '全部模块', value: 'all' },
   { label: '登录认证', value: 'auth' },
+  { label: '账户', value: 'account' },
   { label: '商品', value: 'product' },
   { label: '订单', value: 'order' },
   { label: '预约', value: 'booking' },
   { label: '社区', value: 'community' },
   { label: '通知', value: 'notification' },
+  { label: '积分', value: 'points' },
+  { label: '座位', value: 'seat' },
   { label: '上传文件', value: 'upload' },
   { label: '图书', value: 'book' },
 ]
 
 const actionOptions = [
   { label: '全部操作', value: 'all' },
-  { label: '登录', value: 'login' },
-  { label: '新增', value: 'create' },
-  { label: '修改', value: 'update' },
-  { label: '删除', value: 'delete' },
-  { label: '审核通过', value: 'approve' },
-  { label: '拒绝', value: 'reject' },
-  { label: '改状态', value: 'change_status' },
+  { label: '认证', value: 'auth.' },
+  { label: '用户资料', value: 'user.' },
+  { label: '订单', value: 'order.' },
+  { label: '预约', value: 'booking.' },
+  { label: '活动', value: 'event.' },
+  { label: '社区', value: 'post.' },
+  { label: '评论', value: 'comment.' },
+  { label: '积分', value: 'points.' },
+  { label: '优惠券发放', value: 'coupon.issue' },
+  { label: '优惠券兑换', value: 'coupon.redeem' },
+  { label: '座位管理', value: 'seat.' },
+]
+
+const roleOptions = [
+  { label: '全部角色', value: 'all' },
+  { label: '普通用户', value: 'user' },
+  { label: '管理员', value: 'admin' },
 ]
 
 const actionText = {
@@ -117,7 +132,7 @@ onMounted(() => load(1))
       <div class="admin-page__title">
         <span class="section-eyebrow">Admin Logs</span>
         <h1>操作日志</h1>
-        <p>查看后台管理员的重要操作记录，支持按管理员、模块、操作类型和时间筛选。</p>
+        <p>查看管理员与普通用户的关键操作，支持按用户、角色、操作类型和时间筛选。</p>
       </div>
       <BaseButton variant="outline" @click="exportLogs">导出日志</BaseButton>
     </header>
@@ -126,8 +141,9 @@ onMounted(() => load(1))
     <p v-if="exportMessage" class="form-error">{{ exportMessage }}</p>
 
     <section class="logs-toolbar">
-      <BaseInput v-model="filters.adminName" label="管理员名称" placeholder="输入账号或昵称" />
-      <BaseInput v-model="filters.adminId" label="管理员 ID" placeholder="例如 1" />
+      <BaseInput v-model="filters.userName" label="用户名称" placeholder="输入账号或昵称" />
+      <BaseInput v-model="filters.userId" label="用户 ID" placeholder="例如 1" />
+      <BaseSelect v-model="filters.role" label="角色" :options="roleOptions" />
       <BaseSelect v-model="filters.module" label="模块" :options="moduleOptions" />
       <BaseSelect v-model="filters.action" label="操作类型" :options="actionOptions" />
       <BaseInput v-model="filters.startDate" type="date" label="开始日期" />
@@ -138,7 +154,8 @@ onMounted(() => load(1))
 
     <BaseTable :columns="columns" :items="rows" :loading="loading" empty-text="暂无操作日志">
       <template #cell-createdAt="{ value }">{{ new Date(value).toLocaleString('zh-CN') }}</template>
-      <template #cell-adminName="{ item }">{{ item.adminName || `管理员 ${item.adminId || '-'}` }}</template>
+      <template #cell-userName="{ item }">{{ item.userName || `用户 ${item.userId || '-'}` }}</template>
+      <template #cell-role="{ value }"><BaseBadge :variant="value === 'admin' ? 'premium' : 'info'">{{ value === 'admin' ? '管理员' : '普通用户' }}</BaseBadge></template>
       <template #cell-module="{ value }">
         <BaseBadge variant="neutral">{{ value }}</BaseBadge>
       </template>
@@ -164,7 +181,9 @@ onMounted(() => load(1))
     <BaseModal v-model="detailOpen" title="日志详情" @close="detail = null">
       <dl v-if="detail" class="log-detail">
         <div><dt>时间</dt><dd>{{ new Date(detail.createdAt).toLocaleString('zh-CN') }}</dd></div>
-        <div><dt>管理员</dt><dd>{{ detail.adminName || detail.adminId || '-' }}</dd></div>
+        <div><dt>用户</dt><dd>{{ detail.userName || detail.userId || '-' }}</dd></div>
+        <div><dt>用户 ID</dt><dd>{{ detail.userId || '-' }}</dd></div>
+        <div><dt>角色</dt><dd>{{ detail.role === 'admin' ? '管理员' : '普通用户' }}</dd></div>
         <div><dt>模块</dt><dd>{{ detail.module }}</dd></div>
         <div><dt>操作</dt><dd>{{ actionText[detail.action] || detail.action }}</dd></div>
         <div><dt>目标类型</dt><dd>{{ detail.targetType || '-' }}</dd></div>

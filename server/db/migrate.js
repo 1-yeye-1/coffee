@@ -37,12 +37,17 @@ async function migrate() {
     await ensureColumn(connection, databaseName, 'payments', 'updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at')
     await ensureColumn(connection, databaseName, 'audit_logs', 'operator_type', "VARCHAR(30) NOT NULL DEFAULT 'user' AFTER operator_id")
     await ensureColumn(connection, databaseName, 'audit_logs', 'admin_name', 'VARCHAR(120) NULL AFTER operator_type')
+    await ensureColumn(connection, databaseName, 'audit_logs', 'user_name', 'VARCHAR(120) NULL AFTER admin_name')
+    await ensureColumn(connection, databaseName, 'audit_logs', 'role', "VARCHAR(30) NOT NULL DEFAULT 'user' AFTER user_name")
     await ensureColumn(connection, databaseName, 'audit_logs', 'target_type', 'VARCHAR(80) NULL AFTER module')
     await ensureColumn(connection, databaseName, 'audit_logs', 'target_id', 'VARCHAR(80) NULL AFTER target_type')
     await ensureColumn(connection, databaseName, 'audit_logs', 'description', 'VARCHAR(500) NULL AFTER target_id')
     await ensureColumn(connection, databaseName, 'audit_logs', 'ip', 'VARCHAR(80) NULL AFTER description')
     await ensureColumn(connection, databaseName, 'audit_logs', 'user_agent', 'VARCHAR(500) NULL AFTER ip')
     await ensureColumn(connection, databaseName, 'users', 'profile_public', 'TINYINT(1) NOT NULL DEFAULT 1 AFTER level')
+    await ensureColumn(connection, databaseName, 'users', 'gender', 'VARCHAR(20) NULL AFTER profile_public')
+    await ensureColumn(connection, databaseName, 'users', 'birthday', 'DATE NULL AFTER gender')
+    await ensureColumn(connection, databaseName, 'users', 'bio', 'VARCHAR(500) NULL AFTER birthday')
     await ensureColumn(connection, databaseName, 'user_notifications', 'is_read', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER type')
     await ensureColumn(connection, databaseName, 'user_notifications', 'related_id', 'BIGINT UNSIGNED NULL AFTER is_read')
     await ensureColumn(connection, databaseName, 'user_notifications', 'related_type', 'VARCHAR(50) NULL AFTER related_id')
@@ -61,6 +66,13 @@ async function migrate() {
     await connection.query(`ALTER TABLE ${databaseSql}.\`payments\` MODIFY \`expires_at\` DATETIME NULL`)
     await connection.query(`UPDATE ${databaseSql}.\`user_notifications\` SET is_read = 1 WHERE read_at IS NOT NULL`)
     await connection.query(`UPDATE ${databaseSql}.\`seats\` SET status = 'maintenance' WHERE status = 'disabled'`)
+    await connection.query(`UPDATE ${databaseSql}.\`audit_logs\` SET role = operator_type WHERE role IS NULL OR role = '' OR (role = 'user' AND operator_type = 'admin')`)
+    await connection.query(`UPDATE ${databaseSql}.\`audit_logs\` SET user_name = admin_name WHERE (user_name IS NULL OR user_name = '') AND admin_name IS NOT NULL`)
+    await connection.query(`UPDATE ${databaseSql}.\`audit_logs\` SET operator_type = 'user', role = 'user'
+      WHERE action IN ('event.register', 'event.unregister', 'order.create', 'order.pay.submit', 'order.cancel',
+        'booking.create', 'booking.cancel', 'post.create', 'post.like', 'post.unlike', 'comment.create', 'comment.delete')`)
+    await connection.query(`UPDATE ${databaseSql}.\`audit_logs\` SET operator_type = 'admin', role = 'admin'
+      WHERE action LIKE 'seat.%'`)
     await migrateContentStatuses(connection)
     await ensureContentReports(connection)
     await migrateProductTypes(connection)
@@ -71,6 +83,7 @@ async function migrate() {
     await ensureIndex(connection, databaseName, 'cart_items', 'uk_cart_items_cart_product_brew', 'UNIQUE KEY uk_cart_items_cart_product_brew (cart_id, product_id, brew_method)')
     await ensureIndex(connection, databaseName, 'audit_logs', 'idx_audit_logs_operator', 'KEY idx_audit_logs_operator (operator_type, operator_id)')
     await ensureIndex(connection, databaseName, 'audit_logs', 'idx_audit_logs_action', 'KEY idx_audit_logs_action (action)')
+    await ensureIndex(connection, databaseName, 'audit_logs', 'idx_audit_logs_role', 'KEY idx_audit_logs_role (role)')
     await ensureIndex(connection, databaseName, 'user_notifications', 'idx_user_notifications_type', 'KEY idx_user_notifications_type (type)')
     await ensureIndex(connection, databaseName, 'user_notifications', 'idx_user_notifications_is_read', 'KEY idx_user_notifications_is_read (is_read)')
     await ensureIndex(connection, databaseName, 'bookings', 'idx_bookings_seat_date_time', 'KEY idx_bookings_seat_date_time (seat_id, booking_date, time_slot)')
@@ -84,10 +97,53 @@ async function migrate() {
     await ensureSeats(connection)
     await ensureUserAvatars(connection)
     await ensureProductReviews(connection)
+    await ensurePointsCenter(connection)
+    await ensureColumn(connection, databaseName, 'user_coupons', 'request_key', 'VARCHAR(80) NULL AFTER coupon_code')
+    await ensureIndex(connection, databaseName, 'user_coupons', 'uk_user_coupons_request', 'UNIQUE KEY uk_user_coupons_request (user_id, request_key)')
     await removeLegacyAdminUsers(connection)
     console.log(`Database migration completed: ${databaseName} (schema.sql)`)
   } finally {
     await connection.end()
+  }
+}
+
+async function ensurePointsCenter(connection) {
+  await connection.query(`CREATE TABLE IF NOT EXISTS ${databaseSql}.\`coupons\` (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, code VARCHAR(80) NOT NULL, name VARCHAR(120) NOT NULL,
+    coupon_type VARCHAR(40) NOT NULL, points_cost INT NOT NULL DEFAULT 0,
+    discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0, min_spend DECIMAL(10,2) NOT NULL DEFAULT 0,
+    valid_days INT NOT NULL DEFAULT 30, description VARCHAR(255) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'active', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id), UNIQUE KEY uk_coupons_code (code), KEY idx_coupons_status (status)
+  ) ENGINE=InnoDB`)
+  await connection.query(`CREATE TABLE IF NOT EXISTS ${databaseSql}.\`user_coupons\` (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, user_id BIGINT UNSIGNED NOT NULL,
+    coupon_id BIGINT UNSIGNED NOT NULL, coupon_code VARCHAR(120) NOT NULL, request_key VARCHAR(80) NULL,
+    source VARCHAR(30) NOT NULL DEFAULT 'points', issue_year SMALLINT UNSIGNED NULL,
+    points_cost INT NOT NULL DEFAULT 0, status VARCHAR(20) NOT NULL DEFAULT 'unused',
+    issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, redeemed_at DATETIME NULL,
+    PRIMARY KEY (id), UNIQUE KEY uk_user_coupons_code (coupon_code),
+    UNIQUE KEY uk_user_coupons_request (user_id, request_key),
+    UNIQUE KEY uk_user_coupons_annual (user_id, coupon_id, source, issue_year),
+    KEY idx_user_coupons_user_status (user_id, status),
+    CONSTRAINT fk_user_coupons_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_coupons_coupon FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE RESTRICT
+  ) ENGINE=InnoDB`)
+  const coupons = [
+    ['COFFEE-8', '咖啡 8 元折扣券', 'coffee', 300, 8, 28, 30, '咖啡商品满 28 元可用'],
+    ['BOOK-15', '图书满 99 减 15 券', 'book', 500, 15, 99, 45, '图书商品满 99 元可用'],
+    ['EVENT-20', '文化活动 20 元券', 'event', 800, 20, 80, 60, '文化活动报名满 80 元可用'],
+    ['MEMBER-10', '全场 10 元优惠券', 'general', 600, 10, 68, 30, '全场满 68 元可用'],
+    ['BIRTHDAY-20', '生日专享 20 元券', 'birthday', 0, 20, 68, 30, '生日当天自动发放，每年一次'],
+  ]
+  for (const coupon of coupons) {
+    await connection.execute(`INSERT INTO ${databaseSql}.\`coupons\`
+      (code, name, coupon_type, points_cost, discount_amount, min_spend, valid_days, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE name=VALUES(name), coupon_type=VALUES(coupon_type), points_cost=VALUES(points_cost),
+        discount_amount=VALUES(discount_amount), min_spend=VALUES(min_spend), valid_days=VALUES(valid_days),
+        description=VALUES(description)`, coupon)
   }
 }
 

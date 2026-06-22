@@ -3,12 +3,18 @@ import { onMounted, reactive, ref } from 'vue'
 
 import { getAccountOverview, getAvatarHistory, reuseAvatar, selectPresetAvatar, updatePrivacy, updateProfile } from '@/api/account'
 import { resolveUploadUrl, uploadAvatar } from '@/api/upload'
-import { BaseBadge, BaseButton, BaseInput, BaseToast, ErrorPanel } from '@/components/base'
+import { BaseBadge, BaseButton, BaseInput, BaseSelect, BaseTextarea, BaseToast, ErrorPanel } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/pages/engagement.css'
 
 const authStore = useAuthStore()
-const form = reactive({ nickname: '', phone: '', email: '', profilePublic: true })
+const form = reactive({ nickname: '', phone: '', email: '', gender: 'private', birthday: '', bio: '', profilePublic: true })
+const genderOptions = [
+  { label: '不公开', value: 'private' },
+  { label: '女性', value: 'female' },
+  { label: '男性', value: 'male' },
+  { label: '其他', value: 'other' },
+]
 const user = ref(null)
 const toastVisible = ref(false)
 const toastTitle = ref('保存成功')
@@ -33,6 +39,9 @@ async function load() {
       nickname: user.value.nickname || '',
       phone: user.value.phoneMasked || user.value.phone || '',
       email: user.value.email || '',
+      gender: user.value.gender || 'private',
+      birthday: user.value.birthday || '',
+      bio: user.value.bio || '',
       profilePublic: user.value.profilePublic !== false,
     })
   } catch (err) {
@@ -51,7 +60,7 @@ function syncUser(nextUser) {
 async function save() {
   error.value = ''
   try {
-    syncUser((await updateProfile({ nickname: form.nickname, email: form.email })).data)
+    syncUser((await updateProfile({ nickname: form.nickname, email: form.email, gender: form.gender, birthday: form.birthday, bio: form.bio })).data)
     toastTitle.value = '保存成功'
     toastMessage.value = '个人资料已同步到数据库。'
     toastVisible.value = true
@@ -141,7 +150,7 @@ onMounted(load)
     <header>
       <span class="section-eyebrow">Profile</span>
       <h2 class="page-title">个人资料</h2>
-      <p class="page-subtitle">管理你的昵称、头像和个人主页可见性。</p>
+      <p class="page-subtitle">管理昵称、头像、联系方式、生日和个人主页可见性。</p>
     </header>
 
     <ErrorPanel v-if="error" :message="error" @retry="load" />
@@ -172,7 +181,10 @@ onMounted(load)
         <BaseInput v-model="form.nickname" label="昵称" />
         <BaseInput v-model="form.phone" label="手机号" disabled />
         <BaseInput v-model="form.email" type="email" label="邮箱" />
+        <BaseSelect v-model="form.gender" label="性别" :options="genderOptions" />
+        <BaseInput v-model="form.birthday" type="date" label="生日" :max="new Date().toISOString().slice(0, 10)" />
       </div>
+      <BaseTextarea v-model="form.bio" label="个人简介" :maxlength="500" show-count :rows="4" />
       <BaseButton :loading="loading" @click="save">保存资料</BaseButton>
     </section>
 

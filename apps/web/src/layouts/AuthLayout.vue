@@ -21,7 +21,11 @@ import ThemeToggle from '@/components/common/ThemeToggle.vue'
         <ThemeToggle />
       </div>
       <div class="auth-layout__view">
-        <RouterView />
+        <RouterView v-slot="{ Component, route }">
+          <Transition name="route-page" mode="out-in">
+            <component :is="Component" :key="route.path" />
+          </Transition>
+        </RouterView>
       </div>
     </section>
   </div>
@@ -117,4 +121,3 @@ import ThemeToggle from '@/components/common/ThemeToggle.vue'
   }
 }
 </style>
-

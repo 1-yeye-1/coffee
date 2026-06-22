@@ -140,7 +140,7 @@ watch(() => visibleProducts.value.map((product) => product.id).join(','), async 
     </div>
 
     <main class="cb-container cb-section">
-      <section v-if="todayRecommendation" class="today-recommendation" @click="router.push(`/coffee/${todayRecommendation.slug}`)">
+      <section v-if="todayRecommendation" class="today-recommendation" role="link" tabindex="0" @click="router.push(`/coffee/${todayRecommendation.slug}`)" @keydown.enter="router.push(`/coffee/${todayRecommendation.slug}`)" @keydown.space.prevent="router.push(`/coffee/${todayRecommendation.slug}`)">
         <div>
           <BaseBadge variant="premium">今日推荐</BaseBadge>
           <h2>{{ todayRecommendation.name }}</h2>
@@ -162,7 +162,7 @@ watch(() => visibleProducts.value.map((product) => product.id).join(','), async 
 
       <div id="coffee-products" class="catalog-grid">
         <BaseSkeleton v-if="productsStore.loading" v-for="index in pageSize" :key="`product-loading-${index}`" variant="card" />
-        <BaseCard v-for="product in visibleProducts" :key="product.id" class="catalog-card" variant="hover" data-cursor="BUY" data-tilt-card>
+        <BaseCard v-for="product in visibleProducts" :key="product.id" class="catalog-card" variant="interactive" data-cursor="BUY" data-tilt-card @click="router.push(`/coffee/${product.slug}`)">
           <div class="catalog-card__visual" data-tilt-layer="1.35">
             <img v-if="product.imageUrl" class="catalog-card__image" :src="resolveUploadUrl(product.imageUrl)" :alt="product.name" loading="lazy" decoding="async" />
             <div v-else class="product-art catalog-card__visual-inner" :class="`tone-${product.tone}`">
@@ -183,7 +183,7 @@ watch(() => visibleProducts.value.map((product) => product.id).join(','), async 
               <small>已售 {{ product.sales }}</small>
             </div>
             <div class="catalog-card__actions">
-              <BaseButton size="sm" variant="outline" @click="router.push(`/coffee/${product.slug}`)">查看详情</BaseButton>
+              <BaseButton size="sm" variant="outline" @click.stop="router.push(`/coffee/${product.slug}`)">查看详情</BaseButton>
             </div>
           </div>
         </BaseCard>

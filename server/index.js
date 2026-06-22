@@ -8,6 +8,7 @@ import { env } from './config/env.js'
 import { checkDatabaseConnection, pool } from './db/mysql.js'
 import { handleError } from './middlewares/error.js'
 import { createRouter } from './routes/index.js'
+import { auditContextMiddleware } from './services/audit.service.js'
 import { failure, success } from './utils/response.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -34,6 +35,7 @@ app.use(cors({
 
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true, limit: '1mb' }))
+app.use(auditContextMiddleware)
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')))
 
 app.get('/api/health', (_req, res) => {

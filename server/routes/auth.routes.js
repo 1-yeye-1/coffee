@@ -12,6 +12,8 @@ import {
 import { signUserToken } from '../utils/jwt.js'
 import { failure, success } from '../utils/response.js'
 import { issueCaptcha } from '../services/captcha.service.js'
+import { recordAudit } from '../services/audit.service.js'
+import { issueBirthdayCoupon } from '../services/points.service.js'
 
 function serializeSession(user) {
   return {
@@ -51,6 +53,8 @@ export function registerAuthRoutes(router) {
       }
       await verifyCode(phone, 'register', req.body.code, connection)
       const user = await createUser({ ...req.body, phone, password }, connection)
+      await recordAudit({ operatorId: user.id, actor: user, action: 'auth.register', module: 'auth', targetType: 'user', targetId: user.id, description: `用户 ${user.nickname || user.username} 注册`, req, connection })
+      await recordAudit({ operatorId: user.id, actor: user, action: 'points.change', module: 'points', targetType: 'user', targetId: user.id, description: '注册欢迎积分 +100', payload: { type: 'earn', source: 'register', points: 100 }, req, connection })
       await connection.commit()
       return success(res, serializeSession(user), '注册成功', 201)
     } catch (error) {
@@ -63,6 +67,8 @@ export function registerAuthRoutes(router) {
 
   router.post('/api/auth/login', async (req, res) => {
     const user = await authenticate(req.body)
+    await recordAudit({ operatorId: user.id, actor: user, action: 'auth.login', module: 'auth', targetType: 'user', targetId: user.id, description: `用户 ${user.nickname || user.username} 登录`, req })
+    await issueBirthdayCoupon(user.id).catch((error) => console.warn(`生日优惠券发放检查失败: ${error.message}`))
     return success(res, serializeSession(user), '登录成功')
   })
 
@@ -72,7 +78,8 @@ export function registerAuthRoutes(router) {
     return success(res, user)
   })
 
-  router.post('/api/auth/logout', requireUser, async (_req, res) => {
+  router.post('/api/auth/logout', requireUser, async (req, res) => {
+    await recordAudit({ operatorId: req.user.id, actor: req.user, action: 'auth.logout', module: 'auth', targetType: 'user', targetId: req.user.id, description: `用户 ${req.user.nickname || req.user.username} 退出登录`, req })
     return success(res, {}, '已退出登录')
   })
 }

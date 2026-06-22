@@ -2,7 +2,7 @@ import { pool } from '../server/db/mysql.js'
 import { env } from '../server/config/env.js'
 
 const requiredColumns = {
-  users: ['id', 'username', 'phone', 'points', 'level', 'profile_public'],
+  users: ['id', 'username', 'phone', 'points', 'level', 'profile_public', 'gender', 'birthday', 'bio'],
   admin_users: ['id', 'username', 'password_hash', 'status'],
   verification_codes: ['id', 'phone', 'scene', 'code_hash', 'used_at', 'expires_at', 'created_at'],
   books: ['id', 'slug', 'title', 'stock', 'status', 'cover_url'],
@@ -18,6 +18,8 @@ const requiredColumns = {
   user_avatars: ['id', 'user_id', 'avatar_url', 'source', 'is_current', 'created_at'],
   user_favorites: ['id', 'user_id', 'target_type', 'target_id', 'created_at'],
   user_points: ['id', 'user_id', 'points', 'type', 'source', 'description', 'created_at'],
+  coupons: ['id', 'code', 'coupon_type', 'points_cost', 'discount_amount', 'min_spend', 'valid_days', 'status'],
+  user_coupons: ['id', 'user_id', 'coupon_id', 'coupon_code', 'request_key', 'source', 'issue_year', 'points_cost', 'status', 'expires_at'],
   user_notifications: ['id', 'user_id', 'type', 'is_read', 'related_id', 'related_type'],
   audit_logs: ['id', 'operator_id', 'operator_type', 'action', 'module', 'target_type', 'target_id'],
   orders: ['id', 'order_no', 'user_id', 'source', 'total_amount', 'status', 'paid_at'],
@@ -37,6 +39,8 @@ const requiredIndexes = {
   bookings: ['uk_bookings_booking_no', 'idx_bookings_seat_date_time'],
   user_favorites: ['uk_user_favorites_target'],
   user_avatars: ['uk_user_avatars_url'],
+  coupons: ['uk_coupons_code'],
+  user_coupons: ['uk_user_coupons_code', 'uk_user_coupons_annual', 'uk_user_coupons_request'],
   orders: ['uk_orders_order_no'],
   payments: ['uk_payments_payment_no'],
 }

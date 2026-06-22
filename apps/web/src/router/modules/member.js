@@ -53,7 +53,7 @@ export const memberRoutes = [
       {
         path: 'points',
         component: PointsView,
-        meta: { ...memberMeta, title: '积分记录' },
+        meta: { ...memberMeta, title: '积分中心' },
       },
       {
         path: 'favorites',

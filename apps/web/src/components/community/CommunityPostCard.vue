@@ -14,7 +14,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('zh-CN', { month: 'short',
 </script>
 
 <template>
-  <BaseCard class="post-card post-card--clickable" variant="hover" role="link" tabindex="0" data-cursor="VIEW" :data-post-id="post.id" @click="$emit('open')" @keydown.enter="$emit('open')">
+  <BaseCard class="post-card post-card--clickable" variant="hover" role="link" tabindex="0" data-cursor="VIEW" :data-post-id="post.id" @click="$emit('open')" @keydown.enter="$emit('open')" @keydown.space.prevent="$emit('open')">
     <div class="post-card__author"><span class="avatar">{{ post.avatar }}</span><div><strong>{{ post.author }}</strong><small>{{ formatDate(post.createdAt) }} · {{ post.topic }}</small></div></div>
     <div v-if="post.mediaUrl" class="post-media" data-tilt-card data-tilt-layer="0.8">
       <img v-if="post.mediaType === 'image'" :src="resolveUploadUrl(post.mediaUrl)" alt="帖子图片" loading="lazy" decoding="async" />

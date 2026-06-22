@@ -7,7 +7,7 @@ import { createNotification } from './notifications.service.js'
 
 const userColumns = `
   id, username, nickname, email, phone, avatar, role, status, points, level,
-  profile_public AS profilePublic,
+  profile_public AS profilePublic, gender, DATE_FORMAT(birthday, '%Y-%m-%d') AS birthday, bio,
   created_at AS createdAt, updated_at AS updatedAt
 `
 const adminColumns = `

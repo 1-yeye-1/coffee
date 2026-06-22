@@ -61,6 +61,7 @@ watch(() => route.params.id, load)
           <div>
             <h1 class="page-title">{{ profile.nickname }}</h1>
             <p class="text-muted">加入于 {{ formatDate(profile.createdAt) }}</p>
+            <p v-if="profile.bio">{{ profile.bio }}</p>
           </div>
           <div class="public-profile__stats">
             <span><strong>{{ profile.postsCount }}</strong> 篇帖子</span>

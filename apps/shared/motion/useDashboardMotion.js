@@ -12,7 +12,7 @@ export function useDashboardMotion(root = null) {
     reveal.revealCards(target, { key: 'dashboard-stats', stagger: 0.06, limit: 20, ...options })
     const scope = root?.value || root || document
     const elements = typeof target === 'string' ? scope?.querySelectorAll(`${target} strong`) || [] : target
-    return numbers.animateCounts(elements, values, { duration: 0.9 })
+    return numbers.animateCounts(elements, values, { duration: 0.6 })
   }
 
   function animateDashboardFeeds(target = '.admin-chart, .dashboard-feed > button, .admin-panel', options = {}) {

@@ -117,15 +117,24 @@ function calculateAmounts(payload, subtotal) {
       : subtotal >= 99 ? 10 : 0
   const pointsUsed = Math.max(0, Number(payload.pointsUsed) || 0)
   const pointsAmount = Math.min(Math.floor(pointsUsed / 100), 20, Math.max(0, subtotal - discount))
+  const appliedPoints = Math.round(pointsAmount * 100)
   const shippingFee = payload.deliveryType === 'delivery' && subtotal < 199 ? 8 : 0
   const total = Math.max(0, Math.round((subtotal - discount - pointsAmount + shippingFee) * 100) / 100)
-  return { couponCode, discount, pointsUsed, pointsAmount, shippingFee, total }
+  return { couponCode, discount, pointsUsed: appliedPoints, pointsAmount, shippingFee, total }
 }
 
 async function insertOrder(userId, payload, snapshots, source, connection) {
   const subtotal = Math.round(snapshots.reduce((sum, item) => sum + item.lineTotal, 0) * 100) / 100
   const amounts = calculateAmounts(payload, subtotal)
   const address = payload.addressForm || {}
+  if (amounts.pointsUsed > 0) {
+    const [[user]] = await connection.execute('SELECT points FROM users WHERE id = ? FOR UPDATE', [userId])
+    if (!user || Number(user.points) < amounts.pointsUsed) throw Object.assign(new Error('积分余额不足，请调整抵扣积分'), { statusCode: 409 })
+    await connection.execute('UPDATE users SET points = points - ? WHERE id = ?', [amounts.pointsUsed, userId])
+    await connection.execute(`INSERT INTO user_points (user_id, points, type, source, description)
+      VALUES (?, ?, 'spend', 'order_deduction', '订单积分抵扣')`, [userId, -amounts.pointsUsed])
+    await writeAudit(userId, 'points.change', 'points', { userId, points: -amounts.pointsUsed, balance: Number(user.points) - amounts.pointsUsed, source: 'order_deduction' }, connection)
+  }
   const [result] = await connection.execute(
     `INSERT INTO orders (order_no, user_id, source, receiver_name, receiver_phone, delivery_type, pickup_store,
      address_region, address_detail, payment_method, coupon_code, points_used, subtotal_amount,
@@ -452,6 +461,7 @@ export async function changeOrderStatus(id, target, userId, isAdmin = false, ope
     const timeColumn = target === 'paid' ? 'paid_at' : target === 'completed' ? 'completed_at' : target === 'cancelled' ? 'cancelled_at' : null
     await connection.execute(`UPDATE orders SET status = ?${timeColumn ? `, ${timeColumn} = CURRENT_TIMESTAMP` : ''} WHERE id = ?`, [target, id])
     if (isAdmin) await writeAudit(operatorId, 'order.status.update', 'orders', { id, from: order.status, to: target }, connection)
+    else await writeAudit(userId, target === 'cancelled' ? 'order.cancel' : `order.${target}`, 'orders', { id, from: order.status, to: target }, connection)
     await notifyOrderStatus(order.user_id, id, target, connection)
     await connection.commit()
     return getOrderDetail(id, userId, isAdmin)

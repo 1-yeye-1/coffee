@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS users (
   points INT NOT NULL DEFAULT 0,
   level VARCHAR(50) NOT NULL DEFAULT '普通会员',
   profile_public TINYINT(1) NOT NULL DEFAULT 1,
+  gender VARCHAR(20) NULL,
+  birthday DATE NULL,
+  bio VARCHAR(500) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -76,6 +79,46 @@ CREATE TABLE IF NOT EXISTS user_points (
   KEY idx_user_points_user (user_id),
   KEY idx_user_points_created_at (created_at),
   CONSTRAINT fk_user_points_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS coupons (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  code VARCHAR(80) NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  coupon_type VARCHAR(40) NOT NULL,
+  points_cost INT NOT NULL DEFAULT 0,
+  discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  min_spend DECIMAL(10,2) NOT NULL DEFAULT 0,
+  valid_days INT NOT NULL DEFAULT 30,
+  description VARCHAR(255) NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_coupons_code (code),
+  KEY idx_coupons_status (status)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS user_coupons (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  coupon_id BIGINT UNSIGNED NOT NULL,
+  coupon_code VARCHAR(120) NOT NULL,
+  request_key VARCHAR(80) NULL,
+  source VARCHAR(30) NOT NULL DEFAULT 'points',
+  issue_year SMALLINT UNSIGNED NULL,
+  points_cost INT NOT NULL DEFAULT 0,
+  status VARCHAR(20) NOT NULL DEFAULT 'unused',
+  issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  redeemed_at DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_user_coupons_code (coupon_code),
+  UNIQUE KEY uk_user_coupons_request (user_id, request_key),
+  UNIQUE KEY uk_user_coupons_annual (user_id, coupon_id, source, issue_year),
+  KEY idx_user_coupons_user_status (user_id, status),
+  CONSTRAINT fk_user_coupons_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_user_coupons_coupon FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS user_notifications (
@@ -234,6 +277,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   operator_type VARCHAR(30) NOT NULL DEFAULT 'user',
   admin_name VARCHAR(120) NULL,
+  user_name VARCHAR(120) NULL,
+  role VARCHAR(30) NOT NULL DEFAULT 'user',
   target_type VARCHAR(80) NULL,
   target_id VARCHAR(80) NULL,
   description VARCHAR(500) NULL,
@@ -243,6 +288,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   KEY idx_audit_logs_operator (operator_type, operator_id),
   KEY idx_audit_logs_module (module),
   KEY idx_audit_logs_action (action),
+  KEY idx_audit_logs_role (role),
   KEY idx_audit_logs_created_at (created_at)
 ) ENGINE=InnoDB;
 

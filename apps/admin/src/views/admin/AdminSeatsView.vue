@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { createSeat, deleteSeat, fetchSeatUsage, updateSeat, updateSeatStatus } from '@/api/admin'
-import { BaseBadge, BaseButton, BaseInput, BaseModal, BaseSelect, BaseTable, EmptyState } from '@/components/base'
+import { BaseBadge, BaseButton, BaseInput, BaseModal, BaseSelect, BaseTable, BaseToast, EmptyState } from '@/components/base'
 import { debounce } from '@/utils'
 import { useAnimeMotion } from '@/composables/useAnimeMotion'
 import { useGsapReveal } from '@/composables/useGsapReveal'
@@ -18,6 +18,14 @@ const error = ref('')
 const modalOpen = ref(false)
 const editingId = ref(null)
 const pageRef = ref(null)
+const mapRef = ref(null)
+const draggingSeatId = ref(null)
+const toastVisible = ref(false)
+const toastVariant = ref('success')
+const toastTitle = ref('')
+const toastMessage = ref('')
+let dragState = null
+let suppressedClickId = null
 const { revealCards, revealSeatMap, animateProgress } = useGsapReveal(pageRef)
 const { pulseSeat, wiggleIcon, flashRow, successCheck } = useAnimeMotion()
 const form = reactive({ code: '', name: '', area: '', capacity: 1, x: 50, y: 50, width: 64, height: 52, sortOrder: 0, status: 'available' })
@@ -29,6 +37,91 @@ const occupancyRate = computed(() => {
   const usable = stats.value.available + stats.value.reserved
   return usable ? Math.round((stats.value.reserved / usable) * 100) : 0
 })
+
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+
+function showToast(variant, title, message) {
+  toastVariant.value = variant
+  toastTitle.value = title
+  toastMessage.value = message
+  toastVisible.value = true
+}
+
+function seatPayload(seat) {
+  return {
+    code: seat.code,
+    name: seat.name,
+    area: seat.area,
+    capacity: seat.capacity,
+    x: seat.x,
+    y: seat.y,
+    width: seat.width || 64,
+    height: seat.height || 52,
+    sortOrder: seat.sortOrder || 0,
+    status: seat.status === 'maintenance' ? 'maintenance' : 'available',
+  }
+}
+
+function startSeatDrag(seat, event) {
+  if (event.button !== 0 || saving.value) return
+  const map = mapRef.value
+  if (!map) return
+  dragState = {
+    seat,
+    pointerId: event.pointerId,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    originalX: seat.x,
+    originalY: seat.y,
+    moved: false,
+  }
+  draggingSeatId.value = seat.seatId
+  event.currentTarget.setPointerCapture(event.pointerId)
+  event.preventDefault()
+}
+
+function moveSeat(event) {
+  if (!dragState || dragState.pointerId !== event.pointerId) return
+  const distance = Math.hypot(event.clientX - dragState.startClientX, event.clientY - dragState.startClientY)
+  if (!dragState.moved && distance < 4) return
+  dragState.moved = true
+  const bounds = mapRef.value.getBoundingClientRect()
+  const halfWidth = ((dragState.seat.width || 64) / bounds.width) * 50
+  const halfHeight = ((dragState.seat.height || 52) / bounds.height) * 50
+  dragState.seat.x = Math.round(clamp(((event.clientX - bounds.left) / bounds.width) * 100, halfWidth, 100 - halfWidth))
+  dragState.seat.y = Math.round(clamp(((event.clientY - bounds.top) / bounds.height) * 100, halfHeight, 100 - halfHeight))
+}
+
+async function finishSeatDrag(event, cancelled = false) {
+  if (!dragState || dragState.pointerId !== event.pointerId) return
+  const state = dragState
+  dragState = null
+  draggingSeatId.value = null
+  if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  if (!state.moved || cancelled) {
+    if (cancelled) Object.assign(state.seat, { x: state.originalX, y: state.originalY })
+    return
+  }
+  suppressedClickId = state.seat.seatId
+  window.setTimeout(() => {
+    if (suppressedClickId === state.seat.seatId) suppressedClickId = null
+  }, 0)
+  try {
+    await updateSeat(state.seat.seatId, seatPayload(state.seat))
+    showToast('success', '位置已保存', `${state.seat.code} 已移动到 ${state.seat.x}%, ${state.seat.y}%`)
+  } catch (err) {
+    Object.assign(state.seat, { x: state.originalX, y: state.originalY })
+    showToast('error', '保存失败', err.message || '座位位置已回滚')
+  }
+}
+
+function handleSeatClick(seat, event) {
+  if (suppressedClickId === seat.seatId) {
+    suppressedClickId = null
+    return
+  }
+  openEditor(seat, event)
+}
 
 async function refresh() {
   loading.value = true
@@ -102,8 +195,8 @@ onBeforeUnmount(scheduleRefresh.cancel)
     <section class="seat-occupancy" aria-label="当前时段占用率"><div><strong>当前时段占用率</strong><span>{{ occupancyRate }}%</span></div><progress :value="occupancyRate" max="100">{{ occupancyRate }}%</progress></section>
     <p v-if="error" class="form-error">{{ error }}</p>
     <section class="admin-panel">
-      <div class="admin-seat-map">
-        <button v-for="seat in seats" :key="seat.seatId" type="button" :title="`${seat.code} ${seat.status}`" :class="`is-${seat.status}`" :style="{ left: `${seat.x}%`, top: `${seat.y}%`, width: `${seat.width || 64}px`, height: `${seat.height || 52}px` }" @click="openEditor(seat, $event)"><strong>{{ seat.code }}</strong><small>{{ seat.status === 'available' ? '空闲' : seat.status === 'reserved' ? '已预约' : '停用' }}</small></button>
+      <div ref="mapRef" class="admin-seat-map" aria-label="可拖拽座位地图">
+        <button v-for="seat in seats" :key="seat.seatId" type="button" :title="`${seat.code} ${seat.status}，拖拽可调整位置，点击可编辑`" :aria-label="`${seat.code}，拖拽调整位置，点击编辑`" :class="[`is-${seat.status}`, { 'is-dragging': draggingSeatId === seat.seatId }]" :style="{ left: `${seat.x}%`, top: `${seat.y}%`, width: `${seat.width || 64}px`, height: `${seat.height || 52}px` }" @pointerdown="startSeatDrag(seat, $event)" @pointermove="moveSeat" @pointerup="finishSeatDrag" @pointercancel="finishSeatDrag($event, true)" @click="handleSeatClick(seat, $event)"><strong>{{ seat.code }}</strong><small>{{ seat.status === 'available' ? '空闲' : seat.status === 'reserved' ? '已预约' : '停用' }}</small></button>
       </div>
       <BaseTable :columns="columns" :items="seats" :loading="loading" empty-text="暂无座位">
         <template #cell-capacity="{ value }">{{ value }} 人</template>
@@ -120,12 +213,16 @@ onBeforeUnmount(scheduleRefresh.cancel)
         <BaseButton type="submit" :loading="saving">保存座位</BaseButton>
       </form>
     </BaseModal>
+    <div class="seat-toast"><BaseToast v-model="toastVisible" :variant="toastVariant" :title="toastTitle">{{ toastMessage }}</BaseToast></div>
   </div>
 </template>
 
 <style scoped>
 .admin-seat-map{position:relative;height:25rem;overflow:hidden;background:linear-gradient(135deg,var(--cb-bg-soft),var(--cb-bg-page));border:.0625rem solid var(--cb-border-strong);border-radius:var(--cb-radius-xl)}
-.admin-seat-map button{position:absolute;display:grid;place-content:center;color:var(--cb-text-primary);background:var(--cb-bg-surface);border:.125rem solid var(--cb-success);border-radius:var(--cb-radius-lg);transform:translate(-50%,-50%)}
+.admin-seat-map button{position:absolute;display:grid;place-content:center;color:var(--cb-text-primary);background:var(--cb-bg-surface);border:.125rem solid var(--cb-success);border-radius:var(--cb-radius-lg);cursor:grab;touch-action:none;user-select:none;transform:translate(-50%,-50%)}
+.admin-seat-map button:active,.admin-seat-map button.is-dragging{z-index:3;cursor:grabbing;box-shadow:0 0 0 .3rem color-mix(in srgb,var(--cb-color-gold) 22%,transparent),var(--cb-shadow-lg)}
 .admin-seat-map button.is-reserved{border-color:var(--cb-warning);background:color-mix(in srgb,var(--cb-warning) 12%,var(--cb-bg-surface))}.admin-seat-map button.is-maintenance{color:var(--cb-text-muted);border-color:var(--cb-border-strong);background:var(--cb-bg-soft)}
 .admin-seat-map small{font-size:var(--cb-font-size-xs)}
+.seat-toast{position:fixed;z-index:var(--cb-z-toast);right:var(--cb-space-5);bottom:var(--cb-space-5);width:min(calc(100% - var(--cb-space-8)),24rem)}
+@media(prefers-reduced-motion:reduce){.admin-seat-map button{transition:none!important}}
 </style>

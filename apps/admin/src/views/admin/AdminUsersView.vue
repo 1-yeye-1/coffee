@@ -27,6 +27,8 @@ const columns = [
   { key: 'email', label: '邮箱' },
   { key: 'level', label: '等级' },
   { key: 'points', label: '积分' },
+  { key: 'birthday', label: '生日' },
+  { key: 'couponCount', label: '优惠券' },
   { key: 'orders', label: '订单' },
   { key: 'status', label: '状态' },
   { key: 'actions', label: '操作' },
@@ -116,6 +118,8 @@ async function toggle(item) {
         <span class="admin-user-avatar">{{ (item.nickname || item.username || '用').slice(0, 1) }}</span>
       </template>
       <template #cell-email="{ value }">{{ value || '-' }}</template>
+      <template #cell-birthday="{ value }">{{ value || '未设置' }}</template>
+      <template #cell-couponCount="{ value }">{{ value || 0 }} 张</template>
       <template #cell-level="{ value }"><BaseBadge variant="premium">{{ value }}</BaseBadge></template>
       <template #cell-status="{ value }">
         <BaseBadge :variant="value === 'active' ? 'success' : 'neutral'">

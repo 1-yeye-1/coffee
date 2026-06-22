@@ -32,7 +32,7 @@ body{color:var(--text-main);background:radial-gradient(circle at 12% 4%,color-mi
 .catalog-hero,.engagement-hero{position:relative;background:radial-gradient(circle at 78% 38%,color-mix(in srgb,var(--gold-400) 28%,transparent),transparent 24rem),linear-gradient(135deg,var(--page-bg),var(--cb-bg-soft))!important}
 .catalog-hero::after,.engagement-hero::after,.hero::after{position:absolute;inset:0;pointer-events:none;content:"";opacity:.2;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E")}
 .catalog-hero__art,.engagement-hero__art,.hero-art__card{box-shadow:var(--shadow-hover);transform-style:preserve-3d}
-.hero-art{transform:translate3d(var(--hero-parallax-x,0),var(--hero-parallax-y,0),0) rotateX(var(--hero-rotate-x,0)) rotateY(var(--hero-rotate-y,0));transition:transform 120ms ease-out}
+.hero-art{transform:translate3d(var(--hero-parallax-x,0),var(--hero-parallax-y,0),0) rotateX(var(--hero-rotate-x,0)) rotateY(var(--hero-rotate-y,0));transition:transform 180ms ease-out}
 .catalog-toolbar__surface,.catalog-toolbar,.guest-fields{backdrop-filter:blur(18px)}
 .catalog-tabs button,.topic-cloud span,.date-strip button,.time-grid button,.people-picker button{border-radius:var(--radius-pill)!important}
 .catalog-grid,.event-grid,.post-grid,.member-stat-grid{gap:1.75rem!important}
@@ -78,3 +78,5 @@ body{color:var(--text-main);background:radial-gradient(circle at 12% 4%,color-mi
 .base-toast-enter-from,.base-toast-leave-to{opacity:0!important;transform:translate(24px,-16px)!important}
 
 @media(prefers-reduced-motion:reduce){.map-seat.is-selected,.empty-state__icon{animation:none!important}.base-card:hover,.base-button:hover{transform:none!important}}
+@media(max-width:64rem){.booking-layout--map{grid-template-columns:minmax(0,1fr)!important}.base-drawer__panel{width:min(90vw,28rem)!important}}
+@media(max-width:40rem){.page-toast{right:1rem!important;left:1rem!important}.page-toast .base-toast{width:100%}}

@@ -1,17 +1,13 @@
 import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
-
-function clientIp(req) {
-  const forwarded = req?.headers?.['x-forwarded-for']
-  if (forwarded) return String(forwarded).split(',')[0].trim()
-  return req?.ip || req?.socket?.remoteAddress || ''
-}
+import { recordAudit } from './audit.service.js'
 
 function mapLog(row) {
   return {
     id: row.id,
-    adminId: row.adminId,
-    adminName: row.adminName,
+    userId: row.userId,
+    userName: row.userName,
+    role: row.role,
     action: row.action,
     module: row.module,
     targetType: row.targetType,
@@ -34,23 +30,7 @@ export async function logAdminAction({
   payload = null,
 }) {
   try {
-    await pool.execute(
-      `INSERT INTO audit_logs
-        (operator_id, operator_type, admin_name, action, module, target_type, target_id, description, ip, user_agent, payload)
-       VALUES (?, 'admin', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        admin?.id || null,
-        admin?.username || admin?.nickname || '',
-        action,
-        module,
-        targetType,
-        targetId == null ? null : String(targetId),
-        description,
-        clientIp(req),
-        req?.headers?.['user-agent'] || '',
-        payload ? JSON.stringify(payload) : null,
-      ],
-    )
+    await recordAudit({ operatorId: admin?.id, operatorType: 'admin', actor: admin, action, module, targetType, targetId, description, req, payload })
   } catch (error) {
     console.warn(`后台操作日志写入失败: ${error.message}`)
   }
@@ -58,43 +38,47 @@ export async function logAdminAction({
 
 export async function listAdminLogs(query = {}) {
   const { page, pageSize, offset } = parsePagination(query, 20)
-  const clauses = ["operator_type = 'admin'"]
+  const clauses = []
   const params = []
 
-  if (query.adminId) {
+  if (query.userId || query.adminId) {
     clauses.push('operator_id = ?')
-    params.push(query.adminId)
+    params.push(query.userId || query.adminId)
   }
-  if (query.adminName) {
-    clauses.push('admin_name LIKE ?')
-    params.push(`%${String(query.adminName).trim()}%`)
+  if (query.userName || query.adminName) {
+    clauses.push('COALESCE(user_name, admin_name) LIKE ?')
+    params.push(`%${String(query.userName || query.adminName).trim()}%`)
+  }
+  if (query.role && query.role !== 'all') {
+    clauses.push('role = ?')
+    params.push(query.role)
   }
   if (query.action && query.action !== 'all') {
-    clauses.push('action = ?')
-    params.push(query.action)
+    clauses.push('action LIKE ?')
+    params.push(`${query.action}%`)
   }
   if (query.module && query.module !== 'all') {
-    clauses.push('module = ?')
-    params.push(query.module)
+    clauses.push('module LIKE ?')
+    params.push(`${query.module}%`)
   }
   if (query.startDate) {
     clauses.push('created_at >= ?')
     params.push(query.startDate)
   }
   if (query.endDate) {
-    clauses.push('created_at <= ?')
+    clauses.push('created_at < DATE_ADD(?, INTERVAL 1 DAY)')
     params.push(query.endDate)
   }
   if (query.keyword) {
-    clauses.push('(action LIKE ? OR module LIKE ? OR target_type LIKE ? OR target_id LIKE ? OR description LIKE ? OR admin_name LIKE ?)')
+    clauses.push('(action LIKE ? OR module LIKE ? OR target_type LIKE ? OR target_id LIKE ? OR description LIKE ? OR COALESCE(user_name, admin_name) LIKE ?)')
     const keyword = `%${String(query.keyword).trim()}%`
     params.push(keyword, keyword, keyword, keyword, keyword, keyword)
   }
 
-  const where = `WHERE ${clauses.join(' AND ')}`
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
   const [[{ total }]] = await pool.execute(`SELECT COUNT(*) AS total FROM audit_logs ${where}`, params)
   const [rows] = await pool.execute(
-    `SELECT id, operator_id AS adminId, admin_name AS adminName, action, module,
+    `SELECT id, operator_id AS userId, COALESCE(user_name, admin_name) AS userName, role, action, module,
       target_type AS targetType, target_id AS targetId, description, ip,
       user_agent AS userAgent, created_at AS createdAt
      FROM audit_logs ${where}
@@ -110,11 +94,11 @@ export async function listAdminLogs(query = {}) {
 
 export async function getAdminLogDetail(id) {
   const [[row]] = await pool.execute(
-    `SELECT id, operator_id AS adminId, admin_name AS adminName, action, module,
+    `SELECT id, operator_id AS userId, COALESCE(user_name, admin_name) AS userName, role, action, module,
       target_type AS targetType, target_id AS targetId, description, ip,
       user_agent AS userAgent, created_at AS createdAt
      FROM audit_logs
-     WHERE id = ? AND operator_type = 'admin'
+     WHERE id = ?
      LIMIT 1`,
     [id],
   )

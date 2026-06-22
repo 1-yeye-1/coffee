@@ -48,7 +48,7 @@ function requireFields(res, payload, fields) {
 export function registerAdminRoutes(router) {
   router.post('/api/admin/auth/login', async (req, res) => {
     const admin = await authenticateAdmin(req.body)
-    await logAdminAction({ admin, action: 'login', module: 'auth', targetType: 'admin', targetId: admin.id, description: `管理员 ${admin.username} 登录后台`, req })
+    await logAdminAction({ admin, action: 'auth.login', module: 'auth', targetType: 'admin', targetId: admin.id, description: `管理员 ${admin.username} 登录后台`, req })
     return success(res, { token: signAdminToken(admin), admin }, '后台登录成功')
   })
 
@@ -58,7 +58,8 @@ export function registerAdminRoutes(router) {
     return success(res, admin)
   })
 
-  router.post('/api/admin/auth/logout', requireAdmin, async (_req, res) => {
+  router.post('/api/admin/auth/logout', requireAdmin, async (req, res) => {
+    await logAdminAction({ admin: req.user, action: 'auth.logout', module: 'auth', targetType: 'admin', targetId: req.user.id, description: `管理员 ${req.user.username} 退出后台`, req })
     return success(res, {}, '已退出后台登录')
   })
 

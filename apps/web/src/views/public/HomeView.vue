@@ -51,9 +51,9 @@ function formatNumber(value) {
 
 async function animateHome() {
   await nextTick()
-  revealCards('.hero__stagger', { key: 'hero', y: 26, duration: 0.72, stagger: 0.1 })
+  revealCards('.hero__stagger', { key: 'hero', y: 26, duration: 0.58, stagger: 0.08 })
   revealOnScroll('[data-reveal]', { limit: 20 })
-  floatVisual('.hero-art')
+  floatVisual('.hero-art__card')
   bindParallax('.hero', '.hero-art')
   animateCounts(homeRef.value?.querySelectorAll('[data-count]') || [], stats.value.map((item) => item.value), { suffix: '+' })
   bindTiltCards()
@@ -130,14 +130,14 @@ onMounted(async () => {
           <p>从文学经典到现代思考，为每一种好奇心挑选值得停留的文字。</p>
         </header>
         <div class="book-grid">
-          <BaseCard v-for="book in books" :key="book.title" class="book-card" variant="hover" data-reveal data-cursor="READ" data-tilt-card>
+          <BaseCard v-for="book in books" :key="book.id || book.slug" class="book-card" variant="interactive" data-reveal data-cursor="READ" data-tilt-card @click="navigate(`/books/${book.slug}`)">
             <div class="book-card__cover" :class="`book-card__cover--${book.tone}`" data-tilt-layer="1.4">
               <span>{{ book.category }}</span><strong>{{ book.title }}</strong><small>COFFEE BOOK EDITION</small>
             </div>
             <div class="book-card__content" data-tilt-layer="0.7">
               <div class="card-topline"><BaseBadge variant="neutral">{{ book.category }}</BaseBadge><span>★ {{ book.rating }}</span></div>
               <h3>{{ book.title }}</h3><small>{{ book.author }}</small><p>{{ book.description }}</p>
-              <BaseButton variant="ghost" size="sm" @click="navigate('/books')">查看详情　→</BaseButton>
+              <BaseButton variant="ghost" size="sm" @click.stop="navigate(`/books/${book.slug}`)">查看详情　→</BaseButton>
             </div>
           </BaseCard>
         </div>
@@ -151,7 +151,7 @@ onMounted(async () => {
           <p>从产地风味到杯中香气，每一款咖啡都有清晰而独特的表达。</p>
         </header>
         <div class="coffee-grid">
-          <BaseCard v-for="coffee in coffees" :key="coffee.name" class="coffee-card" variant="hover" data-reveal data-cursor="BUY" data-tilt-card>
+          <BaseCard v-for="coffee in coffees" :key="coffee.id || coffee.slug" class="coffee-card" variant="interactive" data-reveal data-cursor="BUY" data-tilt-card @click="navigate(`/coffee/${coffee.slug}`)">
             <div class="coffee-card__visual" :class="`coffee-card__visual--${coffee.tone}`" data-tilt-layer="1.4">
               <div class="coffee-card__cup"><span /></div>
               <span class="coffee-card__bean coffee-card__bean--one" />
@@ -160,7 +160,7 @@ onMounted(async () => {
             <div class="coffee-card__content" data-tilt-layer="0.7">
               <div class="card-topline"><BaseBadge :variant="coffee.badge">{{ coffee.stock }}</BaseBadge><strong>{{ coffee.price }}</strong></div>
               <h3>{{ coffee.name }}</h3><p>{{ coffee.flavor }}</p>
-              <BaseButton size="sm" variant="outline" @click="navigate('/coffee')">查看详情</BaseButton>
+              <BaseButton size="sm" variant="outline" @click.stop="navigate(`/coffee/${coffee.slug}`)">查看详情</BaseButton>
             </div>
           </BaseCard>
         </div>
@@ -174,12 +174,12 @@ onMounted(async () => {
           <p>让阅读从书页延伸到人与人的相遇，在城市里共享真实的灵感。</p>
         </header>
         <div class="event-grid">
-          <BaseCard v-for="event in events" :key="event.title" class="event-card" variant="hover" data-reveal data-cursor="JOIN" data-tilt-card>
+          <BaseCard v-for="event in events" :key="event.id || event.slug" class="event-card" variant="interactive" data-reveal data-cursor="JOIN" data-tilt-card @click="navigate(`/events/${event.slug}`)">
             <div class="event-card__date" data-tilt-layer="1.2"><strong>{{ event.date }}</strong><span>{{ event.weekday }}</span></div>
             <div class="event-card__body" data-tilt-layer="0.6">
               <BaseBadge :variant="event.badge">{{ event.status }}</BaseBadge><h3>{{ event.title }}</h3>
               <dl><div><dt>地点</dt><dd>{{ event.location }}</dd></div><div><dt>报名</dt><dd>{{ event.attendees }}</dd></div></dl>
-              <BaseButton variant="outline" size="sm" @click="navigate('/events')">查看活动</BaseButton>
+              <BaseButton variant="outline" size="sm" @click.stop="navigate(`/events/${event.slug}`)">查看活动</BaseButton>
             </div>
           </BaseCard>
         </div>
@@ -196,7 +196,7 @@ onMounted(async () => {
           <BaseButton @click="navigate('/community')">进入社区</BaseButton>
         </BaseCard>
         <div class="post-list" data-reveal>
-          <article v-for="post in databasePosts" :key="post.id" class="post-item" role="link" tabindex="0" data-cursor="VIEW" @click="navigate(`/community/${post.id}`)" @keydown.enter="navigate(`/community/${post.id}`)">
+          <article v-for="post in databasePosts" :key="post.id" class="post-item" role="link" tabindex="0" data-cursor="VIEW" @click="navigate(`/community/${post.slug || post.id}`)" @keydown.enter="navigate(`/community/${post.slug || post.id}`)" @keydown.space.prevent="navigate(`/community/${post.slug || post.id}`)">
             <span class="post-item__avatar">{{ post.avatar }}</span>
             <div><h3>{{ post.title }}</h3><div class="post-item__meta"><span>{{ post.author }} · {{ new Date(post.createdAt).toLocaleDateString('zh-CN') }}</span><span>♡ {{ post.likes }}　☵ {{ post.commentsCount }}</span></div></div>
             <span class="post-item__arrow" aria-hidden="true">→</span>
@@ -261,12 +261,11 @@ onMounted(async () => {
 .hero__description { max-width: 37rem; font-size: clamp(var(--cb-font-size-md), 2vw, var(--cb-font-size-xl)); }
 .hero__actions { display: flex; flex-wrap: wrap; gap: var(--cb-space-3); }
 .hero__note { display: flex; gap: var(--cb-space-2); align-items: center; color: var(--cb-text-muted); font-size: var(--cb-font-size-sm); }
-.hero__stagger { opacity: 0; animation: hero-enter var(--cb-duration-slow) var(--cb-ease-emphasized) forwards; }
-.hero__stagger:nth-child(1) { animation-delay: 80ms; }.hero__stagger:nth-child(2) { animation-delay: 160ms; }.hero__stagger:nth-child(3) { animation-delay: 240ms; }.hero__stagger:nth-child(4) { animation-delay: 320ms; }.hero__stagger:nth-child(5) { animation-delay: 400ms; }
+.hero__stagger { will-change: opacity, transform; }
 .hero__glow { position: absolute; border-radius: var(--cb-radius-pill); filter: blur(var(--cb-space-10)); opacity: .45; }
 .hero__glow--one { top: 12%; right: -8rem; width: 22rem; height: 22rem; background: color-mix(in srgb, var(--cb-color-gold) 45%, transparent); }
 .hero__glow--two { bottom: -8rem; left: -6rem; width: 18rem; height: 18rem; background: color-mix(in srgb, var(--cb-color-caramel) 22%, transparent); }
-.hero-art { position: relative; width: min(100%, 34rem); margin-inline: auto; animation: hero-enter var(--cb-duration-slow) var(--cb-ease-emphasized) 360ms forwards, gentle-float 6s var(--cb-ease-standard) 900ms infinite alternate; }
+.hero-art { position: relative; width: min(100%, 34rem); margin-inline: auto; }
 .hero-art__halo { position: absolute; inset: 12%; background: color-mix(in srgb, var(--cb-color-gold) 38%, transparent); border-radius: var(--cb-radius-pill); filter: blur(var(--cb-space-10)); }
 .hero-art__card { position: relative; min-height: 31rem; padding: var(--cb-space-8); overflow: hidden; background: linear-gradient(145deg, color-mix(in srgb, var(--cb-color-coffee) 94%, var(--cb-bg-dark)), var(--cb-bg-dark)); border: .0625rem solid color-mix(in srgb, var(--cb-color-gold) 36%, transparent); border-radius: var(--cb-radius-2xl); box-shadow: var(--cb-shadow-xl); }
 .hero-art__card::before { position: absolute; inset: var(--cb-space-5); border: .0625rem solid color-mix(in srgb, var(--cb-color-cream) 18%, transparent); border-radius: var(--cb-radius-xl); content: ""; }
@@ -303,10 +302,9 @@ onMounted(async () => {
 .benefit-card { position: relative; display: flex; min-height: 15rem; padding: var(--cb-space-7); flex-direction: column; justify-content: flex-end; gap: var(--cb-space-3); }.benefit-card__index { position: absolute; top: var(--cb-space-5); right: var(--cb-space-5); color: color-mix(in srgb,var(--cb-color-coffee) 25%,transparent); font-family: var(--cb-font-display); font-size: var(--cb-font-size-5xl); font-weight: var(--cb-font-bold); }
 .cta-section { padding-top: 0; }.cta-panel { display: flex; padding: clamp(var(--cb-space-8),8vw,var(--cb-space-20)); flex-direction: column; align-items: center; gap: var(--cb-space-5); color: var(--cb-color-ivory); text-align: center; background: radial-gradient(circle at 20% 10%,color-mix(in srgb,var(--cb-color-gold) 28%,transparent),transparent 35%),linear-gradient(135deg,var(--cb-color-coffee),var(--cb-bg-dark)); border-radius: var(--cb-radius-2xl); box-shadow: var(--cb-shadow-xl); }.cta-panel h2 { max-width: 18ch; color: var(--cb-color-ivory); font-size: clamp(var(--cb-font-size-3xl),6vw,var(--cb-font-size-5xl)); }.cta-panel p { max-width: 38rem; color: var(--cb-color-cream); }
 .home-toast { position: fixed; z-index: var(--cb-z-toast); right: var(--cb-space-4); bottom: var(--cb-space-4); width: min(calc(100% - (var(--cb-space-4)*2)),24rem); }
-@keyframes hero-enter { from { opacity: 0; transform: translateY(var(--cb-space-5)); } to { opacity: 1; transform: translateY(0); } }@keyframes gentle-float { from { transform: translateY(0) rotate(-.4deg); } to { transform: translateY(calc(var(--cb-space-3)*-1)) rotate(.4deg); } }
 @media (min-width:40rem) { .book-grid,.coffee-grid,.benefit-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.event-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.section-heading { grid-template-columns: minmax(0,1fr) minmax(16rem,.8fr); align-items: end; }.section-heading--center { grid-template-columns: 1fr; } }
 @media (min-width:64rem) { .hero__grid { grid-template-columns: minmax(0,1.05fr) minmax(25rem,.95fr); padding-block: var(--cb-space-16); }.stats-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }.stat-item+.stat-item { border-left: .0625rem solid var(--cb-border-soft); }.community-grid,.booking-panel { grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr); }.booking-panel { align-items: center; } }
 @media (min-width:80rem) { .book-grid,.coffee-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }.event-grid,.benefit-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
 @media (max-width:39.999rem) { .hero__grid { min-height: auto; padding-block: var(--cb-space-10) var(--cb-space-16); }.hero__actions,.hero__actions :deep(.base-button) { width: 100%; }.hero-art__card { min-height: 25rem; padding: var(--cb-space-5); }.hero-art__book--back { left: 10%; }.hero-art__book--front { left: 24%; }.hero-art__cup { right: 8%; width: 6.5rem; height: 5.5rem; }.hero-art__saucer { right: 3%; width: 9.5rem; }.event-card { grid-template-columns: 4.5rem minmax(0,1fr); }.post-item { grid-template-columns: auto minmax(0,1fr); }.post-item__arrow { display: none; }.community-intro__metrics { gap: var(--cb-space-5); }.cta-panel { width: calc(100% - (var(--cb-space-4)*2)); } }
-@media (prefers-reduced-motion:reduce) { .hero__stagger,.hero-art { opacity: 1; animation: none; } }
+@media (prefers-reduced-motion:reduce) { .hero__stagger { opacity: 1; will-change:auto; } }
 </style>

@@ -161,6 +161,45 @@ async function main() {
   assert(me.payload.data.phone === smokePhone, 'auth/me should return normal user')
   logPass('auth/me')
 
+  const today = new Date().toISOString().slice(0, 10)
+  const profile = await request('PATCH', '/account/profile', {
+    token: userToken,
+    body: { nickname: 'Smoke Profile', email: `smoke-${stamp}@example.test`, gender: 'private', birthday: today, bio: 'Phase 17 smoke profile' },
+  })
+  assert(profile.payload.data.nickname === 'Smoke Profile' && profile.payload.data.birthday === today,
+    `profile fields were not persisted: ${JSON.stringify({ nickname: profile.payload.data.nickname, birthday: profile.payload.data.birthday, today })}`)
+  const publicProfile = await request('GET', `/users/${me.payload.data.id}/profile`)
+  assert(publicProfile.payload.data.bio === 'Phase 17 smoke profile', 'public profile should include public bio')
+  assert(!['phone', 'email', 'birthday'].some((key) => key in publicProfile.payload.data), 'public profile leaked private fields')
+  logPass('profile edit and public privacy boundary')
+
+  await pool.query('UPDATE users SET points = 1000 WHERE id = ?', [me.payload.data.id])
+  const pointsCenter = await request('GET', '/account/points-center', { token: userToken })
+  const redeemable = pointsCenter.payload.data.coupons.find((coupon) => Number(coupon.pointsCost) <= 1000)
+  assert(redeemable, 'redeemable coupon missing')
+  const birthdayBefore = pointsCenter.payload.data.redemptions.filter((item) => item.source === 'birthday')
+  assert(birthdayBefore.length === 1, 'birthday coupon should be issued once on birthday')
+  const requestKey = `smoke-${stamp}`
+  const redeemed = await request('POST', `/account/points-center/redeem/${redeemable.id}`, { token: userToken, body: { requestKey } })
+  const balanceAfterRedeem = Number(redeemed.payload.data.balance)
+  const repeated = await request('POST', `/account/points-center/redeem/${redeemable.id}`, { token: userToken, body: { requestKey } })
+  assert(Number(repeated.payload.data.balance) === balanceAfterRedeem, 'duplicate redemption request deducted points twice')
+  assert(repeated.payload.data.redemptions.filter((item) => item.source === 'points').length === 1, 'duplicate redemption created multiple coupons')
+  const birthdayAgain = await request('GET', '/account/points-center', { token: userToken })
+  assert(birthdayAgain.payload.data.redemptions.filter((item) => item.source === 'birthday').length === 1, 'birthday coupon was issued more than once')
+  logPass('points redemption idempotency and annual birthday coupon')
+
+  const adminUsers = await request('GET', `/admin/users?keyword=${encodeURIComponent(smokePhone)}`, { token: adminToken })
+  const adminUser = adminUsers.payload.data.find((item) => Number(item.id) === Number(me.payload.data.id))
+  assert(adminUser?.birthday === today && Number(adminUser.couponCount) === 2 && Number(adminUser.points) === balanceAfterRedeem, 'admin user points/birthday/coupon summary invalid')
+  await request('PATCH', `/admin/users/${me.payload.data.id}`, { token: adminToken, body: { points: -1 }, expectedStatus: 400 })
+  const couponLogs = await request('GET', `/admin/logs?userId=${me.payload.data.id}&role=user&action=coupon.`, { token: adminToken })
+  assert(couponLogs.payload.data.some((item) => item.action === 'coupon.issue')
+    && couponLogs.payload.data.some((item) => item.action === 'coupon.redeem'), 'admin coupon log filters returned incomplete results')
+  const [auditPayloads] = await pool.query('SELECT payload FROM audit_logs WHERE operator_id = ?', [me.payload.data.id])
+  assert(auditPayloads.every((row) => !/"(?:password|token|verificationCode|captchaCode)"\s*:/i.test(String(row.payload || ''))), 'audit log contains sensitive credential fields')
+  logPass('admin user summary, log filters, points floor and audit privacy')
+
   await request('GET', '/auth/me', { token: 'invalid.smoke.token', expectedStatus: 401 })
   logPass('invalid token rejected')
 
@@ -338,7 +377,7 @@ async function main() {
   assert(unauthLike.payload.code === 401, 'unauth like should return 401')
   await request('POST', `/posts/${post.id}/like`, { token: userToken })
   const postLikes = await request('GET', `/posts/${post.id}/likes`)
-  assert(postLikes.payload.data.items.some((item) => item.nickname === 'Smoke User'), 'post like users missing')
+  assert(postLikes.payload.data.items.some((item) => item.nickname === 'Smoke Profile'), 'post like users missing')
   logPass('community like, bookmark, gallery, new post and comment data')
   await request('DELETE', `/upload/files/${uploaded.payload.data.file.id}`, { token: adminToken })
 
@@ -425,6 +464,9 @@ async function main() {
   createdSeatIds.push(createdSeat.payload.data.id)
   const editedSeat = await request('PATCH', `/admin/seats/${createdSeat.payload.data.id}`, { token: adminToken, body: { ...createdSeat.payload.data, name: 'Smoke Seat Edited', x: 45, y: 65, status: 'available' } })
   assert(editedSeat.payload.data.name === 'Smoke Seat Edited' && Number(editedSeat.payload.data.x) === 45, 'seat edit not persisted')
+  const syncedSeats = await request('GET', '/seats')
+  const syncedSeat = syncedSeats.payload.data.find((seat) => Number(seat.id) === Number(createdSeat.payload.data.id))
+  assert(Number(syncedSeat?.x) === 45 && Number(syncedSeat?.y) === 65, 'frontend seat endpoint did not expose saved coordinates')
   const disabledSeat = await request('PATCH', `/admin/seats/${createdSeat.payload.data.id}/status`, { token: adminToken, body: { status: 'disabled' } })
   assert(disabledSeat.payload.data.status === 'maintenance', 'seat maintenance status failed')
   await request('DELETE', `/admin/seats/${createdSeat.payload.data.id}`, { token: adminToken })

@@ -19,7 +19,7 @@ const menu = [
   { label: '个人资料', to: '/account/profile' },
   { label: '安全设置', to: '/account/security' },
   { label: '会员权益', to: '/account/membership' },
-  { label: '积分记录', to: '/account/points' },
+  { label: '积分中心', to: '/account/points' },
   { label: '我的收藏', to: '/account/favorites' },
   { label: '我的订单', to: '/account/orders' },
   { label: '我的预约', to: '/account/bookings' },

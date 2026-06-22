@@ -19,6 +19,13 @@ const groups = computed(() => [
   { key: 'posts', label: '社区', path: (item) => `/community/${item.slug}` },
 ])
 const total = computed(() => groups.value.reduce((sum, group) => sum + results.value[group.key].length, 0))
+const resultState = computed(() => {
+  if (error.value) return 'error'
+  if (loading.value) return 'loading'
+  if (searched.value && total.value === 0) return 'empty'
+  if (total.value) return 'results'
+  return 'hint'
+})
 let searchTimer
 let searchSequence = 0
 
@@ -79,18 +86,25 @@ async function visit(group, item) {
         <BaseInput v-model="keyword" label="搜索" placeholder="搜索商品、图书、活动或社区内容" search autofocus />
         <BaseButton type="submit" :loading="loading">搜索</BaseButton>
       </form>
-      <p v-if="error" class="search-panel__error">{{ error }}</p>
-      <p v-if="loading" class="text-muted">正在搜索...</p>
-      <EmptyState v-else-if="searched && total === 0 && !error" title="没有找到结果" description="换一个关键词试试。" />
-      <div v-else-if="total" class="search-results">
-        <section v-for="group in groups" :key="group.key" v-show="results[group.key].length" class="search-group">
-          <h3>{{ group.label }}</h3>
-          <button v-for="item in results[group.key]" :key="item.id" type="button" @click="visit(group, item)">
-            <strong>{{ item.title }}</strong><small>{{ item.summary || '查看详情' }}</small>
-          </button>
-        </section>
-      </div>
-      <p v-else class="text-muted">输入关键词后将自动搜索。</p>
+      <Transition name="search-results" mode="out-in">
+        <div :key="resultState" class="search-panel__feedback" role="status" aria-live="polite">
+          <p v-if="error" class="search-panel__error">{{ error }}</p>
+          <div v-else-if="loading" class="search-panel__loading">
+            <span class="cb-spin" aria-hidden="true" />
+            <span>正在搜索...</span>
+          </div>
+          <EmptyState v-else-if="searched && total === 0" title="没有找到结果" description="换一个关键词试试。" />
+          <div v-else-if="total" class="search-results">
+            <section v-for="group in groups" :key="group.key" v-show="results[group.key].length" class="search-group">
+              <h3>{{ group.label }}</h3>
+              <button v-for="item in results[group.key]" :key="item.id" type="button" @click="visit(group, item)">
+                <strong>{{ item.title }}</strong><small>{{ item.summary || '查看详情' }}</small>
+              </button>
+            </section>
+          </div>
+          <p v-else class="text-muted">输入关键词后将自动搜索。</p>
+        </div>
+      </Transition>
     </div>
   </BaseModal>
 </template>
@@ -99,12 +113,18 @@ async function visit(group, item) {
 .search-trigger { display:inline-grid; width:2.75rem; height:2.75rem; padding:0; place-items:center; color:var(--cb-text-secondary); background:transparent; border:0; border-radius:var(--cb-radius-pill); }
 .search-trigger:hover { color:var(--cb-text-primary); background:var(--cb-bg-soft); }
 .search-trigger svg { width:1.25rem; fill:none; stroke:currentcolor; stroke-linecap:round; stroke-width:1.75; }
-.search-panel,.search-results,.search-group { display:grid; gap:var(--cb-space-4); }
+.search-panel,.search-results,.search-group,.search-panel__feedback { display:grid; gap:var(--cb-space-4); }
 .search-panel__form { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:var(--cb-space-3); align-items:end; }
 .search-panel__error { padding:var(--cb-space-3); color:var(--cb-danger); background:color-mix(in srgb,var(--cb-danger) 10%,transparent); border-radius:var(--cb-radius-lg); }
+.search-panel__loading { display:flex; min-height:3rem; gap:var(--cb-space-3); align-items:center; color:var(--cb-text-muted); }
+.search-panel__loading .cb-spin { width:1rem; height:1rem; border:.125rem solid var(--cb-border-strong); border-top-color:var(--cb-color-coffee); border-radius:50%; }
 .search-group h3 { font-size:var(--cb-font-size-lg); }
-.search-group button { display:grid; gap:var(--cb-space-1); padding:var(--cb-space-3); color:var(--cb-text-primary); text-align:left; background:var(--cb-bg-soft); border:0.0625rem solid var(--cb-border-soft); border-radius:var(--cb-radius-lg); }
+.search-group button { display:grid; gap:var(--cb-space-1); padding:var(--cb-space-3); color:var(--cb-text-primary); text-align:left; background:var(--cb-bg-soft); border:0.0625rem solid var(--cb-border-soft); border-radius:var(--cb-radius-lg); transition:border-color var(--cb-motion-quick) var(--cb-ease-standard),box-shadow var(--cb-motion-quick) var(--cb-ease-standard),transform var(--cb-motion-quick) var(--cb-motion-enter); }
 .search-group button:hover { border-color:var(--cb-border-strong); transform:translateY(-1px); }
 .search-group small { overflow:hidden; color:var(--cb-text-muted); text-overflow:ellipsis; white-space:nowrap; }
+.search-results-enter-active,.search-results-leave-active { transition:opacity var(--cb-motion-quick) var(--cb-ease-standard),transform var(--cb-motion-base) var(--cb-motion-enter),clip-path var(--cb-motion-base) var(--cb-motion-enter); }
+.search-results-enter-from,.search-results-leave-to { opacity:0; clip-path:inset(0 0 100%); transform:translateY(-.4rem); }
+.search-results-enter-to,.search-results-leave-from { opacity:1; clip-path:inset(0); transform:translateY(0); }
 @media(max-width:35rem){.search-panel__form{grid-template-columns:1fr;}}
+@media(prefers-reduced-motion:reduce){.search-results-enter-active,.search-results-leave-active,.search-group button{transition-duration:.01ms!important}.search-results-enter-from,.search-results-leave-to{transform:none}.search-group button:hover{transform:none}}
 </style>

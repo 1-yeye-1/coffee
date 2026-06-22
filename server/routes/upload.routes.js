@@ -1,6 +1,7 @@
 import { requireAdmin, requireUser } from '../middlewares/auth.js'
 import fs from 'node:fs/promises'
 import { logAdminAction } from '../services/admin-log.service.js'
+import { recordAudit } from '../services/audit.service.js'
 import {
   deleteUploadFile,
   listUploadFiles,
@@ -53,6 +54,7 @@ export function registerUploadRoutes(router) {
     if (!requireFile(req, res)) return false
     await validateUploadedFile(req)
     const result = await persistUploadedFile(req, req.user.id, saveAvatarUpload)
+    await recordAudit({ operatorId: req.user.id, actor: req.user, action: 'user.avatar.upload', module: 'account', targetType: 'upload', targetId: result.file.id, description: '用户上传头像', payload: { fileId: result.file.id, mimeType: result.file.mimeType, size: result.file.size }, req })
     return success(res, result, '头像上传成功', 201)
   })
 

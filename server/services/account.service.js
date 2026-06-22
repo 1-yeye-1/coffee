@@ -5,7 +5,7 @@ import { writeAudit } from './admin.service.js'
 
 const userSelect = `
   id, username, nickname, email, phone, avatar, status, points, level,
-  profile_public AS profilePublic,
+  profile_public AS profilePublic, gender, DATE_FORMAT(birthday, '%Y-%m-%d') AS birthday, bio,
   created_at AS createdAt, updated_at AS updatedAt
 `
 
@@ -110,9 +110,16 @@ export async function removeFavorite(userId, favoriteId) {
 export async function updateProfile(userId, payload) {
   const nickname = String(payload.nickname || '').trim()
   const email = String(payload.email || '').trim() || null
+  const gender = String(payload.gender || '').trim() || null
+  const birthday = String(payload.birthday || '').trim() || null
+  const bio = String(payload.bio || '').trim() || null
   if (!nickname) throw Object.assign(new Error('昵称必填'), { statusCode: 400 })
-  await pool.execute('UPDATE users SET nickname = ?, email = ? WHERE id = ? AND role = "user"', [nickname, email, userId])
-  await writeAudit(userId, 'user.profile.update', 'account', { userId })
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Object.assign(new Error('邮箱格式不正确'), { statusCode: 400 })
+  if (gender && !['female', 'male', 'other', 'private'].includes(gender)) throw Object.assign(new Error('性别选项无效'), { statusCode: 400 })
+  if (birthday && (!/^\d{4}-\d{2}-\d{2}$/.test(birthday) || birthday > new Date().toISOString().slice(0, 10))) throw Object.assign(new Error('生日日期无效'), { statusCode: 400 })
+  if (bio && bio.length > 500) throw Object.assign(new Error('个人简介不能超过 500 字'), { statusCode: 400 })
+  await pool.execute('UPDATE users SET nickname = ?, email = ?, gender = ?, birthday = ?, bio = ? WHERE id = ? AND role = "user"', [nickname, email, gender, birthday, bio, userId])
+  await writeAudit(userId, 'user.profile.update', 'account', { userId, changes: { nickname, emailChanged: payload.email !== undefined, gender, birthday, bioLength: bio?.length || 0 } })
   const [[user]] = await pool.execute(
     `SELECT ${userSelect} FROM users WHERE id = ? AND role = 'user' LIMIT 1`,
     [userId],
@@ -258,7 +265,7 @@ export async function updatePrivacy(userId, payload) {
 
 export async function getPublicProfile(userId) {
   const [[user]] = await pool.execute(
-    `SELECT id, nickname, username, avatar, created_at AS createdAt,
+    `SELECT id, nickname, username, avatar, gender, bio, created_at AS createdAt,
       profile_public AS profilePublic
      FROM users WHERE id = ? AND role = 'user' AND status = 'active' LIMIT 1`,
     [userId],
@@ -290,6 +297,8 @@ export async function getPublicProfile(userId) {
     id: user.id,
     nickname: user.nickname || user.username,
     avatar: user.avatar,
+    gender: user.gender,
+    bio: user.bio,
     createdAt: user.createdAt,
     postsCount: Number(postsCount[0].total),
     likesCount: Number(likesCount[0].total),

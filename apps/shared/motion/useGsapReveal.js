@@ -97,7 +97,7 @@ export function useGsapReveal(root = null) {
     key: 'page', y: 16, duration: 0.48, stagger: 0.04, ...options,
   })
   const revealSection = (target, options = {}) => reveal(target, {
-    key: options.key || `section:${String(target)}`, y: 26, duration: 0.64, stagger: 0, ...options,
+    key: options.key || `section:${String(target)}`, y: 26, duration: 0.6, stagger: 0, ...options,
   })
   const revealCards = (target, options = {}) => reveal(target, {
     key: options.key || `cards:${String(target)}`, ...options,
@@ -118,7 +118,7 @@ export function useGsapReveal(root = null) {
       {
         opacity: 1,
         y: 0,
-        duration: options.duration ?? 0.64,
+        duration: options.duration ?? 0.6,
         delay: Math.min(index, 4) * 0.025,
         ease: MOTION.ease,
         clearProps: 'transform,opacity',
@@ -160,7 +160,7 @@ export function useGsapReveal(root = null) {
     const property = horizontal ? 'scaleX' : 'scaleY'
     return track(inContext(() => gsap.fromTo(targets,
       { [property]: 0, transformOrigin: horizontal ? 'left' : 'bottom' },
-      { [property]: 1, duration: 0.72, stagger: 0.05, ease: 'power2.out', clearProps: 'transform' },
+      { [property]: 1, duration: 0.6, stagger: 0.05, ease: 'power2.out', clearProps: 'transform' },
     )), `progress:${String(target)}`)
   }
 
