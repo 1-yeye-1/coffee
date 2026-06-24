@@ -29,6 +29,8 @@ async function migrate() {
     await ensureColumn(connection, databaseName, 'products', 'product_type', "VARCHAR(40) NOT NULL DEFAULT 'coffee' AFTER category")
     await ensureColumn(connection, databaseName, 'products', 'image_url', 'VARCHAR(500) NULL AFTER supports_brew_method')
     await ensureColumn(connection, databaseName, 'books', 'cover_url', 'VARCHAR(500) NULL AFTER cover_tone')
+    await ensureColumn(connection, databaseName, 'books', 'seat_id', 'BIGINT UNSIGNED NULL AFTER author_bio')
+    await ensureColumn(connection, databaseName, 'books', 'location_label', 'VARCHAR(255) NULL AFTER seat_id')
     await ensureColumn(connection, databaseName, 'events', 'cover_url', 'VARCHAR(500) NULL AFTER tone')
     await ensureColumn(connection, databaseName, 'products', 'supports_brew_method', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER product_type')
     await ensureColumn(connection, databaseName, 'cart_items', 'brew_method', "VARCHAR(40) NOT NULL DEFAULT 'none' AFTER product_id")
@@ -44,6 +46,8 @@ async function migrate() {
     await ensureColumn(connection, databaseName, 'audit_logs', 'description', 'VARCHAR(500) NULL AFTER target_id')
     await ensureColumn(connection, databaseName, 'audit_logs', 'ip', 'VARCHAR(80) NULL AFTER description')
     await ensureColumn(connection, databaseName, 'audit_logs', 'user_agent', 'VARCHAR(500) NULL AFTER ip')
+    await ensureColumn(connection, databaseName, 'users', 'growth_value', 'INT NOT NULL DEFAULT 0 AFTER level')
+    await ensureColumn(connection, databaseName, 'users', 'last_checkin_date', 'DATE NULL AFTER growth_value')
     await ensureColumn(connection, databaseName, 'users', 'profile_public', 'TINYINT(1) NOT NULL DEFAULT 1 AFTER level')
     await ensureColumn(connection, databaseName, 'users', 'gender', 'VARCHAR(20) NULL AFTER profile_public')
     await ensureColumn(connection, databaseName, 'users', 'birthday', 'DATE NULL AFTER gender')
@@ -62,6 +66,7 @@ async function migrate() {
     await ensureColumn(connection, databaseName, 'seats', 'width', 'INT NOT NULL DEFAULT 64 AFTER y')
     await ensureColumn(connection, databaseName, 'seats', 'height', 'INT NOT NULL DEFAULT 52 AFTER width')
     await ensureColumn(connection, databaseName, 'seats', 'sort_order', 'INT NOT NULL DEFAULT 0 AFTER status')
+    await ensureUploadFilesUserNullable(connection)
     await connection.query(`ALTER TABLE ${databaseSql}.\`verification_codes\` MODIFY \`expires_at\` DATETIME NOT NULL`)
     await connection.query(`ALTER TABLE ${databaseSql}.\`payments\` MODIFY \`expires_at\` DATETIME NULL`)
     await connection.query(`UPDATE ${databaseSql}.\`user_notifications\` SET is_read = 1 WHERE read_at IS NOT NULL`)
@@ -87,7 +92,17 @@ async function migrate() {
     await ensureIndex(connection, databaseName, 'user_notifications', 'idx_user_notifications_type', 'KEY idx_user_notifications_type (type)')
     await ensureIndex(connection, databaseName, 'user_notifications', 'idx_user_notifications_is_read', 'KEY idx_user_notifications_is_read (is_read)')
     await ensureIndex(connection, databaseName, 'bookings', 'idx_bookings_seat_date_time', 'KEY idx_bookings_seat_date_time (seat_id, booking_date, time_slot)')
+    await ensureIndex(connection, databaseName, 'books', 'idx_books_seat', 'KEY idx_books_seat (seat_id)')
     await ensureIndex(connection, databaseName, 'posts', 'idx_posts_status', 'KEY idx_posts_status (status)')
+    await ensureColumn(connection, databaseName, 'comments', 'parent_id', 'BIGINT UNSIGNED NULL AFTER user_id')
+    await ensureIndex(connection, databaseName, 'comments', 'idx_comments_parent', 'KEY idx_comments_parent (parent_id)')
+    await ensureForeignKey(
+      connection,
+      databaseName,
+      'comments',
+      'fk_comments_parent',
+      'FOREIGN KEY (parent_id) REFERENCES comments(id) ON DELETE CASCADE',
+    )
     await ensureIndex(connection, databaseName, 'comments', 'idx_comments_status', 'KEY idx_comments_status (status)')
     await ensureIndex(connection, databaseName, 'content_reports', 'idx_content_reports_post', 'KEY idx_content_reports_post (post_id)')
     await ensureIndex(connection, databaseName, 'content_reports', 'idx_content_reports_comment', 'KEY idx_content_reports_comment (comment_id)')
@@ -97,7 +112,11 @@ async function migrate() {
     await ensureSeats(connection)
     await ensureUserAvatars(connection)
     await ensureProductReviews(connection)
+    await ensureBookReviews(connection)
+    await ensureCommentLikes(connection)
+    await ensureBookReservations(connection)
     await ensurePointsCenter(connection)
+    await ensureMembershipGrowth(connection)
     await ensureColumn(connection, databaseName, 'user_coupons', 'request_key', 'VARCHAR(80) NULL AFTER coupon_code')
     await ensureIndex(connection, databaseName, 'user_coupons', 'uk_user_coupons_request', 'UNIQUE KEY uk_user_coupons_request (user_id, request_key)')
     await removeLegacyAdminUsers(connection)
@@ -105,6 +124,27 @@ async function migrate() {
   } finally {
     await connection.end()
   }
+}
+
+async function ensureMembershipGrowth(connection) {
+  await ensureColumn(connection, databaseName, 'users', 'growth_value', 'INT NOT NULL DEFAULT 0 AFTER level')
+  await ensureColumn(connection, databaseName, 'users', 'last_checkin_date', 'DATE NULL AFTER growth_value')
+  await ensureIndex(connection, databaseName, 'users', 'idx_users_growth_value', 'KEY idx_users_growth_value (growth_value)')
+  await connection.query(`UPDATE ${databaseSql}.\`users\` u
+    LEFT JOIN (
+      SELECT user_id, COALESCE(SUM(CASE WHEN points > 0 THEN points ELSE 0 END), 0) AS earned
+      FROM ${databaseSql}.\`user_points\` GROUP BY user_id
+    ) p ON p.user_id = u.id
+    SET u.growth_value = GREATEST(u.growth_value, COALESCE(p.earned, 0))
+    WHERE u.role = 'user'`)
+  await connection.query(`UPDATE ${databaseSql}.\`users\`
+    SET level = CASE
+      WHEN growth_value >= 3000 THEN '黑金会员'
+      WHEN growth_value >= 1500 THEN '金卡会员'
+      WHEN growth_value >= 500 THEN '银卡会员'
+      ELSE '普通会员'
+    END
+    WHERE role = 'user'`)
 }
 
 async function ensurePointsCenter(connection) {
@@ -145,6 +185,23 @@ async function ensurePointsCenter(connection) {
         discount_amount=VALUES(discount_amount), min_spend=VALUES(min_spend), valid_days=VALUES(valid_days),
         description=VALUES(description)`, coupon)
   }
+}
+
+async function ensureUploadFilesUserNullable(connection) {
+  await dropForeignKeysForColumn(connection, databaseName, 'upload_files', 'user_id')
+  await connection.query(`ALTER TABLE ${databaseSql}.\`upload_files\` MODIFY \`user_id\` BIGINT UNSIGNED NULL`)
+  await connection.query(`UPDATE ${databaseSql}.\`upload_files\` uf
+    LEFT JOIN ${databaseSql}.\`users\` u ON u.id = uf.user_id
+    SET uf.user_id = NULL
+    WHERE uf.user_id IS NOT NULL AND u.id IS NULL`)
+  await ensureIndex(connection, databaseName, 'upload_files', 'idx_upload_files_user_id', 'KEY idx_upload_files_user_id (user_id)')
+  await ensureForeignKey(
+    connection,
+    databaseName,
+    'upload_files',
+    'fk_upload_files_user',
+    'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL',
+  )
 }
 
 async function ensureUserAvatars(connection) {
@@ -278,6 +335,7 @@ async function ensureProductReviews(connection) {
       product_id BIGINT UNSIGNED NOT NULL,
       user_id BIGINT UNSIGNED NOT NULL,
       order_id BIGINT UNSIGNED NULL,
+      parent_id BIGINT UNSIGNED NULL,
       rating INT NOT NULL DEFAULT 5,
       content TEXT NULL,
       media_url VARCHAR(500) NULL,
@@ -287,10 +345,84 @@ async function ensureProductReviews(connection) {
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       KEY idx_product_reviews_product_id (product_id),
+      KEY idx_product_reviews_parent (parent_id),
       KEY idx_product_reviews_user_id (user_id),
       KEY idx_product_reviews_status (status),
       CONSTRAINT fk_product_reviews_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
       CONSTRAINT fk_product_reviews_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB`,
+  )
+  await ensureColumn(connection, databaseName, 'product_reviews', 'parent_id', 'BIGINT UNSIGNED NULL AFTER order_id')
+  await ensureIndex(connection, databaseName, 'product_reviews', 'idx_product_reviews_parent', 'KEY idx_product_reviews_parent (parent_id)')
+  await dropIndexIfExists(connection, databaseName, 'product_reviews', 'uk_product_reviews_product_user')
+}
+
+async function ensureBookReviews(connection) {
+  await connection.query(
+    `CREATE TABLE IF NOT EXISTS ${databaseSql}.\`book_reviews\` (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      book_id BIGINT UNSIGNED NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      reservation_id BIGINT UNSIGNED NULL,
+      parent_id BIGINT UNSIGNED NULL,
+      rating INT NOT NULL DEFAULT 5,
+      content TEXT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'published',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_book_reviews_book_id (book_id),
+      KEY idx_book_reviews_parent (parent_id),
+      KEY idx_book_reviews_user_id (user_id),
+      KEY idx_book_reviews_status (status),
+      CONSTRAINT fk_book_reviews_book FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+      CONSTRAINT fk_book_reviews_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB`,
+  )
+  await ensureColumn(connection, databaseName, 'book_reviews', 'parent_id', 'BIGINT UNSIGNED NULL AFTER reservation_id')
+  await ensureIndex(connection, databaseName, 'book_reviews', 'idx_book_reviews_parent', 'KEY idx_book_reviews_parent (parent_id)')
+  await dropIndexIfExists(connection, databaseName, 'book_reviews', 'uk_book_reviews_book_user')
+}
+
+async function ensureCommentLikes(connection) {
+  await connection.query(
+    `CREATE TABLE IF NOT EXISTS ${databaseSql}.\`comment_likes\` (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      target_type VARCHAR(20) NOT NULL,
+      comment_id BIGINT UNSIGNED NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uk_comment_likes_target_user (target_type, comment_id, user_id),
+      KEY idx_comment_likes_target (target_type, comment_id),
+      KEY idx_comment_likes_user (user_id),
+      CONSTRAINT fk_comment_likes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB`,
+  )
+}
+
+async function ensureBookReservations(connection) {
+  await connection.query(
+    `CREATE TABLE IF NOT EXISTS ${databaseSql}.\`book_reservations\` (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      reservation_no VARCHAR(80) NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      book_id BIGINT UNSIGNED NOT NULL,
+      seat_id BIGINT UNSIGNED NULL,
+      location_label VARCHAR(255) NULL,
+      status VARCHAR(30) NOT NULL DEFAULT 'confirmed',
+      reserved_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      cancelled_at DATETIME NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uk_book_reservations_no (reservation_no),
+      KEY idx_book_reservations_user (user_id),
+      KEY idx_book_reservations_book (book_id),
+      KEY idx_book_reservations_status (status),
+      CONSTRAINT fk_book_reservations_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      CONSTRAINT fk_book_reservations_book FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+      CONSTRAINT fk_book_reservations_seat FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE SET NULL
     ) ENGINE=InnoDB`,
   )
 }
@@ -388,6 +520,29 @@ async function dropForeignKeyIfExists(connection, schema, table, constraintName)
   )
   if (Number(rows[0].total) > 0) {
     await connection.query(`ALTER TABLE \`${schema}\`.\`${table}\` DROP FOREIGN KEY \`${constraintName}\``)
+  }
+}
+
+async function dropForeignKeysForColumn(connection, schema, table, column) {
+  const [rows] = await connection.execute(
+    `SELECT DISTINCT CONSTRAINT_NAME AS constraintName
+     FROM information_schema.KEY_COLUMN_USAGE
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL`,
+    [schema, table, column],
+  )
+  for (const row of rows) {
+    await connection.query(`ALTER TABLE \`${schema}\`.\`${table}\` DROP FOREIGN KEY \`${row.constraintName}\``)
+  }
+}
+
+async function ensureForeignKey(connection, schema, table, constraintName, definition) {
+  const [rows] = await connection.execute(
+    `SELECT COUNT(*) AS total FROM information_schema.TABLE_CONSTRAINTS
+     WHERE CONSTRAINT_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY'`,
+    [schema, table, constraintName],
+  )
+  if (Number(rows[0].total) === 0) {
+    await connection.query(`ALTER TABLE \`${schema}\`.\`${table}\` ADD CONSTRAINT \`${constraintName}\` ${definition}`)
   }
 }
 

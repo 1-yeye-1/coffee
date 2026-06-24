@@ -3,9 +3,11 @@ import { shanghaiDateString } from '../utils/date.js'
 import { assertPhone, normalizePhone, phoneExists, verifyCode } from './auth.service.js'
 import { createNotification, listNotifications as listUserNotifications, markAsRead } from './notifications.service.js'
 import { writeAudit } from './admin.service.js'
+import { getAccountOverviewStats, postCommentCountSql, postLikeCountSql } from './stats.service.js'
 
 const userSelect = `
   id, username, nickname, email, phone, avatar, status, points, level,
+  growth_value AS growthValue, DATE_FORMAT(last_checkin_date, '%Y-%m-%d') AS lastCheckinDate,
   profile_public AS profilePublic, gender, DATE_FORMAT(birthday, '%Y-%m-%d') AS birthday, bio,
   created_at AS createdAt, updated_at AS updatedAt
 `
@@ -31,30 +33,15 @@ export async function getAccountOverview(userId) {
     `SELECT ${userSelect} FROM users WHERE id = ? AND role = 'user' LIMIT 1`,
     [userId],
   )
-  const [[orders], [bookings], [posts], [unread], [addresses], [registrations], [favorites], [recentNotifications], [recentOrders], [recentBookings]] = await Promise.all([
-    pool.execute('SELECT COUNT(*) AS total FROM orders WHERE user_id = ?', [userId]),
-    pool.execute('SELECT COUNT(*) AS total FROM bookings WHERE user_id = ?', [userId]),
-    pool.execute('SELECT COUNT(*) AS total FROM posts WHERE user_id = ?', [userId]),
-    pool.execute('SELECT COUNT(*) AS total FROM user_notifications WHERE user_id = ? AND is_read = 0', [userId]),
-    pool.execute('SELECT COUNT(*) AS total FROM user_addresses WHERE user_id = ?', [userId]),
-    pool.execute("SELECT COUNT(*) AS total FROM event_registrations WHERE user_id = ? AND status = 'registered'", [userId]),
-    pool.execute('SELECT COUNT(*) AS total FROM user_favorites WHERE user_id = ?', [userId]),
+  const [stats, [recentNotifications], [recentOrders], [recentBookings]] = await Promise.all([
+    getAccountOverviewStats(userId),
     pool.execute('SELECT id, title, content, type, is_read AS isRead, created_at AS createdAt FROM user_notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5', [userId]),
     pool.execute('SELECT id, order_no AS orderNo, total_amount AS amount, status, created_at AS createdAt FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 5', [userId]),
     pool.execute('SELECT id, booking_no AS bookingNo, booking_date AS bookingDate, time_slot AS timeSlot, status, created_at AS createdAt FROM bookings WHERE user_id = ? ORDER BY created_at DESC LIMIT 5', [userId]),
   ])
   return {
     user: mapUser(user),
-    stats: {
-      orders: Number(orders[0].total),
-      bookings: Number(bookings[0].total),
-      posts: Number(posts[0].total),
-      unreadNotifications: Number(unread[0].total),
-      addresses: Number(addresses[0].total),
-      eventRegistrations: Number(registrations[0].total),
-      favorites: Number(favorites[0].total),
-      points: Number(user?.points || 0),
-    },
+    stats,
     recentNotifications: recentNotifications.map((item) => ({ ...item, isRead: Boolean(item.isRead) })),
     recentOrders: recentOrders.map((item) => ({ ...item, amount: Number(item.amount) })),
     recentBookings,
@@ -232,7 +219,8 @@ export async function saveAddress(userId, payload) {
 export async function listMyPosts(userId) {
   const [rows] = await pool.execute(
     `SELECT id, slug, title, topic, excerpt, status, featured,
-      likes_count AS likes, comments_count AS commentsCount,
+      ${postLikeCountSql('posts')} AS likes,
+      ${postCommentCountSql('posts')} AS commentsCount,
       created_at AS createdAt, updated_at AS updatedAt
      FROM posts WHERE user_id = ? ORDER BY created_at DESC, id DESC`,
     [userId],
@@ -286,8 +274,10 @@ export async function getPublicProfile(userId) {
       [userId],
     ),
     pool.execute(
-      `SELECT id, slug, title, topic, excerpt, likes_count AS likes,
-        comments_count AS commentsCount, created_at AS createdAt
+      `SELECT id, slug, title, topic, excerpt,
+        ${postLikeCountSql('posts')} AS likes,
+        ${postCommentCountSql('posts')} AS commentsCount,
+        created_at AS createdAt
        FROM posts WHERE user_id = ? AND status = 'published'
        ORDER BY created_at DESC, id DESC LIMIT 20`,
       [userId],

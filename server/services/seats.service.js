@@ -2,16 +2,44 @@ import { pool } from '../db/mysql.js'
 import { maskPhone } from './account.service.js'
 import { writeAudit } from './admin.service.js'
 
-export const allowedTimeSlots = ['09:00-11:00', '11:00-13:00', '13:00-15:00', '15:00-17:00', '17:00-19:00', '19:00-21:00']
+export const allowedTimeSlots = [
+  '09:00-10:30',
+  '10:30-12:00',
+  '13:00-14:30',
+  '14:30-16:00',
+  '16:00-17:30',
+  '18:00-20:00',
+  '09:00-11:00',
+  '11:00-13:00',
+  '13:00-15:00',
+  '15:00-17:00',
+  '17:00-19:00',
+  '19:00-21:00',
+]
 
 export function normalizeTimeSlot(value) {
   return String(value || '').replace(/\s+/g, '')
 }
 
+export function parseTimeSlotParts(value) {
+  const normalized = normalizeTimeSlot(value)
+  const [start, end] = normalized.split('-')
+  return { normalized, start, end }
+}
+
 export function assertBookingDateAndTime(date, timeSlot) {
-  const value = String(date || '')
+  const value = String(date || '').trim()
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) {
+    throw Object.assign(new Error('预约日期格式无效，请使用 YYYY-MM-DD'), { statusCode: 400 })
+  }
+  const parsed = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
+  const normalizedDate = `${parsed.getUTCFullYear()}-${String(parsed.getUTCMonth() + 1).padStart(2, '0')}-${String(parsed.getUTCDate()).padStart(2, '0')}`
+  if (normalizedDate !== value) {
+    throw Object.assign(new Error('预约日期不存在，请重新选择日期'), { statusCode: 400 })
+  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < today) {
     throw Object.assign(new Error('预约日期不能早于今天'), { statusCode: 400 })
   }
@@ -31,6 +59,7 @@ export async function listSeats() {
 
 export async function getSeatAvailability(date, timeSlot, admin = false) {
   const normalized = assertBookingDateAndTime(date, timeSlot)
+  const { start, end } = parseTimeSlotParts(normalized)
   const [rows] = await pool.execute(
     `SELECT s.id, s.code, s.name, s.area, s.capacity, s.x, s.y, s.width, s.height,
       s.sort_order AS sortOrder, s.status AS baseStatus,
@@ -39,11 +68,12 @@ export async function getSeatAvailability(date, timeSlot, admin = false) {
       COALESCE(u.nickname, u.username) AS nickname
      FROM seats s
      LEFT JOIN bookings b ON b.seat_id = s.id AND b.booking_date = ?
-       AND COALESCE(b.time_slot, REPLACE(b.booking_time, ' ', '')) = ?
+       AND SUBSTRING_INDEX(COALESCE(b.time_slot, REPLACE(b.booking_time, ' ', '')), '-', 1) < ?
+       AND SUBSTRING_INDEX(COALESCE(b.time_slot, REPLACE(b.booking_time, ' ', '')), '-', -1) > ?
        AND b.status IN ('pending', 'confirmed')
      LEFT JOIN users u ON u.id = b.user_id
      ORDER BY s.sort_order ASC, s.code ASC`,
-    [date, normalized],
+    [date, end, start],
   )
   return rows.map((row) => {
     const status = ['disabled', 'maintenance'].includes(row.baseStatus) ? 'maintenance' : row.bookingId ? 'reserved' : 'available'

@@ -84,6 +84,38 @@
   border: 0.0625rem solid var(--cb-border-soft);
 }
 
+.admin-batch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cb-space-3);
+  align-items: center;
+  padding: var(--cb-space-3) var(--cb-space-4);
+  background: var(--cb-bg-soft);
+  border: 0.0625rem solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-xl);
+}
+
+.admin-batch-bar label {
+  display: inline-flex;
+  gap: var(--cb-space-2);
+  align-items: center;
+  font-weight: var(--cb-font-semibold);
+}
+
+.admin-batch-bar__count {
+  margin-right: auto;
+  color: var(--cb-text-secondary);
+}
+
+.admin-select-cell,
+.admin-select-head {
+  display: inline-flex;
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--cb-color-coffee);
+  cursor: pointer;
+}
+
 .admin-panel {
   display: grid;
   min-width: 0;

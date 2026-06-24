@@ -3,16 +3,21 @@ import { parsePagination } from '../utils/pagination.js'
 import { writeAudit } from './admin.service.js'
 import { maskPhone } from './account.service.js'
 import { createNotification } from './notifications.service.js'
+import { postCommentCountSql, postLikeCountSql } from './stats.service.js'
+
+export { getCommunityStats } from './stats.service.js'
 
 const postColumns = `
-  id, slug, user_id AS userId, title, author, avatar, topic, excerpt, content,
-  media_url AS mediaUrl, media_type AS mediaType,
-  status AS reviewStatus, featured, likes_count AS likes, comments_count AS commentsCount,
-  created_at AS createdAt, updated_at AS updatedAt
+  p.id, p.slug, p.user_id AS userId, p.title, p.author, COALESCE(u.avatar, p.avatar) AS avatar, p.topic, p.excerpt, p.content,
+  p.media_url AS mediaUrl, p.media_type AS mediaType,
+  p.status AS reviewStatus, p.featured,
+  ${postLikeCountSql('p')} AS likes,
+  ${postCommentCountSql('p')} AS commentsCount,
+  p.created_at AS createdAt, p.updated_at AS updatedAt
 `
 
 const commentColumns = `
-  id, post_id AS postId, user_id AS userId, author, content, status, is_anonymous AS isAnonymous,
+  id, post_id AS postId, user_id AS userId, parent_id AS parentId, author, content, status, is_anonymous AS isAnonymous,
   created_at AS createdAt, updated_at AS updatedAt
 `
 
@@ -27,8 +32,9 @@ function slugify(value) {
 
 async function getComments(postId, publishedOnly = true) {
   const [rows] = await pool.execute(
-    `SELECT c.id, c.post_id AS postId, c.user_id AS userId, c.author, c.content, c.status,
+    `SELECT c.id, c.post_id AS postId, c.user_id AS userId, c.parent_id AS parentId, c.author, c.content, c.status,
       c.is_anonymous AS isAnonymous,
+      (SELECT COUNT(*) FROM comment_likes cl WHERE cl.target_type = 'community_comment' AND cl.comment_id = c.id) AS likeCount,
       c.created_at AS createdAt, c.updated_at AS updatedAt,
       u.nickname, u.username, u.avatar AS userAvatar, u.phone, u.profile_public AS profilePublic
      FROM comments c
@@ -41,9 +47,11 @@ async function getComments(postId, publishedOnly = true) {
     id: row.id,
     postId: row.postId,
     userId: row.userId,
+    parentId: row.parentId,
     author: row.isAnonymous && publishedOnly ? '匿名用户' : row.author,
     isAnonymous: Boolean(row.isAnonymous),
     content: row.content,
+    likeCount: Number(row.likeCount || 0),
     status: row.status,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -95,27 +103,27 @@ export async function listPosts(query = {}, admin = false) {
   const { page, pageSize, offset } = parsePagination(query)
   const clauses = []
   const params = []
-  if (!admin) clauses.push("status = 'published'")
+  if (!admin) clauses.push("p.status = 'published'")
   if (query.status) {
-    clauses.push('status = ?')
+    clauses.push('p.status = ?')
     params.push(query.status)
   }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
-  const orderBy = query.sort === 'latest' ? 'created_at DESC, id DESC' : 'likes_count DESC, created_at DESC'
-  const [countRows] = await pool.execute(`SELECT COUNT(*) AS total FROM posts ${where}`, params)
+  const orderBy = query.sort === 'latest' ? 'p.created_at DESC, p.id DESC' : 'likes DESC, p.created_at DESC'
+  const [countRows] = await pool.execute(`SELECT COUNT(*) AS total FROM posts p ${where}`, params)
   const [rows] = await pool.query(
-    `SELECT ${postColumns} FROM posts ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
+    `SELECT ${postColumns} FROM posts p LEFT JOIN users u ON u.id = p.user_id ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
     [...params, pageSize, offset],
   )
   return { items: await attachComments(rows, !admin), meta: { page, pageSize, total: Number(countRows[0].total) } }
 }
 
 export async function findPost(idOrSlug, admin = false) {
-  const clauses = ['(id = ? OR slug = ?)']
+  const clauses = ['(p.id = ? OR p.slug = ?)']
   const params = [idOrSlug, idOrSlug]
-  if (!admin) clauses.push("status = 'published'")
+  if (!admin) clauses.push("p.status = 'published'")
   const [rows] = await pool.execute(
-    `SELECT ${postColumns} FROM posts WHERE ${clauses.join(' AND ')} LIMIT 1`,
+    `SELECT ${postColumns} FROM posts p LEFT JOIN users u ON u.id = p.user_id WHERE ${clauses.join(' AND ')} LIMIT 1`,
     params,
   )
   const [post] = await attachComments(rows, !admin)
@@ -126,7 +134,7 @@ export async function createPost(payload, user) {
   const title = String(payload.title || '').trim()
   const content = String(payload.content || '').trim()
   const slug = `${slugify(payload.slug || title)}-${Date.now()}`
-  const author = user?.username || 'Coffee Reader'
+  const author = user?.nickname || user?.username || 'Coffee Reader'
   const avatar = author.slice(0, 1).toUpperCase()
   const mediaUrl = String(payload.mediaUrl || payload.media_url || '').trim() || null
   const mediaType = String(payload.mediaType || payload.media_type || '').trim() || null
@@ -159,10 +167,19 @@ export async function createComment(postId, payload, user) {
   try {
     await connection.beginTransaction()
     const author = user?.username || 'Coffee Reader'
+    const parentId = payload.parentId || payload.parent_id || null
+    if (parentId) {
+      const [[parent]] = await connection.execute(
+        "SELECT id, parent_id AS parentId FROM comments WHERE id = ? AND post_id = ? AND status = 'published' LIMIT 1",
+        [parentId, postId],
+      )
+      if (!parent) throw Object.assign(new Error('回复的评论不存在'), { statusCode: 404 })
+      if (parent.parentId) throw Object.assign(new Error('最多支持两层评论'), { statusCode: 400 })
+    }
     const [result] = await connection.execute(
-      `INSERT INTO comments (post_id, user_id, author, content, status, is_anonymous)
-       VALUES (?, ?, ?, ?, 'published', ?)`,
-      [postId, user?.id || null, author, String(payload.content || '').trim(), payload.isAnonymous || payload.is_anonymous ? 1 : 0],
+      `INSERT INTO comments (post_id, user_id, parent_id, author, content, status, is_anonymous)
+       VALUES (?, ?, ?, ?, ?, 'published', ?)`,
+      [postId, user?.id || null, parentId, author, String(payload.content || '').trim(), payload.isAnonymous || payload.is_anonymous ? 1 : 0],
     )
     await connection.execute(
       `UPDATE posts SET comments_count = (
@@ -179,6 +196,40 @@ export async function createComment(postId, payload, user) {
   } finally {
     connection.release()
   }
+}
+
+export async function likeComment(postId, commentId, userId) {
+  const [[comment]] = await pool.execute(
+    "SELECT id FROM comments WHERE id = ? AND post_id = ? AND status = 'published' LIMIT 1",
+    [commentId, postId],
+  )
+  if (!comment) throw Object.assign(new Error('评论不存在'), { statusCode: 404 })
+  await pool.execute(
+    "INSERT IGNORE INTO comment_likes (target_type, comment_id, user_id) VALUES ('community_comment', ?, ?)",
+    [commentId, userId],
+  )
+  const [[{ likeCount }]] = await pool.execute(
+    "SELECT COUNT(*) AS likeCount FROM comment_likes WHERE target_type = 'community_comment' AND comment_id = ?",
+    [commentId],
+  )
+  return { liked: true, likeCount: Number(likeCount || 0) }
+}
+
+export async function unlikeComment(postId, commentId, userId) {
+  const [[comment]] = await pool.execute(
+    "SELECT id FROM comments WHERE id = ? AND post_id = ? AND status = 'published' LIMIT 1",
+    [commentId, postId],
+  )
+  if (!comment) throw Object.assign(new Error('评论不存在'), { statusCode: 404 })
+  await pool.execute(
+    "DELETE FROM comment_likes WHERE target_type = 'community_comment' AND comment_id = ? AND user_id = ?",
+    [commentId, userId],
+  )
+  const [[{ likeCount }]] = await pool.execute(
+    "SELECT COUNT(*) AS likeCount FROM comment_likes WHERE target_type = 'community_comment' AND comment_id = ?",
+    [commentId],
+  )
+  return { liked: false, likeCount: Number(likeCount || 0) }
 }
 
 export async function deleteComment(postId, commentId, userId) {

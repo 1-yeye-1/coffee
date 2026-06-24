@@ -7,6 +7,10 @@ function reduced() {
   return !isMotionEnabled() || (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
 }
 
+function setElementText(node, text) {
+  if (node instanceof HTMLElement || node?.nodeType === 1) node.textContent = text
+}
+
 export function useCommunityMotion(root = null) {
   let context = null
   const animations = new Set()
@@ -42,7 +46,7 @@ export function useCommunityMotion(root = null) {
     const particles = Array.from({ length: 6 }, (_, index) => {
       const particle = document.createElement('span')
       particle.className = 'community-like-particle'
-      particle.textContent = index % 2 ? '♥' : '·'
+      setElementText(particle, index % 2 ? '♥' : '·')
       particle.style.left = `${bounds.left + bounds.width / 2}px`
       particle.style.top = `${bounds.top + bounds.height / 2}px`
       document.body.appendChild(particle)
@@ -67,7 +71,7 @@ export function useCommunityMotion(root = null) {
     const to = target?.getBoundingClientRect?.() || { left: window.innerWidth - 48, top: 32, width: 1, height: 1 }
     const marker = document.createElement('span')
     marker.className = 'community-bookmark-flight'
-    marker.textContent = '◆'
+    setElementText(marker, '◆')
     marker.style.left = `${from.left + from.width / 2}px`
     marker.style.top = `${from.top + from.height / 2}px`
     document.body.appendChild(marker)

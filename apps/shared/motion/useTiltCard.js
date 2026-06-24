@@ -13,9 +13,9 @@ function resolveScope(root) {
 function resolveCards(root, target) {
   const scope = resolveScope(root)
   if (!scope || !target) return []
-  if (typeof target === 'string') return [...scope.querySelectorAll(target)].slice(0, MAX_CARDS)
+  if (typeof target === 'string') return typeof scope.querySelectorAll === 'function' ? [...scope.querySelectorAll(target)].slice(0, MAX_CARDS) : []
   if (target instanceof Element) return [target]
-  return [...target].filter(Boolean).slice(0, MAX_CARDS)
+  return typeof target?.[Symbol.iterator] === 'function' ? [...target].filter(Boolean).slice(0, MAX_CARDS) : []
 }
 
 export function useTiltCard(root = null, options = {}) {

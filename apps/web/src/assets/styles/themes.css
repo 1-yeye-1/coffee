@@ -24,34 +24,6 @@ html[data-theme="light"] {
   --cb-border-strong: #b9aa9b;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    color-scheme: dark;
-    --text-main: #f7f3ee;
-    --text-muted: #ada298;
-    --border-soft: #403832;
-    --page-bg: #181512;
-    --card-bg: #25211d;
-    --panel-bg: #2b2622;
-    --field-bg: #211d1a;
-    --field-border: #51473f;
-    --table-bg: #25211d;
-    --modal-bg: #2b2622;
-    --cb-text-primary: var(--text-main);
-    --cb-text-secondary: #d2c8bd;
-    --cb-text-muted: var(--text-muted);
-    --cb-text-inverse: #1e1b18;
-    --cb-bg-page: var(--page-bg);
-    --cb-bg-surface: var(--card-bg);
-    --cb-bg-soft: #302a25;
-    --cb-bg-elevated: var(--panel-bg);
-    --cb-bg-dark: #100e0c;
-    --cb-border-soft: var(--field-border);
-    --cb-border-strong: #6d6055;
-    --cb-color-coffee: #c8a165;
-  }
-}
-
 html[data-theme="dark"] {
   color-scheme: dark;
   --text-main: #f7f3ee;

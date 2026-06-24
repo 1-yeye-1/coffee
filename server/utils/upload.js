@@ -66,11 +66,23 @@ function randomName(ext) {
   return `${Date.now()}-${crypto.randomBytes(8).toString('hex')}.${ext}`
 }
 
+function decodeOriginalName(name) {
+  const value = String(name || '')
+  if (!value) return value
+  try {
+    const decoded = Buffer.from(value, 'latin1').toString('utf8')
+    return decoded.includes('\uFFFD') ? value : decoded
+  } catch {
+    return value
+  }
+}
+
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true })
 }
 
 function matchRules(file, rules) {
+  file.originalname = decodeOriginalName(file.originalname)
   const ext = safeExtension(file.originalname)
   if (!ext) return { ok: false, message: '不允许上传该文件类型' }
   if (!rules.extensions.has(ext) || !rules.mimes.has(file.mimetype)) {

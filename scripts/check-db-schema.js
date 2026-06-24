@@ -5,7 +5,7 @@ const requiredColumns = {
   users: ['id', 'username', 'phone', 'points', 'level', 'profile_public', 'gender', 'birthday', 'bio'],
   admin_users: ['id', 'username', 'password_hash', 'status'],
   verification_codes: ['id', 'phone', 'scene', 'code_hash', 'used_at', 'expires_at', 'created_at'],
-  books: ['id', 'slug', 'title', 'stock', 'status', 'cover_url'],
+  books: ['id', 'slug', 'title', 'stock', 'status', 'cover_url', 'seat_id', 'location_label'],
   products: ['id', 'slug', 'product_type', 'supports_brew_method', 'image_url', 'price', 'stock', 'sales', 'status'],
   events: ['id', 'slug', 'event_date', 'capacity', 'attendees', 'status', 'cover_url'],
   event_registrations: ['id', 'event_id', 'user_id', 'status', 'created_at', 'updated_at'],
@@ -16,11 +16,16 @@ const requiredColumns = {
   seats: ['id', 'code', 'area', 'capacity', 'x', 'y', 'width', 'height', 'status', 'sort_order'],
   bookings: ['id', 'booking_no', 'user_id', 'phone', 'seat_id', 'time_slot', 'people_count', 'status'],
   user_avatars: ['id', 'user_id', 'avatar_url', 'source', 'is_current', 'created_at'],
+  upload_files: ['id', 'user_id', 'scene', 'file_type', 'original_name', 'stored_name', 'mime_type', 'size', 'url', 'storage_path'],
   user_favorites: ['id', 'user_id', 'target_type', 'target_id', 'created_at'],
   user_points: ['id', 'user_id', 'points', 'type', 'source', 'description', 'created_at'],
   coupons: ['id', 'code', 'coupon_type', 'points_cost', 'discount_amount', 'min_spend', 'valid_days', 'status'],
   user_coupons: ['id', 'user_id', 'coupon_id', 'coupon_code', 'request_key', 'source', 'issue_year', 'points_cost', 'status', 'expires_at'],
   user_notifications: ['id', 'user_id', 'type', 'is_read', 'related_id', 'related_type'],
+  product_reviews: ['id', 'product_id', 'user_id', 'order_id', 'parent_id', 'rating', 'content', 'status'],
+  book_reviews: ['id', 'book_id', 'user_id', 'reservation_id', 'parent_id', 'rating', 'content', 'status'],
+  comment_likes: ['id', 'target_type', 'comment_id', 'user_id', 'created_at'],
+  book_reservations: ['id', 'reservation_no', 'user_id', 'book_id', 'seat_id', 'location_label', 'status'],
   audit_logs: ['id', 'operator_id', 'operator_type', 'action', 'module', 'target_type', 'target_id'],
   orders: ['id', 'order_no', 'user_id', 'source', 'total_amount', 'status', 'paid_at'],
   order_items: ['id', 'order_id', 'product_id', 'brew_method', 'price', 'quantity', 'subtotal'],
@@ -43,6 +48,10 @@ const requiredIndexes = {
   user_coupons: ['uk_user_coupons_code', 'uk_user_coupons_annual', 'uk_user_coupons_request'],
   orders: ['uk_orders_order_no'],
   payments: ['uk_payments_payment_no'],
+  product_reviews: ['idx_product_reviews_parent'],
+  book_reviews: ['idx_book_reviews_parent'],
+  comment_likes: ['uk_comment_likes_target_user', 'idx_comment_likes_target'],
+  book_reservations: ['uk_book_reservations_no'],
 }
 
 function assert(condition, message) {
@@ -66,8 +75,10 @@ async function checkStructure() {
   }
   const verificationExpiry = columns.get('verification_codes').get('expires_at')
   const paymentExpiry = columns.get('payments').get('expires_at')
+  const uploadFileUserId = columns.get('upload_files').get('user_id')
   assert(verificationExpiry.dataType === 'datetime' && verificationExpiry.isNullable === 'NO', 'verification_codes.expires_at must be DATETIME NOT NULL')
   assert(paymentExpiry.dataType === 'datetime' && paymentExpiry.isNullable === 'YES', 'payments.expires_at must be DATETIME NULL')
+  assert(uploadFileUserId.isNullable === 'YES', 'upload_files.user_id must be nullable for admin/system uploads')
 
   const [[statusDefaults]] = await pool.query(`SELECT
     (SELECT COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'posts' AND COLUMN_NAME = 'status') AS postDefault,

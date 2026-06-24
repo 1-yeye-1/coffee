@@ -45,11 +45,21 @@ export const useBookingStore = defineStore('booking', {
       return this.bookings
     },
     async fetchSeats() {
-      this.seats = (await bookingApi.fetchSeats()).data
+      this.seats = []
+      this.availability = []
+      try {
+        this.seats = (await bookingApi.fetchSeats()).data
+        this.dataSource = 'api'
+        this.apiError = ''
+      } catch (error) {
+        this.apiError = error.message
+        this.seats = []
+      }
       return this.seats
     },
     async fetchAvailability(date, timeSlot) {
       if (!date || !timeSlot) return []
+      this.availability = []
       this.availability = (await bookingApi.fetchSeatAvailability({ date, timeSlot })).data
       return this.availability
     },

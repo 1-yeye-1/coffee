@@ -6,6 +6,11 @@ function reduced() {
   return !isMotionEnabled() || (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
 }
 
+function allowsRichMotion() {
+  if (typeof window === 'undefined') return false
+  return window.location.pathname === '/' || Boolean(document.querySelector('.hero'))
+}
+
 function targetsOf(target, limit = 20) {
   if (!target) return []
   if (typeof target === 'string') return [...document.querySelectorAll(target)].slice(0, limit)
@@ -19,7 +24,7 @@ export function useAnimeMotion() {
 
   function run(key, target, parameters) {
     const targets = targetsOf(target)
-    if (!targets.length || reduced()) return null
+    if (!targets.length || reduced() || !allowsRichMotion()) return null
     instances.get(key)?.cancel?.()
     const instance = animate(targets, parameters)
     instances.set(key, instance)
@@ -27,17 +32,17 @@ export function useAnimeMotion() {
   }
 
   const popLike = (target, countTarget) => {
-    run('like', target, { scale: [1, 1.32, 1], rotate: [0, -7, 0], duration: 480, ease: 'out(4)' })
-    return run('like-count', countTarget, { translateY: [0, -6, 0], scale: [1, 1.12, 1], duration: 420, ease: 'out(3)' })
+    run('like', target, { scale: [1, 1.08, 1], opacity: [1, 0.88, 1], duration: 240, ease: 'out(3)' })
+    return run('like-count', countTarget, { translateY: [0, -3, 0], opacity: [1, 0.9, 1], duration: 220, ease: 'out(3)' })
   }
-  const bounceCart = (target) => run('cart', target, { translateY: [0, -7, 0], scale: [1, 1.16, 1], duration: 520, ease: 'out(4)' })
-  const successCheck = (target) => run('success', target, { opacity: [0.45, 1], scale: [0.55, 1.18, 1], rotate: [-18, 0], duration: 600, ease: 'out(4)' })
-  const wiggleIcon = (target) => run(`wiggle:${targetsOf(target)[0]?.className || 'icon'}`, target, { rotate: [0, -8, 8, -4, 0], duration: 520, ease: 'inOut(2)' })
-  const pulseBadge = (target) => run('badge', target, { scale: [1, 1.09, 1], opacity: [1, 0.82, 1], duration: 540, ease: 'out(3)' })
-  const floatEmpty = (target) => run('empty', target, { translateY: [0, -7, 0], duration: 600, ease: 'inOutSine' })
-  const pulseSeat = (target) => run('seat', target, { scale: [1, 1.14, 1], duration: 460, ease: 'out(4)' })
-  const shakeError = (target) => run('error', target, { translateX: [0, -6, 6, -4, 4, 0], duration: 460, ease: 'inOut(2)' })
-  const flashRow = (target) => run('row', target, { opacity: [1, 0.58, 1], translateX: [0, 3, 0], duration: 600, ease: 'out(3)' })
+  const bounceCart = (target) => run('cart', target, { translateY: [0, -3, 0], scale: [1, 1.06, 1], duration: 240, ease: 'out(3)' })
+  const successCheck = (target) => run('success', target, { opacity: [0.65, 1], scale: [0.92, 1.04, 1], duration: 260, ease: 'out(3)' })
+  const wiggleIcon = (target) => run(`wiggle:${targetsOf(target)[0]?.className || 'icon'}`, target, { opacity: [1, 0.78, 1], duration: 220, ease: 'inOut(2)' })
+  const pulseBadge = (target) => run('badge', target, { scale: [1, 1.04, 1], opacity: [1, 0.88, 1], duration: 220, ease: 'out(3)' })
+  const floatEmpty = (target) => run('empty', target, { opacity: [0.8, 1], duration: 200, ease: 'inOutSine' })
+  const pulseSeat = (target) => run('seat', target, { scale: [1, 1.05, 1], duration: 220, ease: 'out(3)' })
+  const shakeError = (target) => run('error', target, { opacity: [1, 0.72, 1], duration: 200, ease: 'inOut(2)' })
+  const flashRow = (target) => run('row', target, { opacity: [1, 0.78, 1], duration: 220, ease: 'out(3)' })
 
   function cleanup() {
     instances.forEach((instance) => { instance.revert?.(); instance.cancel?.() })

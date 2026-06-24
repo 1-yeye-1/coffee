@@ -34,7 +34,7 @@ import {
 } from '../services/orders.service.js'
 import { signAdminToken } from '../utils/jwt.js'
 import { searchAdmin } from '../services/admin-search.service.js'
-import { failure, paginated, success } from '../utils/response.js'
+import { dbSuccess, failure, paginated, success } from '../utils/response.js'
 
 function requireFields(res, payload, fields) {
   const missing = fields.find((field) => payload[field] === undefined || payload[field] === null || String(payload[field]).trim() === '')
@@ -64,16 +64,16 @@ export function registerAdminRoutes(router) {
   })
 
   router.get('/api/admin/dashboard', requireAdmin, async (_req, res) => {
-    return success(res, await getDashboardStats())
+    return dbSuccess(res, await getDashboardStats())
   })
 
-  router.get('/api/admin/dashboard/summary', requireAdmin, async (_req, res) => success(res, await getDashboardSummary()))
-  router.get('/api/admin/dashboard/trends', requireAdmin, async (_req, res) => success(res, await getDashboardTrends()))
+  router.get('/api/admin/dashboard/summary', requireAdmin, async (_req, res) => dbSuccess(res, await getDashboardSummary()))
+  router.get('/api/admin/dashboard/trends', requireAdmin, async (_req, res) => dbSuccess(res, await getDashboardTrends()))
   router.get('/api/admin/dashboard/recent', requireAdmin, async (_req, res) => success(res, await getDashboardRecent()))
-  router.get('/api/admin/dashboard/finance', requireAdmin, async (_req, res) => success(res, await getFinanceDashboard()))
-  router.get('/api/admin/finance/summary', requireAdmin, async (_req, res) => success(res, (await getFinanceDashboard()).summary))
-  router.get('/api/admin/finance/trends', requireAdmin, async (_req, res) => success(res, (await getFinanceDashboard()).trends))
-  router.get('/api/admin/finance/orders', requireAdmin, async (_req, res) => success(res, (await getFinanceDashboard()).orders))
+  router.get('/api/admin/dashboard/finance', requireAdmin, async (_req, res) => dbSuccess(res, await getFinanceDashboard()))
+  router.get('/api/admin/finance/summary', requireAdmin, async (_req, res) => dbSuccess(res, (await getFinanceDashboard()).summary))
+  router.get('/api/admin/finance/trends', requireAdmin, async (_req, res) => dbSuccess(res, (await getFinanceDashboard()).trends))
+  router.get('/api/admin/finance/orders', requireAdmin, async (_req, res) => dbSuccess(res, (await getFinanceDashboard()).orders))
 
   router.get('/api/admin/search', requireAdmin, async (req, res) => {
     return success(res, await searchAdmin(req.query.keyword))
@@ -103,14 +103,13 @@ export function registerAdminRoutes(router) {
   })
 
   router.post('/api/admin/books', requireAdmin, async (req, res) => {
-    if (!requireFields(res, req.body, ['title', 'slug', 'author'])) return false
+    if (!requireFields(res, req.body, ['title', 'author'])) return false
     const book = await createBook(req.body)
     await writeAudit(req.user.id, 'book.create', 'books', { id: book.id, slug: book.slug })
     return success(res, book, '图书创建成功', 201)
   })
 
   router.put('/api/admin/books/:id', requireAdmin, async (req, res) => {
-    if (!requireFields(res, req.body, ['title', 'slug', 'author'])) return false
     if (!await findBookById(req.params.id)) return failure(res, 404, '图书不存在', 404)
     const book = await updateBook(req.params.id, req.body)
     await writeAudit(req.user.id, 'book.update', 'books', { id: book.id })
@@ -137,7 +136,7 @@ export function registerAdminRoutes(router) {
   })
 
   router.post('/api/admin/products', requireAdmin, async (req, res) => {
-    if (!requireFields(res, req.body, ['name', 'slug', 'category', 'price'])) return false
+    if (!requireFields(res, req.body, ['name', 'category', 'price'])) return false
     const product = await createProduct(req.body)
     await writeAudit(req.user.id, 'product.create', 'products', { id: product.id, slug: product.slug })
     await logAdminAction({ admin: req.user, action: 'create', module: 'product', targetType: 'product', targetId: product.id, description: `新增商品：${product.name}`, req })
@@ -145,7 +144,6 @@ export function registerAdminRoutes(router) {
   })
 
   router.put('/api/admin/products/:id', requireAdmin, async (req, res) => {
-    if (!requireFields(res, req.body, ['name', 'slug', 'category', 'price'])) return false
     if (!await findProductById(req.params.id)) return failure(res, 404, '商品不存在', 404)
     const product = await updateProduct(req.params.id, req.body)
     await writeAudit(req.user.id, 'product.update', 'products', { id: product.id })
@@ -210,14 +208,13 @@ export function registerAdminRoutes(router) {
   })
 
   router.post('/api/admin/events', requireAdmin, async (req, res) => {
-    if (!requireFields(res, req.body, ['title', 'slug', 'date'])) return false
+    if (!requireFields(res, req.body, ['title', 'date'])) return false
     const event = await createEvent(req.body)
     await writeAudit(req.user.id, 'event.create', 'events', { id: event.id, slug: event.slug })
     return success(res, event, '活动创建成功', 201)
   })
 
   router.put('/api/admin/events/:id', requireAdmin, async (req, res) => {
-    if (!requireFields(res, req.body, ['title', 'slug', 'date'])) return false
     if (!await findEventById(req.params.id)) return failure(res, 404, '活动不存在', 404)
     const event = await updateEvent(req.params.id, req.body)
     await writeAudit(req.user.id, 'event.update', 'events', { id: event.id })

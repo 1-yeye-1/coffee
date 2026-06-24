@@ -4,6 +4,9 @@ import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
 import { assertPathInsideUploads } from '../utils/upload.js'
 
+const scenesRequiringUser = new Set(['avatar', 'community', 'review'])
+const scenesAllowingNullUser = new Set(['product', 'book', 'event', 'banner', 'system'])
+
 function mapUploadFile(row) {
   return {
     id: row.id,
@@ -19,13 +22,48 @@ function mapUploadFile(row) {
   }
 }
 
+function createUploadError(message, statusCode = 400) {
+  return Object.assign(new Error(message), { statusCode })
+}
+
+function normalizeUserId(userId) {
+  if (userId === null || userId === undefined || userId === '') return null
+  const normalized = Number(userId)
+  return Number.isInteger(normalized) && normalized > 0 ? normalized : null
+}
+
+async function userExists(userId, connection) {
+  const [rows] = await connection.execute('SELECT id FROM users WHERE id = ? LIMIT 1', [userId])
+  return Boolean(rows[0])
+}
+
+async function resolveUploadUserId(userId, scene, connection) {
+  const normalizedUserId = normalizeUserId(userId)
+
+  if (scenesRequiringUser.has(scene)) {
+    if (!normalizedUserId) throw createUploadError('请先登录后再上传文件', 401)
+    if (!await userExists(normalizedUserId, connection)) {
+      throw createUploadError('上传用户不存在或登录已失效', 400)
+    }
+    return normalizedUserId
+  }
+
+  if (scenesAllowingNullUser.has(scene)) {
+    if (!normalizedUserId) return null
+    return await userExists(normalizedUserId, connection) ? normalizedUserId : null
+  }
+
+  throw createUploadError('上传场景无效', 400)
+}
+
 export async function createUploadFile(userId, meta, connection = pool) {
+  const uploadUserId = await resolveUploadUserId(userId, meta.scene, connection)
   const [result] = await connection.execute(
     `INSERT INTO upload_files
       (user_id, scene, file_type, original_name, stored_name, mime_type, size, url, storage_path)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      userId,
+      uploadUserId,
       meta.scene,
       meta.fileType,
       meta.originalName,

@@ -13,6 +13,7 @@ import {
   BaseSkeleton,
   BaseTabs,
   EmptyState,
+  ErrorPanel,
 } from '@/components/base'
 import { useBooksStore } from '@/stores/books'
 import { useAuthStore } from '@/stores/auth'
@@ -83,6 +84,10 @@ function clearFilters() {
   sort.value = 'recommended'
 }
 
+function handleImageError(event) {
+  event.currentTarget.hidden = true
+}
+
 async function toggleFavorite(id, event) {
   if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: '/books' } })
   await membershipStore.toggleFavorite('book', id)
@@ -90,6 +95,7 @@ async function toggleFavorite(id, event) {
 }
 
 watch(() => visibleBooks.value.map((book) => book.id).join(','), async () => {
+  if (booksStore.loading) return
   await nextTick()
   revealCards('.catalog-card', { key: 'books', limit: 20 })
   bindTiltCards()
@@ -124,7 +130,7 @@ watch(() => visibleBooks.value.map((book) => book.id).join(','), async () => {
           </BaseInput>
           <BaseSelect v-model="sort" aria-label="图书排序" :options="sortOptions" />
         </div>
-        <BaseTabs v-model="category" class="catalog-tabs" :tabs="categories" />
+        <BaseTabs v-model="category" class="catalog-tabs" variant="books" aria-label="图书分类" :tabs="categories" />
       </div>
     </div>
 
@@ -136,7 +142,7 @@ watch(() => visibleBooks.value.map((book) => book.id).join(','), async () => {
         <div class="catalog-stat"><strong>{{ favoriteCount.toLocaleString('zh-CN') }}</strong><span>收藏人数</span></div>
       </section>
 
-      <p v-if="booksStore.error" class="text-muted" role="status">API 暂不可用，当前展示本地数据。</p>
+      <ErrorPanel v-if="booksStore.error" title="图书加载失败" :message="booksStore.error" @retry="loadBooks" />
 
       <div class="catalog-grid">
         <BaseSkeleton v-if="booksStore.loading" v-for="index in pageSize" :key="`book-loading-${index}`" variant="card" />
@@ -152,7 +158,7 @@ watch(() => visibleBooks.value.map((book) => book.id).join(','), async () => {
             >
               {{ membershipStore.isFavorite('book', book.id) ? '♥' : '♡' }}
             </button>
-            <img v-if="book.coverUrl" class="catalog-content-image" :src="resolveUploadUrl(book.coverUrl)" :alt="book.title" loading="lazy" decoding="async" />
+            <img v-if="book.coverUrl" class="catalog-content-image" :src="resolveUploadUrl(book.coverUrl)" :alt="book.title" loading="lazy" decoding="async" @error="handleImageError" />
             <div v-else class="book-cover catalog-card__visual-inner" :class="`tone-${book.coverTone}`">
               <span>{{ book.category }}</span><strong>{{ book.title }}</strong><small>Coffee Book Edition</small>
             </div>
@@ -234,5 +240,6 @@ watch(() => visibleBooks.value.map((book) => book.id).join(','), async () => {
   font-size: var(--cb-font-size-xs);
   letter-spacing: 0.12em;
 }
+.catalog-card__visual { aspect-ratio: 3 / 4; background: linear-gradient(135deg, var(--cb-bg-soft), color-mix(in srgb, var(--cb-color-gold) 16%, var(--cb-bg-surface))); }
 .catalog-content-image { display:block; width:100%; height:100%; min-height:18rem; object-fit:cover; }
 </style>

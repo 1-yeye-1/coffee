@@ -5,6 +5,33 @@ import { createNotification } from './notifications.service.js'
 
 const validEventStatuses = new Set(['draft', 'published', 'ongoing', 'ended', 'cancelled'])
 
+function slugify(value, fallback = 'event') {
+  const slug = String(value || '')
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug || fallback
+}
+
+async function uniqueEventSlug(base, excludeId = null) {
+  const root = slugify(base)
+  let slug = root
+  let index = 2
+  while (true) {
+    const params = [slug]
+    let clause = ''
+    if (excludeId) {
+      clause = 'AND id <> ?'
+      params.push(excludeId)
+    }
+    const [[row]] = await pool.execute(`SELECT id FROM events WHERE slug = ? ${clause} LIMIT 1`, params)
+    if (!row) return slug
+    slug = `${root}-${index++}`
+  }
+}
+
 function assertEventStatus(status) {
   if (!validEventStatuses.has(status)) throw Object.assign(new Error('活动状态无效'), { statusCode: 400 })
 }
@@ -56,7 +83,9 @@ export async function listEvents(query = {}, admin = false) {
 }
 
 export async function findEventBySlug(slug) {
-  const [rows] = await pool.execute(`SELECT ${columns} FROM events WHERE slug = ? AND status IN ('published', 'ongoing', 'open', 'active') LIMIT 1`, [slug])
+  const identifier = String(slug || '').trim()
+  const byId = /^\d+$/.test(identifier)
+  const [rows] = await pool.execute(`SELECT ${columns} FROM events WHERE ${byId ? 'id' : 'slug'} = ? AND status IN ('published', 'ongoing', 'open', 'active') LIMIT 1`, [identifier])
   return normalize(rows[0])
 }
 
@@ -67,54 +96,59 @@ export async function findEventById(id) {
 
 export async function createEvent(payload) {
   assertEventStatus(payload.status || 'draft')
+  const next = { ...payload, slug: payload.slug || await uniqueEventSlug(payload.title) }
   const [result] = await pool.execute(
     `INSERT INTO events
       (slug, title, category, event_date, event_time, location, capacity, attendees, status,
        tone, cover_url, summary, description, speaker, agenda)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      payload.slug,
-      payload.title,
-      payload.category || '',
-      payload.date,
-      payload.time || '',
-      payload.location || '',
-      Number(payload.capacity) || 0,
-      Number(payload.attendees) || 0,
-      payload.status || 'draft',
-      payload.tone || null,
-      payload.coverUrl || null,
-      payload.summary || null,
-      payload.description || null,
-      JSON.stringify(payload.speaker || null),
-      JSON.stringify(payload.agenda || []),
+      next.slug,
+      next.title,
+      next.category || '',
+      next.date,
+      next.time || '',
+      next.location || '',
+      Number(next.capacity) || 0,
+      Number(next.attendees) || 0,
+      next.status || 'draft',
+      next.tone || null,
+      next.coverUrl || null,
+      next.summary || null,
+      next.description || null,
+      JSON.stringify(next.speaker || null),
+      JSON.stringify(next.agenda || []),
     ],
   )
   return findEventById(result.insertId)
 }
 
 export async function updateEvent(id, payload) {
-  assertEventStatus(payload.status || 'draft')
+  const current = await findEventById(id)
+  if (!current) return null
+  const next = { ...current, ...Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined)) }
+  next.slug = current.slug || payload.slug || await uniqueEventSlug(next.title, id)
+  assertEventStatus(next.status || 'draft')
   await pool.execute(
     `UPDATE events SET slug=?, title=?, category=?, event_date=?, event_time=?, location=?,
       capacity=?, attendees=?, status=?, tone=?, cover_url=?, summary=?, description=?, speaker=?, agenda=?
      WHERE id=?`,
     [
-      payload.slug,
-      payload.title,
-      payload.category || '',
-      payload.date,
-      payload.time || '',
-      payload.location || '',
-      Number(payload.capacity) || 0,
-      Number(payload.attendees) || 0,
-      payload.status || 'draft',
-      payload.tone || null,
-      payload.coverUrl || null,
-      payload.summary || null,
-      payload.description || null,
-      JSON.stringify(payload.speaker || null),
-      JSON.stringify(payload.agenda || []),
+      next.slug,
+      next.title,
+      next.category || '',
+      next.date,
+      next.time || '',
+      next.location || '',
+      Number(next.capacity) || 0,
+      Number(next.attendees) || 0,
+      next.status || 'draft',
+      next.tone || null,
+      next.coverUrl || null,
+      next.summary || null,
+      next.description || null,
+      JSON.stringify(next.speaker || null),
+      JSON.stringify(next.agenda || []),
       id,
     ],
   )

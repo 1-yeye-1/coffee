@@ -55,7 +55,16 @@ function runSmoke() {
   })
 }
 
+function runMigration() {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['server/db/migrate.js'], { stdio: 'inherit', env: process.env })
+    child.on('error', reject)
+    child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`Database migration exited with code ${code}`)))
+  })
+}
+
 try {
+  await runMigration()
   await ensureDatabaseReady()
   if (!await isReady()) {
     server = spawn(process.execPath, ['server/index.js'], { stdio: ['ignore', 'pipe', 'pipe'], env: process.env })

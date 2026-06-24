@@ -1,5 +1,5 @@
 <script setup>
-import { computed, useId, useAttrs } from 'vue'
+import { computed, ref, useId, useAttrs } from 'vue'
 
 defineOptions({ inheritAttrs: false })
 
@@ -43,11 +43,12 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 const attrs = useAttrs()
+const passwordVisible = ref(false)
 const generatedId = useId()
 const inputId = computed(() => props.id || `cb-input-${generatedId}`)
 const messageId = computed(() => `${inputId.value}-message`)
 const resolvedType = computed(() => {
-  if (props.password) return 'password'
+  if (props.password) return passwordVisible.value ? 'text' : 'password'
   if (props.search) return 'search'
   return props.type
 })
@@ -80,6 +81,15 @@ const stateClass = computed(() => ({
       <span v-if="$slots.suffix" class="base-field__affix" aria-hidden="true">
         <slot name="suffix" />
       </span>
+      <button
+        v-if="password"
+        class="base-field__password-toggle"
+        type="button"
+        :aria-label="passwordVisible ? '隐藏密码' : '显示密码'"
+        @click="passwordVisible = !passwordVisible"
+      >
+        {{ passwordVisible ? '隐藏' : '显示' }}
+      </button>
     </div>
     <p
       v-if="error || success || hint"
@@ -142,6 +152,16 @@ const stateClass = computed(() => ({
   padding-inline: var(--cb-space-4);
   align-items: center;
   color: var(--cb-text-muted);
+}
+
+.base-field__password-toggle {
+  flex: none;
+  padding-inline: var(--cb-space-3);
+  color: var(--cb-color-coffee);
+  font-size: var(--cb-font-size-sm);
+  font-weight: var(--cb-font-semibold);
+  background: transparent;
+  border: 0;
 }
 
 .base-field__affix + .base-field__input {

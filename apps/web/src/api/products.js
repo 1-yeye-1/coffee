@@ -19,3 +19,15 @@ export function fetchProductReviews(productId, params = {}) {
 export function createProductReview(productId, payload) {
   return request(`/products/${encodeURIComponent(productId)}/reviews`, { method: 'POST', body: payload })
 }
+
+export function replyProductReview(productId, reviewId, payload) {
+  return request(`/products/${encodeURIComponent(productId)}/reviews/${encodeURIComponent(reviewId)}/replies`, { method: 'POST', body: payload })
+}
+
+export function likeProductReview(reviewId) {
+  return request(`/products/reviews/${encodeURIComponent(reviewId)}/like`, { method: 'POST' })
+}
+
+export function unlikeProductReview(reviewId) {
+  return request(`/products/reviews/${encodeURIComponent(reviewId)}/like`, { method: 'DELETE' })
+}

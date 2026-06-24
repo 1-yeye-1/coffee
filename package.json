@@ -17,6 +17,7 @@
     "server": "node server/index.js",
     "db:init": "node server/db/migrate.js && node server/db/seed.js && node scripts/check-db-schema.js",
     "db:seed": "node server/db/seed.js",
+    "db:demo": "node server/db/seed-demo.js",
     "db:check": "node scripts/check-db-schema.js",
     "test:request": "node scripts/test-request.js",
     "test:chunk": "node scripts/test-chunk-recovery.js",

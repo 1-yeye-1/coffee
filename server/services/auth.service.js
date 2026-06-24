@@ -3,10 +3,12 @@ import { randomInt } from 'node:crypto'
 import { env } from '../config/env.js'
 import { pool } from '../db/mysql.js'
 import { hashPassword, verifyPassword } from '../utils/crypto.js'
+import { verifyCaptcha } from './captcha.service.js'
 import { createNotification } from './notifications.service.js'
 
 const userColumns = `
   id, username, nickname, email, phone, avatar, role, status, points, level,
+  growth_value AS growthValue, DATE_FORMAT(last_checkin_date, '%Y-%m-%d') AS lastCheckinDate,
   profile_public AS profilePublic, gender, DATE_FORMAT(birthday, '%Y-%m-%d') AS birthday, bio,
   created_at AS createdAt, updated_at AS updatedAt
 `
@@ -30,8 +32,7 @@ export function assertPhone(phone) {
 export async function findUserByIdentifier(identifier, connection = pool) {
   const value = String(identifier || '').trim()
   const [rows] = await connection.execute(
-    `SELECT ${userColumns}, password_hash AS passwordHash
-     FROM users WHERE username = ? OR phone = ? LIMIT 1`,
+    `SELECT ${userColumns}, password_hash AS passwordHash FROM users WHERE username = ? OR phone = ? LIMIT 1`,
     [value, value],
   )
   return rows[0] || null
@@ -50,8 +51,7 @@ export async function findAdminById(id) {
 export async function findAdminByIdentifier(identifier, connection = pool) {
   const value = String(identifier || '').trim()
   const [rows] = await connection.execute(
-    `SELECT ${adminColumns}, password_hash AS passwordHash
-     FROM admin_users WHERE username = ? OR phone = ? LIMIT 1`,
+    `SELECT ${adminColumns}, password_hash AS passwordHash FROM admin_users WHERE username = ? OR phone = ? LIMIT 1`,
     [value, value],
   )
   return rows[0] || null
@@ -74,8 +74,7 @@ export async function createUser(payload, connection = pool) {
   )
   const userId = result.insertId
   await connection.execute(
-    `INSERT INTO user_points (user_id, points, type, source, description)
-     VALUES (?, 100, 'earn', 'register', '注册欢迎积分')`,
+    `INSERT INTO user_points (user_id, points, type, source, description) VALUES (?, 100, 'earn', 'register', '注册欢迎积分')`,
     [userId],
   )
   await createNotification({
@@ -88,10 +87,11 @@ export async function createUser(payload, connection = pool) {
   return rows[0]
 }
 
-export async function sendVerificationCode(phone, scene = 'login') {
+export async function sendVerificationCode(phone, scene = 'login', captcha = {}) {
   const normalizedPhone = normalizePhone(phone)
   assertPhone(normalizedPhone)
   if (!codeScenes.has(scene)) throw Object.assign(new Error('验证码场景无效'), { statusCode: 400 })
+  if (['login', 'register'].includes(scene)) await verifyCaptcha(captcha.captchaId, captcha.captchaCode)
 
   const [[latest]] = await pool.execute(
     `SELECT TIMESTAMPDIFF(SECOND, created_at, CURRENT_TIMESTAMP) AS secondsAgo
@@ -103,8 +103,7 @@ export async function sendVerificationCode(phone, scene = 'login') {
   }
 
   const [[daily]] = await pool.execute(
-    `SELECT COUNT(*) AS total FROM verification_codes
-     WHERE phone = ? AND scene = ? AND DATE(created_at) = CURRENT_DATE`,
+    `SELECT COUNT(*) AS total FROM verification_codes WHERE phone = ? AND scene = ? AND DATE(created_at) = CURRENT_DATE`,
     [normalizedPhone, scene],
   )
   if (Number(daily.total) >= 10) {
@@ -115,35 +114,22 @@ export async function sendVerificationCode(phone, scene = 'login') {
   const codeHash = await hashPassword(code)
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
   await pool.execute(
-    `INSERT INTO verification_codes (phone, scene, code_hash, expires_at)
-     VALUES (?, ?, ?, ?)`,
+    `INSERT INTO verification_codes (phone, scene, code_hash, expires_at) VALUES (?, ?, ?, ?)`,
     [normalizedPhone, scene, codeHash, expiresAt],
   )
 
   if (env.nodeEnv !== 'production') {
-    const sceneLabel = scene === 'login'
-      ? '登录'
-      : scene === 'register'
-        ? '注册'
-        : scene === 'change_phone_old'
-          ? '当前手机号验证'
-          : scene === 'booking_guest' ? '游客预约' : '新手机号验证'
+    const sceneLabel = scene === 'login' ? '登录' : scene === 'register' ? '注册' : scene === 'booking_guest' ? '游客预约' : '手机号验证'
     console.log(`[DEV SMS CODE] 手机号 ${normalizedPhone} 的${sceneLabel}验证码是：${code}`)
   }
 
-  return {
-    phone: normalizedPhone,
-    scene,
-    expiresIn: 300,
-    cooldown: 60,
-  }
+  return { phone: normalizedPhone, scene, expiresIn: 300, cooldown: 60 }
 }
 
 export async function verifyCode(phone, scene, code, connection = pool) {
   const normalizedPhone = normalizePhone(phone)
   assertPhone(normalizedPhone)
   if (!String(code || '').trim()) throw Object.assign(new Error('请输入验证码'), { statusCode: 400 })
-
   const [rows] = await connection.execute(
     `SELECT id, code_hash AS codeHash FROM verification_codes
      WHERE phone = ? AND scene = ? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP
@@ -157,37 +143,49 @@ export async function verifyCode(phone, scene, code, connection = pool) {
   await connection.execute('UPDATE verification_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?', [record.id])
 }
 
-export async function authenticate(payload) {
-  const identifier = String(payload.phone || payload.username || '').trim()
-  if (!identifier) throw Object.assign(new Error('请输入手机号或用户名'), { statusCode: 400 })
-
-  const user = await findUserByIdentifier(identifier)
-  if (!user) throw Object.assign(new Error('账号不存在'), { statusCode: 401 })
-  if (user.status !== 'active') throw Object.assign(new Error('账号不存在或已被禁用'), { statusCode: 401 })
-
-  if (payload.code) {
-    if (!user.phone) throw Object.assign(new Error('该账号未绑定手机号'), { statusCode: 400 })
-    await verifyCode(user.phone, 'login', payload.code)
-  } else if (!payload.password || !await verifyPassword(payload.password, user.passwordHash)) {
-    throw Object.assign(new Error('手机号、用户名或密码错误'), { statusCode: 401 })
-  }
-
+function withoutPassword(user) {
   const { passwordHash, ...safeUser } = user
   return safeUser
+}
+
+export async function loginBySms(payload) {
+  const phone = normalizePhone(payload.phone || payload.username)
+  assertPhone(phone)
+  const user = await findUserByIdentifier(phone)
+  if (!user) throw Object.assign(new Error('Account not found'), { statusCode: 401 })
+  if (user.status !== 'active') throw Object.assign(new Error('Account is disabled'), { statusCode: 401 })
+  if (!user.phone) throw Object.assign(new Error('Account has no bound phone'), { statusCode: 400 })
+  await verifyCode(user.phone, 'login', payload.code)
+  return withoutPassword(user)
+}
+
+export async function loginByPassword(payload, options = {}) {
+  const identifier = String(payload.phone || payload.username || '').trim()
+  if (!identifier) throw Object.assign(new Error('Phone or username is required'), { statusCode: 400 })
+  if (options.requireCaptcha) await verifyCaptcha(payload.captchaId, payload.captchaCode)
+  const user = await findUserByIdentifier(identifier)
+  if (!user || !payload.password || !await verifyPassword(payload.password, user.passwordHash)) {
+    throw Object.assign(new Error('Invalid phone, username or password'), { statusCode: 401 })
+  }
+  if (user.status !== 'active') throw Object.assign(new Error('Account is disabled'), { statusCode: 401 })
+  return withoutPassword(user)
+}
+
+export async function authenticate(payload) {
+  if (payload.code) return loginBySms(payload)
+  return loginByPassword(payload)
 }
 
 export async function authenticateAdmin(payload) {
   const identifier = String(payload.username || payload.phone || '').trim()
   const password = String(payload.password || '')
   if (!identifier || !password) throw Object.assign(new Error('请输入管理员账号和密码'), { statusCode: 400 })
-
   const admin = await findAdminByIdentifier(identifier)
   if (!admin || !await verifyPassword(password, admin.passwordHash)) {
     throw Object.assign(new Error('当前账号不是管理员或密码错误'), { statusCode: 401 })
   }
   if (admin.status !== 'active') throw Object.assign(new Error('管理员账号已被禁用'), { statusCode: 403 })
   await pool.execute('UPDATE admin_users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?', [admin.id])
-
   const { passwordHash, ...safeAdmin } = admin
   return safeAdmin
 }

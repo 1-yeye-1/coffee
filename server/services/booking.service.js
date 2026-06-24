@@ -6,7 +6,7 @@ import { writeAudit } from './admin.service.js'
 import { createNotification } from './notifications.service.js'
 import { createUser, findUserByIdentifier, normalizePhone } from './auth.service.js'
 import { verifyCaptcha } from './captcha.service.js'
-import { assertBookingDateAndTime } from './seats.service.js'
+import { assertBookingDateAndTime, parseTimeSlotParts } from './seats.service.js'
 
 const spaceColumns = `
   id, slug, name, location, description, capacity, status,
@@ -83,6 +83,7 @@ export async function listBookings(query = {}, admin = false, userId = null) {
 
 async function insertBooking(payload, userId, connection) {
     const timeSlot = assertBookingDateAndTime(payload.date, payload.timeSlot || payload.time)
+    const { start, end } = parseTimeSlotParts(timeSlot)
     const peopleCount = Number(payload.peopleCount || 1)
     if (!Number.isInteger(peopleCount) || peopleCount < 1) throw Object.assign(new Error('请选择预约人数'), { statusCode: 400 })
     const [spaces] = await connection.execute('SELECT id FROM spaces WHERE slug = ? AND status = ? LIMIT 1', [
@@ -106,8 +107,10 @@ async function insertBooking(payload, userId, connection) {
     if (['disabled', 'maintenance'].includes(seat.status)) throw Object.assign(new Error('该座位正在维护'), { statusCode: 409 })
     if (peopleCount > Number(seat.capacity)) throw Object.assign(new Error('预约人数超过座位容量'), { statusCode: 400 })
     const [reserved] = await connection.execute(`SELECT id FROM bookings
-      WHERE seat_id = ? AND booking_date = ? AND COALESCE(time_slot, REPLACE(booking_time, ' ', '')) = ?
-      AND status IN ('pending', 'confirmed') LIMIT 1 FOR UPDATE`, [seatId, payload.date, timeSlot])
+      WHERE seat_id = ? AND booking_date = ?
+      AND SUBSTRING_INDEX(COALESCE(time_slot, REPLACE(booking_time, ' ', '')), '-', 1) < ?
+      AND SUBSTRING_INDEX(COALESCE(time_slot, REPLACE(booking_time, ' ', '')), '-', -1) > ?
+      AND status IN ('pending', 'confirmed') LIMIT 1 FOR UPDATE`, [seatId, payload.date, end, start])
     if (reserved.length) throw Object.assign(new Error('该座位在当前时段已被预约'), { statusCode: 409 })
     const bookingNo = `BK${Date.now()}${randomUUID().slice(0, 6).toUpperCase()}`
     const [result] = await connection.execute(

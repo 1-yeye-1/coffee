@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
   status VARCHAR(30) NOT NULL DEFAULT 'active',
   points INT NOT NULL DEFAULT 0,
   level VARCHAR(50) NOT NULL DEFAULT '普通会员',
+  growth_value INT NOT NULL DEFAULT 0,
+  last_checkin_date DATE NULL,
   profile_public TINYINT(1) NOT NULL DEFAULT 1,
   gender VARCHAR(20) NULL,
   birthday DATE NULL,
@@ -183,7 +185,7 @@ CREATE TABLE IF NOT EXISTS user_avatars (
 
 CREATE TABLE IF NOT EXISTS upload_files (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  user_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED NULL,
   scene VARCHAR(40) NOT NULL,
   file_type VARCHAR(20) NOT NULL,
   original_name VARCHAR(255) NULL,
@@ -198,7 +200,7 @@ CREATE TABLE IF NOT EXISTS upload_files (
   KEY idx_upload_files_scene (scene),
   KEY idx_upload_files_file_type (file_type),
   KEY idx_upload_files_created_at (created_at),
-  CONSTRAINT fk_upload_files_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  CONSTRAINT fk_upload_files_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS books (
@@ -220,12 +222,15 @@ CREATE TABLE IF NOT EXISTS books (
   pages INT UNSIGNED NULL,
   language VARCHAR(80) NULL,
   author_bio TEXT NULL,
+  seat_id BIGINT UNSIGNED NULL,
+  location_label VARCHAR(255) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_books_slug (slug),
   KEY idx_books_category (category),
-  KEY idx_books_status (status)
+  KEY idx_books_status (status),
+  KEY idx_books_seat (seat_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS products (
@@ -464,6 +469,7 @@ CREATE TABLE IF NOT EXISTS comments (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   post_id BIGINT UNSIGNED NOT NULL,
   user_id BIGINT UNSIGNED NULL,
+  parent_id BIGINT UNSIGNED NULL,
   author VARCHAR(120) NOT NULL,
   content TEXT NOT NULL,
   status VARCHAR(30) NOT NULL DEFAULT 'published',
@@ -472,9 +478,11 @@ CREATE TABLE IF NOT EXISTS comments (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_comments_post (post_id),
+  KEY idx_comments_parent (parent_id),
   KEY idx_comments_status (status),
   CONSTRAINT fk_comments_post FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
-  CONSTRAINT fk_comments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+  CONSTRAINT fk_comments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_comments_parent FOREIGN KEY (parent_id) REFERENCES comments(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS post_likes (
@@ -519,6 +527,7 @@ CREATE TABLE IF NOT EXISTS product_reviews (
   product_id BIGINT UNSIGNED NOT NULL,
   user_id BIGINT UNSIGNED NOT NULL,
   order_id BIGINT UNSIGNED NULL,
+  parent_id BIGINT UNSIGNED NULL,
   rating INT NOT NULL DEFAULT 5,
   content TEXT NULL,
   media_url VARCHAR(500) NULL,
@@ -528,10 +537,44 @@ CREATE TABLE IF NOT EXISTS product_reviews (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_product_reviews_product_id (product_id),
+  KEY idx_product_reviews_parent (parent_id),
   KEY idx_product_reviews_user_id (user_id),
   KEY idx_product_reviews_status (status),
   CONSTRAINT fk_product_reviews_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
   CONSTRAINT fk_product_reviews_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS book_reviews (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  book_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  reservation_id BIGINT UNSIGNED NULL,
+  parent_id BIGINT UNSIGNED NULL,
+  rating INT NOT NULL DEFAULT 5,
+  content TEXT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'published',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_book_reviews_book_id (book_id),
+  KEY idx_book_reviews_parent (parent_id),
+  KEY idx_book_reviews_user_id (user_id),
+  KEY idx_book_reviews_status (status),
+  CONSTRAINT fk_book_reviews_book FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+  CONSTRAINT fk_book_reviews_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS comment_likes (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  target_type VARCHAR(20) NOT NULL,
+  comment_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_comment_likes_target_user (target_type, comment_id, user_id),
+  KEY idx_comment_likes_target (target_type, comment_id),
+  KEY idx_comment_likes_user (user_id),
+  CONSTRAINT fk_comment_likes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS spaces (
@@ -613,4 +656,26 @@ CREATE TABLE IF NOT EXISTS bookings (
   CONSTRAINT fk_bookings_space FOREIGN KEY (space_id) REFERENCES spaces(id) ON DELETE CASCADE,
   CONSTRAINT fk_bookings_slot FOREIGN KEY (slot_id) REFERENCES booking_slots(id) ON DELETE SET NULL,
   CONSTRAINT fk_bookings_seat FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS book_reservations (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  reservation_no VARCHAR(80) NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  book_id BIGINT UNSIGNED NOT NULL,
+  seat_id BIGINT UNSIGNED NULL,
+  location_label VARCHAR(255) NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'confirmed',
+  reserved_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  cancelled_at DATETIME NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_book_reservations_no (reservation_no),
+  KEY idx_book_reservations_user (user_id),
+  KEY idx_book_reservations_book (book_id),
+  KEY idx_book_reservations_status (status),
+  CONSTRAINT fk_book_reservations_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_book_reservations_book FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+  CONSTRAINT fk_book_reservations_seat FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;

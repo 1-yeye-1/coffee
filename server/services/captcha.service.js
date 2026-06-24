@@ -35,6 +35,8 @@ export async function issueCaptcha() {
   return { captchaId, image: `data:image/svg+xml;base64,${Buffer.from(createSvg(code)).toString('base64')}`, expiresIn: ttlMs / 1000 }
 }
 
+export const generateCaptcha = issueCaptcha
+
 export async function verifyCaptcha(id, input, connection = pool) {
   const key = String(id || '')
   const [rows] = await connection.execute(

@@ -35,5 +35,8 @@
 
 html[data-theme="dark"] body{background:var(--cb-bg-page)}
 html[data-theme="dark"] .base-card,html[data-theme="dark"] .booking-panel,html[data-theme="dark"] .booking-map-panel,html[data-theme="dark"] .member-panel{background:var(--cb-bg-surface)!important}
+html[data-theme="dark"] .base-tabs{background:color-mix(in srgb,var(--cb-bg-elevated) 88%,transparent)!important;border-color:color-mix(in srgb,var(--cb-color-gold) 22%,var(--cb-border-soft))!important}
+html[data-theme="dark"] .base-tabs button{color:var(--cb-text-secondary)!important}
+html[data-theme="dark"] .base-tabs button.base-tabs__tab--active{color:var(--cb-color-gold)!important;background:color-mix(in srgb,var(--cb-color-gold) 12%,var(--cb-bg-surface))!important}
 
 @media(prefers-reduced-motion:reduce){html:focus-within{scroll-behavior:auto}.route-page-enter-active,.route-page-leave-active{transition:none!important}.base-button[aria-busy="true"] .base-button__spinner{animation-duration:.01ms!important}.cb-skeleton{animation:none!important;background-position:0 0!important}}

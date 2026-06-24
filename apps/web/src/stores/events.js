@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import * as eventsApi from '@/api/events'
 
 export const useEventsStore = defineStore('events', {
-  state: () => ({ items: [], registrations: [], apiError: '', dataSource: 'api' }),
+  state: () => ({ items: [], registrations: [], loading: false, apiError: '', dataSource: 'api' }),
   getters: {
     getEventBySlug: (state) => (slug) => state.items.find((event) => event.slug === slug),
     registrationFor: (state) => (eventId) => state.registrations.find((item) => Number(item.eventId) === Number(eventId)),
@@ -11,12 +11,15 @@ export const useEventsStore = defineStore('events', {
   },
   actions: {
     async fetchEvents(params = {}) {
+      this.loading = true
       try {
         this.items = (await eventsApi.fetchEvents({ page: 1, pageSize: 100, ...params })).data
         this.apiError = ''
       } catch (error) {
         this.apiError = error.message
         this.items = []
+      } finally {
+        this.loading = false
       }
       return this.items
     },
@@ -25,11 +28,20 @@ export const useEventsStore = defineStore('events', {
       return this.registrations
     },
     async fetchEventDetail(slug) {
-      const event = (await eventsApi.fetchEventDetail(slug)).data
-      const index = this.items.findIndex((item) => item.id === event.id)
-      if (index >= 0) this.items[index] = event
-      else this.items.unshift(event)
-      return event
+      this.loading = true
+      try {
+        const event = (await eventsApi.fetchEventDetail(slug)).data
+        const index = this.items.findIndex((item) => item.id === event.id)
+        if (index >= 0) this.items[index] = event
+        else this.items.unshift(event)
+        this.apiError = ''
+        return event
+      } catch (error) {
+        this.apiError = error.message
+        return null
+      } finally {
+        this.loading = false
+      }
     },
     async register(event) {
       const updated = (await eventsApi.registerEvent(event.id)).data

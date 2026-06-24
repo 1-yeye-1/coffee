@@ -2,6 +2,26 @@
 
 Coffee Book 是一个集咖啡、阅读、社区、商城、空间预约和后台管理于一体的全栈平台。项目包含用户端 Web、后台管理端 Admin 和 Express 后端 API，适合用于咖啡书屋、复合文化空间或生活方式门店的业务演示与二次开发。
 
+## 项目亮点
+
+- 前台、会员中心、后台管理与 Express API 完整分层，核心页面按路由拆包。
+- 商品、图书、活动、社区、预约、订单、积分与优惠券形成可演示的完整业务闭环。
+- Coffee Book 多主题 Cursor、GSAP / Anime.js 微交互，并为触屏和 reduced-motion 自动降级。
+- 统一 Skeleton、EmptyState、ErrorPanel 与可重试反馈，列表图片延迟加载并预留稳定容器。
+- 前后台权限隔离、年度生日券幂等、积分事务、隐私边界和操作审计均有 smoke test 覆盖。
+
+## 功能截图
+
+交付仓库不内置环境相关截图，部署后可按以下槽位补充实际图片：
+
+| 截图槽位 | 建议页面 | 展示重点 |
+| --- | --- | --- |
+| 前台首页 | `/` | 品牌首屏、精选图书、商品与活动 |
+| 商城与图书 | `/coffee`、`/books` | 筛选、懒加载图片、加载与空状态 |
+| 社区与预约 | `/community`、`/booking` | 内容互动、座位选择与状态反馈 |
+| 会员中心 | `/account/points` | 积分、优惠券与生日福利 |
+| 后台管理 | `/dashboard`、`/seats` | 数据概览、表格与座位拖拽 |
+
 ## 技术栈
 
 - 前端：Vue 3、Vite、Pinia、Vue Router
@@ -107,9 +127,10 @@ npm run db:check
 
 ```bash
 npm run db:seed
+npm run db:demo
 ```
 
-生产或正式数据环境不建议直接执行任何破坏性数据库重置。执行迁移前建议先备份数据库。
+`npm run db:demo` 会写入幂等演示账号和真实行为数据，包括订单、预约、活动报名、评论、点赞、积分、优惠券和通知。生产或正式数据环境不建议直接执行任何破坏性数据库重置。执行迁移前建议先备份数据库。
 
 ## 启动命令
 
@@ -160,12 +181,22 @@ npm run db:check
 npm run build
 npm run smoke:web
 npm run smoke:api
+npm run check:motion
 node scripts/check-project.js
+git diff --check
 ```
 
 `smoke:web` 检查前后台关键路由与懒加载 chunk；`smoke:api` 使用真实 MySQL 数据覆盖鉴权、资料隐私、积分与优惠券幂等、生日券、商品、订单、社区、预约、座位坐标同步和后台日志筛选。
 
-2026-06-22 最终回归结果：上述六条命令全部通过；Web 构建转换 270 个模块，Admin 构建转换 179 个模块，API smoke 完成后已清理其测试用户和业务数据。
+Phase 18 最终回归结果见 `DELIVERY.md`。构建验证前后台路由拆包，Web smoke 检查关键页面及异步 chunk，API smoke 覆盖真实 MySQL 业务链路，Motion 检查确保动画具备降级和清理边界。
+
+## Phase 18：性能、加载体验与 SEO
+
+- 首页和后台仪表盘保留首屏同步加载，其余业务页面继续使用动态 `import()`。
+- 图书、商品、活动、社区列表图片使用 `loading="lazy"` 与异步解码；卡片视觉区域使用固定高度或比例降低布局偏移。
+- 长列表 reveal / tilt 动画限制处理数量，Cursor 使用单一 RAF 循环，失焦、触屏及 reduced-motion 自动停止。
+- 图书、商品、活动、社区、预约、积分和后台表格统一提供加载、空内容、错误与重试反馈。
+- 前台按路由维护页面标题，并动态更新 description / keywords；后台设置 `noindex,nofollow`。
 
 开发环境可在浏览器控制台临时控制全站复杂动画：
 

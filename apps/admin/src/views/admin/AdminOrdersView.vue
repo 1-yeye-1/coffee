@@ -12,6 +12,8 @@ const keyword = ref(String(route.query.keyword || ''))
 const status = ref('')
 const drawerOpen = ref(false)
 const current = ref(null)
+const selectedIds = ref([])
+const batchLoading = ref(false)
 const statusOptions = [
   { label: '全部状态', value: 'all' },
   { label: '待支付', value: 'pending_payment' },
@@ -23,6 +25,7 @@ const statusOptions = [
   { label: '支付过期', value: 'payment_expired' },
 ]
 const columns = [
+  { key: 'select', label: '' },
   { key: 'id', label: '订单号' },
   { key: 'sourceText', label: '来源' },
   { key: 'user', label: '用户' },
@@ -71,6 +74,36 @@ const stats = computed(() => [
   ['总营收', `¥${revenue.value}`],
 ])
 const editableStatusOptions = computed(() => statusOptions.filter((option) => option.value !== 'all' && option.value !== 'payment_expired'))
+const allVisibleSelected = computed(() => filtered.value.length > 0 && filtered.value.every((item) => selectedIds.value.includes(item.id)))
+
+function toggleSelect(id) {
+  selectedIds.value = selectedIds.value.includes(id)
+    ? selectedIds.value.filter((itemId) => itemId !== id)
+    : [...selectedIds.value, id]
+}
+
+function toggleSelectAll() {
+  selectedIds.value = allVisibleSelected.value ? [] : filtered.value.map((item) => item.id)
+}
+
+async function batchOrderStatus(nextStatus, label) {
+  const ids = [...selectedIds.value]
+  if (!ids.length || batchLoading.value) return
+  batchLoading.value = true
+  adminStore.apiError = ''
+  let failed = 0
+  try {
+    for (const id of ids) {
+      try { await adminStore.updateAdminOrderStatus(id, nextStatus) }
+      catch { failed += 1 }
+    }
+    selectedIds.value = []
+    await adminStore.fetchAdminOrders()
+    if (failed) adminStore.apiError = `${label}\u5b8c\u6210\uff0c${failed} \u9879\u5931\u8d25`
+  } finally {
+    batchLoading.value = false
+  }
+}
 
 async function open(item) {
   current.value = await adminStore.fetchAdminOrderDetail(item.id)
@@ -91,6 +124,10 @@ function brewMethodText(value) {
 
 onMounted(() => adminStore.fetchAdminOrders())
 watch(() => route.query.keyword, (value) => { keyword.value = String(value || '') })
+watch(filtered, (list) => {
+  const ids = new Set(list.map((item) => item.id))
+  selectedIds.value = selectedIds.value.filter((id) => ids.has(id))
+})
 </script>
 
 <template>
@@ -114,7 +151,23 @@ watch(() => route.query.keyword, (value) => { keyword.value = String(value || ''
       <BaseSelect v-model="status" aria-label="订单状态" :options="statusOptions" />
     </section>
 
+    <section class="admin-batch-bar">
+      <label>
+        <input class="admin-select-head" type="checkbox" :checked="allVisibleSelected" :disabled="!filtered.length || batchLoading" @change="toggleSelectAll" />
+        <span>&#20840;&#36873;&#24403;&#21069;&#39029;</span>
+      </label>
+      <span class="admin-batch-bar__count">&#24050;&#36873;&#25321; {{ selectedIds.length }} &#39033;</span>
+      <BaseButton size="sm" variant="outline" :disabled="!selectedIds.length || batchLoading" :loading="batchLoading" @click="batchOrderStatus('paid', '\u6279\u91cf\u6807\u8bb0\u5df2\u5904\u7406')">&#25209;&#37327;&#26631;&#35760;&#24050;&#22788;&#29702;</BaseButton>
+      <BaseButton size="sm" variant="outline" :disabled="!selectedIds.length || batchLoading" :loading="batchLoading" @click="batchOrderStatus('completed', '\u6279\u91cf\u6807\u8bb0\u5df2\u5b8c\u6210')">&#25209;&#37327;&#26631;&#35760;&#24050;&#23436;&#25104;</BaseButton>
+    </section>
+
     <BaseTable :columns="columns" :items="filtered" :loading="adminStore.apiLoading" empty-text="暂无匹配订单">
+      <template #head-select>
+        <input class="admin-select-head" type="checkbox" :checked="allVisibleSelected" :disabled="!filtered.length || batchLoading" aria-label="Select current page" @change="toggleSelectAll" />
+      </template>
+      <template #cell-select="{ item }">
+        <input class="admin-select-cell" type="checkbox" :checked="selectedIds.includes(item.id)" :aria-label="`select ${item.orderNo || item.id}`" @change="toggleSelect(item.id)" />
+      </template>
       <template #cell-id="{ item }"><strong>{{ item.orderNo || item.id }}</strong></template>
       <template #cell-amount="{ value }">¥{{ value }}</template>
       <template #cell-status="{ value }"><BaseBadge :variant="badgeVariant[value] || 'warning'">{{ statusText[value] || value }}</BaseBadge></template>

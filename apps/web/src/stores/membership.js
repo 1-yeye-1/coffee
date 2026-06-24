@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import * as accountApi from '@/api/account'
 
 export const useMembershipStore = defineStore('membership', {
-  state: () => ({ account: null, overview: null, favorites: [], loading: false, error: '' }),
+  state: () => ({ account: null, overview: null, membership: null, favorites: [], loading: false, error: '' }),
   getters: {
     isFavorite: (state) => (targetType, targetId) => state.favorites.some(
       (item) => item.targetType === targetType && Number(item.targetId) === Number(targetId),
@@ -19,6 +19,38 @@ export const useMembershipStore = defineStore('membership', {
       } catch (error) { this.overview = null; this.account = null; this.error = error.message }
       finally { this.loading = false }
       return this.overview
+    },
+    async fetchMembershipCenter() {
+      this.loading = true
+      try {
+        const data = (await accountApi.getPointsCenter()).data
+        this.membership = data.membership
+        this.account = {
+          ...(this.account || {}),
+          points: data.balance,
+          level: data.membership?.currentLevel || this.account?.level || '普通会员',
+          growthValue: data.membership?.growthValue || 0,
+        }
+        this.error = ''
+        return data
+      } catch (error) {
+        this.membership = null
+        this.error = error.message
+        return null
+      } finally {
+        this.loading = false
+      }
+    },
+    async dailyCheckin() {
+      const data = (await accountApi.dailyCheckin()).data
+      this.membership = data.membership
+      this.account = {
+        ...(this.account || {}),
+        points: data.balance,
+        level: data.membership?.currentLevel || this.account?.level || '普通会员',
+        growthValue: data.membership?.growthValue || 0,
+      }
+      return data
     },
     async fetchFavorites() {
       this.loading = true

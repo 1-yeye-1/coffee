@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { getPublicProfile } from '@/api/account'
 import { resolveUploadUrl } from '@/api/upload'
-import { BaseBadge, BaseButton, BaseModal, BaseTextarea, BaseToast, EmptyState } from '@/components/base'
+import { BaseBadge, BaseButton, BaseModal, BaseSkeleton, BaseTextarea, BaseToast, EmptyState, ErrorPanel } from '@/components/base'
 import CommunityGallery from '@/components/community/CommunityGallery.vue'
 import { useCommunityMotion } from '@/composables/useCommunityMotion'
 import { useCommunityStore } from '@/stores/community'
@@ -17,6 +17,9 @@ const communityStore = useCommunityStore()
 const authStore = useAuthStore()
 const comment = ref('')
 const isAnonymous = ref(false)
+const activeReplyId = ref(null)
+const replyContent = ref('')
+const likedCommentIds = ref(new Set())
 const toastVisible = ref(false)
 const toastTitle = ref('评论成功')
 const toastMessage = ref('你的评论已发布。')
@@ -34,7 +37,24 @@ const postParam = computed(() => route.params.slug || route.params.id)
 const post = computed(() => communityStore.getPostBySlug(postParam.value))
 const related = computed(() => communityStore.posts.filter((item) => item.id !== post.value?.id).slice(0, 3))
 const galleryImages = computed(() => [post.value, ...related.value].filter((item) => item?.mediaType === 'image' && item.mediaUrl))
+const commentTree = computed(() => {
+  const nodes = (Array.isArray(post.value?.comments) ? post.value.comments : []).map((item) => ({
+    ...item,
+    liked: likedCommentIds.value.has(Number(item.id)),
+    children: [],
+  }))
+  const byId = new Map(nodes.map((item) => [Number(item.id), item]))
+  const roots = []
+  for (const item of nodes) {
+    const parent = item.parentId ? byId.get(Number(item.parentId)) : null
+    if (parent) parent.children.push(item)
+    else roots.push(item)
+  }
+  return roots
+})
 const formatDate = (value) => new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+const commentCount = computed(() => Array.isArray(post.value?.comments) ? post.value.comments.length : 0)
+const isAvatarImage = (value) => /^(https?:\/\/|data:|blob:|\/uploads\/)/.test(String(value || ''))
 
 function showToast(title, message) {
   toastTitle.value = title
@@ -53,6 +73,35 @@ async function submitComment() {
   const comments = commentsRef.value?.querySelectorAll('.comment') || []
   highlightPost(comments[comments.length - 1])
   showToast('评论成功', '你的评论已发布。')
+}
+
+async function submitReply(parent) {
+  if (!replyContent.value.trim()) return
+  if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
+  await communityStore.replyComment(post.value.id, parent.id, replyContent.value)
+  replyContent.value = ''
+  activeReplyId.value = null
+  commentsOpen.value = true
+  showToast('回复成功', '你的回复已发布。')
+}
+
+async function toggleCommentLike(item) {
+  if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
+  const id = Number(item.id)
+  const nextLikedIds = new Set(likedCommentIds.value)
+  const result = nextLikedIds.has(id)
+    ? await communityStore.unlikeComment(post.value.id, item.id)
+    : await communityStore.likeComment(post.value.id, item.id)
+  if (result?.liked === false) nextLikedIds.delete(id)
+  else nextLikedIds.add(id)
+  likedCommentIds.value = nextLikedIds
+  item.liked = nextLikedIds.has(id)
+  item.likeCount = result?.likeCount ?? item.likeCount
+  const source = post.value?.comments?.find((commentItem) => Number(commentItem.id) === id)
+  if (source) {
+    source.liked = item.liked
+    source.likeCount = item.likeCount
+  }
 }
 
 async function openLikes() {
@@ -117,17 +166,30 @@ watch(postParam, (value) => {
   <div ref="pageRef" class="engagement-page cb-fade-in">
     <main class="cb-container engagement-content">
       <BaseButton class="detail-back" variant="ghost" size="sm" @click="router.push('/community')">返回社区</BaseButton>
-      <template v-if="post">
+      <BaseSkeleton v-if="communityStore.loading" variant="card" />
+      <ErrorPanel
+        v-else-if="communityStore.apiError"
+        title="帖子详情加载失败"
+        :message="communityStore.apiError"
+        @retry="communityStore.fetchPostDetail(postParam)"
+      />
+      <template v-else-if="post">
         <div class="engagement-layout">
           <article class="detail-panel post-article">
-            <button class="post-card__author author-button" type="button" @click="visitUser(post.userId)">
-              <span class="avatar">{{ post.avatar || (post.author || '用').slice(0, 1) }}</span>
-              <div>
-                <strong>{{ post.author }}</strong>
-                <small>{{ formatDate(post.createdAt) }}</small>
+            <div class="post-article__head">
+              <button class="post-card__author author-button" type="button" @click="visitUser(post.userId)">
+                <span class="avatar"><img v-if="isAvatarImage(post.avatar)" :src="resolveUploadUrl(post.avatar)" alt="" decoding="async" /><template v-else>{{ post.avatar || (post.author || '\u7528').slice(0, 1) }}</template></span>
+                <div>
+                  <strong>{{ post.author }}</strong>
+                  <small>{{ formatDate(post.createdAt) }}</small>
+                </div>
+              </button>
+              <div class="post-article__stats">
+                <span>{{ post.likes || 0 }} 点赞</span>
+                <span>{{ commentCount }} 评论</span>
               </div>
-            </button>
-            <div>
+            </div>
+            <div class="post-article__title">
               <BaseBadge variant="neutral">{{ post.topic }}</BaseBadge>
               <h1 class="page-title">{{ post.title }}</h1>
             </div>
@@ -135,7 +197,7 @@ watch(postParam, (value) => {
               <img v-if="post.mediaType === 'image'" :src="resolveUploadUrl(post.mediaUrl)" alt="帖子图片" decoding="async" />
               <video v-else controls :src="resolveUploadUrl(post.mediaUrl)">当前浏览器不支持视频预览。</video>
             </div>
-            <p class="post-article__body">{{ post.content }}</p>
+            <div class="post-article__body">{{ post.content }}</div>
             <div class="post-actions">
               <BaseButton size="sm" :variant="communityStore.likedIds.includes(post.id) ? 'primary' : 'outline'" @click="toggleLike">点赞 {{ post.likes }}</BaseButton>
               <BaseButton size="sm" variant="ghost" @click="openLikes">查看点赞用户</BaseButton>
@@ -150,12 +212,23 @@ watch(postParam, (value) => {
           </aside>
         </div>
 
-        <section id="comments" class="detail-panel section-block">
-          <BaseButton size="sm" variant="outline" :aria-expanded="commentsOpen" @click="toggleComments">{{ commentsOpen ? '收起评论' : '展开评论' }}</BaseButton>
-          <label class="anonymous-toggle"><input v-model="isAnonymous" type="checkbox" /> 匿名评论</label>
-          <h2 class="section-title">评论 {{ post.comments.length }}</h2>
+        <section id="comments" class="detail-panel section-block comments-panel">
+          <div class="comments-panel__header">
+            <div>
+              <span class="section-eyebrow">Comments</span>
+              <h2 class="section-title">评论 {{ commentCount }}</h2>
+            </div>
+            <BaseButton size="sm" variant="outline" :aria-expanded="commentsOpen" @click="toggleComments">{{ commentsOpen ? '收起评论' : '展开评论' }}</BaseButton>
+          </div>
+          <div class="comment-composer">
+            <BaseTextarea v-model="comment" label="发表评论" placeholder="写下你的想法..." :maxlength="300" show-count />
+            <div class="comment-composer__actions">
+              <label class="anonymous-toggle"><input v-model="isAnonymous" type="checkbox" /> 匿名评论</label>
+              <BaseButton :disabled="!comment.trim()" @click="submitComment">发表评论</BaseButton>
+            </div>
+          </div>
           <div v-show="commentsOpen" ref="commentsRef" class="comment-list">
-            <div v-for="item in post.comments" :key="item.id" class="comment">
+            <div v-for="item in commentTree" :key="item.id" class="comment">
               <button class="comment__avatar" type="button" @click="visitUser(item.user?.id)">
                 <img v-if="item.user?.avatar" :src="resolveUploadUrl(item.user.avatar)" alt="评论者头像" loading="lazy" decoding="async" />
                 <span v-else class="avatar">{{ (item.user?.nickname || item.author || '用').slice(0, 1) }}</span>
@@ -164,11 +237,27 @@ watch(postParam, (value) => {
                 <button class="comment__name" type="button" @click="visitUser(item.user?.id)">{{ item.user?.nickname || item.author }}</button>
                 <small>{{ formatDate(item.createdAt) }}</small>
                 <p>{{ item.content }}</p>
+                <div class="comment-actions">
+                  <button type="button" @click="toggleCommentLike(item)">{{ item.liked ? '取消点赞' : '点赞' }} {{ item.likeCount || 0 }}</button>
+                  <button type="button" @click="activeReplyId = activeReplyId === item.id ? null : item.id">回复</button>
+                </div>
+                <div v-if="activeReplyId === item.id" class="comment-reply-form">
+                  <BaseTextarea v-model="replyContent" label="回复内容" placeholder="写下你的回复..." :maxlength="300" show-count />
+                  <BaseButton size="sm" :disabled="!replyContent.trim()" @click="submitReply(item)">发布回复</BaseButton>
+                </div>
+                <div v-if="item.children?.length" class="comment-replies">
+                  <article v-for="reply in item.children.slice(0, 2)" :key="reply.id" class="comment-reply">
+                    <div class="comment-reply__meta">
+                      <button class="comment__name" type="button" @click="visitUser(reply.user?.id)">{{ reply.user?.nickname || reply.author }}</button>
+                      <small>{{ formatDate(reply.createdAt) }}</small>
+                    </div>
+                    <p>{{ reply.content }}</p>
+                    <button type="button" @click="toggleCommentLike(reply)">{{ reply.liked ? '取消点赞' : '点赞' }} {{ reply.likeCount || 0 }}</button>
+                  </article>
+                </div>
               </div>
             </div>
           </div>
-          <BaseTextarea v-model="comment" label="发表评论" placeholder="写下你的想法..." :maxlength="300" show-count />
-          <BaseButton :disabled="!comment.trim()" @click="submitComment">发表评论</BaseButton>
         </section>
       </template>
       <EmptyState v-else title="未找到该帖子" description="帖子可能已被删除，或链接地址不正确。" action-label="返回社区" @action="router.push('/community')">
@@ -201,6 +290,35 @@ watch(postParam, (value) => {
 </template>
 
 <style scoped>
+.post-article {
+  display: grid;
+  gap: var(--cb-space-5);
+}
+.post-article__head,
+.post-article__stats,
+.comment-composer__actions,
+.comments-panel__header {
+  display: flex;
+  gap: var(--cb-space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+.post-article__stats {
+  justify-content: flex-end;
+  color: var(--cb-text-muted);
+  font-size: var(--cb-font-size-sm);
+}
+.post-article__title {
+  display: grid;
+  gap: var(--cb-space-3);
+}
+.post-article__body {
+  color: var(--cb-text-secondary);
+  font-size: var(--cb-font-size-md);
+  line-height: var(--cb-line-relaxed);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .post-media {
   overflow: hidden;
   border: 0.0625rem solid var(--cb-border-soft);
@@ -239,6 +357,89 @@ watch(postParam, (value) => {
   width: fit-content;
   font-weight: var(--cb-font-bold);
 }
+.comment-actions,
+.comment-reply-form,
+.comment-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cb-space-2);
+  margin-top: var(--cb-space-2);
+}
+.comment-actions button,
+.comment-reply button {
+  color: var(--cb-color-coffee);
+  font-weight: var(--cb-font-semibold);
+  background: transparent;
+  border: 0;
+}
+.comments-panel {
+  display: grid;
+  gap: var(--cb-space-5);
+}
+.comments-panel__header {
+  align-items: flex-start;
+}
+.comment-composer {
+  display: grid;
+  gap: var(--cb-space-3);
+  padding: var(--cb-space-4);
+  background: color-mix(in srgb, var(--cb-bg-soft) 72%, transparent);
+  border: 0.0625rem solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-xl);
+}
+.comment-reply-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+.comment-list {
+  display: grid;
+  gap: var(--cb-space-4);
+}
+.comment {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--cb-space-3);
+  padding: var(--cb-space-4);
+  background: var(--cb-bg-surface);
+  border: 0.0625rem solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-xl);
+  box-shadow: var(--cb-shadow-sm);
+}
+.comment__body {
+  display: grid;
+  min-width: 0;
+  gap: var(--cb-space-1);
+}
+.comment__body small {
+  color: var(--cb-text-muted);
+}
+.comment__body p,
+.comment-reply p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: var(--cb-line-relaxed);
+}
+.comment-replies {
+  display: grid;
+  margin-left: var(--cb-space-2);
+  padding: var(--cb-space-3);
+  border-left: 0.1875rem solid color-mix(in srgb, var(--cb-color-gold) 42%, transparent);
+  background: color-mix(in srgb, var(--cb-bg-soft) 78%, transparent);
+  border-radius: var(--cb-radius-lg);
+}
+.comment-reply {
+  display: grid;
+  gap: var(--cb-space-2);
+  color: var(--cb-text-secondary);
+  font-size: var(--cb-font-size-sm);
+}
+.comment-reply__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cb-space-2);
+  align-items: center;
+}
 .like-users {
   display: grid;
   gap: var(--cb-space-3);
@@ -260,4 +461,16 @@ watch(postParam, (value) => {
 .comment-list { overflow: hidden; }
 .comment.is-new-post { background: color-mix(in srgb, var(--cb-color-gold) 12%, transparent); border-radius: var(--cb-radius-lg); box-shadow: 0 0 0 .2rem color-mix(in srgb, var(--cb-color-gold) 18%, transparent); }
 :global(.community-like-particle),:global(.community-bookmark-flight){position:fixed;z-index:var(--cb-z-toast);color:var(--cb-color-gold);font-weight:var(--cb-font-bold);pointer-events:none;translate:-50% -50%;will-change:transform,opacity}:global(.community-like-particle){color:var(--cb-danger)}
+@media (max-width: 40rem) {
+  .post-article__head,
+  .comments-panel__header,
+  .comment-composer__actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .comment {
+    grid-template-columns: 1fr;
+  }
+}
+.author-button .avatar{overflow:hidden}.author-button .avatar img{width:100%;height:100%;object-fit:cover;border-radius:inherit}
 </style>

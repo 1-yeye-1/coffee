@@ -4,6 +4,7 @@ import { pool } from '../db/mysql.js'
 import { isBirthdayOnDate, shanghaiDateString } from '../utils/date.js'
 import { recordAudit } from './audit.service.js'
 import { createNotification } from './notifications.service.js'
+import { getUserPointStats } from './stats.service.js'
 
 function mapCoupon(row) {
   return {
@@ -17,6 +18,34 @@ function mapCoupon(row) {
     validDays: Number(row.validDays || 0),
     description: row.description,
   }
+}
+
+export const memberLevels = [
+  { level: '普通会员', min: 0, benefits: ['积分兑换', '生日券'] },
+  { level: '银卡会员', min: 500, benefits: ['预约优先提醒', '咖啡券兑换折扣'] },
+  { level: '金卡会员', min: 1500, benefits: ['图书预约优先', '活动报名提醒'] },
+  { level: '黑金会员', min: 3000, benefits: ['专属优惠券', '专属客服标识'] },
+]
+
+export function resolveMemberLevel(growthValue = 0) {
+  const growth = Math.max(0, Number(growthValue) || 0)
+  const currentIndex = memberLevels.reduce((matched, item, index) => (growth >= item.min ? index : matched), 0)
+  const current = memberLevels[currentIndex]
+  const next = memberLevels[currentIndex + 1] || null
+  return {
+    current,
+    next,
+    growthValue: growth,
+    progress: next ? Math.min(100, Math.round(((growth - current.min) / Math.max(1, next.min - current.min)) * 100)) : 100,
+    remaining: next ? Math.max(0, next.min - growth) : 0,
+    levels: memberLevels,
+  }
+}
+
+async function syncUserLevel(userId, growthValue, connection = pool) {
+  const membership = resolveMemberLevel(growthValue)
+  await connection.execute('UPDATE users SET level = ? WHERE id = ? AND role = "user"', [membership.current.level, userId])
+  return membership
 }
 
 export async function issueBirthdayCoupon(userId, { date = shanghaiDateString() } = {}) {
@@ -68,8 +97,9 @@ export async function issueBirthdayCoupon(userId, { date = shanghaiDateString() 
 
 export async function getPointsCenter(userId) {
   const birthdayBenefit = await issueBirthdayCoupon(userId)
-  const [userResult, recordsResult, couponsResult, redemptionsResult] = await Promise.all([
-    pool.execute('SELECT points FROM users WHERE id = ? AND role = "user" LIMIT 1', [userId]),
+  const [pointStats, userResult, recordsResult, couponsResult, redemptionsResult] = await Promise.all([
+    getUserPointStats(userId),
+    pool.execute("SELECT growth_value AS growthValue, level, DATE_FORMAT(last_checkin_date, '%Y-%m-%d') AS lastCheckinDate FROM users WHERE id = ? AND role = 'user' LIMIT 1", [userId]),
     pool.execute(`SELECT id, points, type, source, description, created_at AS createdAt
       FROM user_points WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 100`, [userId]),
     pool.execute(`SELECT id, code, name, coupon_type AS type, points_cost AS pointsCost,
@@ -81,16 +111,77 @@ export async function getPointsCenter(userId) {
       FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id
       WHERE uc.user_id = ? ORDER BY uc.issued_at DESC, uc.id DESC`, [userId]),
   ])
-  const user = userResult[0][0]
   const records = recordsResult[0]
   const coupons = couponsResult[0]
   const redemptions = redemptionsResult[0]
+  const user = userResult[0][0] || { growthValue: 0, level: '普通会员', lastCheckinDate: null }
+  const membership = resolveMemberLevel(user.growthValue)
+  const today = shanghaiDateString()
   return {
-    balance: Number(user?.points || 0),
+    balance: pointStats.balance,
+    stats: pointStats,
+    membership: {
+      ...membership,
+      currentLevel: membership.current.level,
+      nextLevel: membership.next?.level || null,
+      benefits: membership.current.benefits,
+      nextBenefits: membership.next?.benefits || [],
+      lastCheckinDate: user.lastCheckinDate || null,
+      checkedInToday: user.lastCheckinDate === today,
+      checkinReward: { points: 10, growthValue: 10 },
+    },
     records,
     coupons: coupons.map(mapCoupon),
     redemptions: redemptions.map((row) => ({ ...row, pointsCost: Number(row.pointsCost), discountAmount: Number(row.discountAmount), minSpend: Number(row.minSpend) })),
     birthdayBenefit,
+  }
+}
+
+export async function dailyCheckin(userId, { date = shanghaiDateString() } = {}) {
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [[user]] = await connection.execute(
+      `SELECT id, username, nickname, points, growth_value AS growthValue,
+        DATE_FORMAT(last_checkin_date, '%Y-%m-%d') AS lastCheckinDate
+       FROM users WHERE id = ? AND role = 'user' FOR UPDATE`,
+      [userId],
+    )
+    if (!user) throw Object.assign(new Error('用户不存在'), { statusCode: 404 })
+    if (user.lastCheckinDate === date) throw Object.assign(new Error('今天已经签到过了'), { statusCode: 409 })
+    const rewardPoints = 10
+    const rewardGrowth = 10
+    const nextPoints = Number(user.points || 0) + rewardPoints
+    const nextGrowth = Number(user.growthValue || 0) + rewardGrowth
+    const membership = resolveMemberLevel(nextGrowth)
+    await connection.execute(
+      'UPDATE users SET points = ?, growth_value = ?, level = ?, last_checkin_date = ? WHERE id = ?',
+      [nextPoints, nextGrowth, membership.current.level, date, userId],
+    )
+    await connection.execute(
+      `INSERT INTO user_points (user_id, points, type, source, description)
+       VALUES (?, ?, 'earn', 'daily_checkin', ?)`,
+      [userId, rewardPoints, '每日签到奖励'],
+    )
+    await recordAudit({
+      operatorId: userId,
+      operatorType: 'user',
+      actor: user,
+      action: 'points.change',
+      module: 'points',
+      targetType: 'daily_checkin',
+      targetId: userId,
+      description: `每日签到获得 ${rewardPoints} 积分与 ${rewardGrowth} 成长值`,
+      payload: { points: rewardPoints, growthValue: rewardGrowth, balance: nextPoints, date },
+      connection,
+    })
+    await connection.commit()
+    return getPointsCenter(userId)
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
   }
 }
 

@@ -16,9 +16,9 @@ function scopeOf(root) {
 function targetsOf(root, target, limit = MAX_SEATS) {
   const scope = scopeOf(root)
   if (!target) return []
-  if (typeof target === 'string') return [...scope.querySelectorAll(target)].slice(0, limit)
+  if (typeof target === 'string') return typeof scope?.querySelectorAll === 'function' ? [...scope.querySelectorAll(target)].slice(0, limit) : []
   if (target instanceof Element) return [target]
-  return [...target].filter(Boolean).slice(0, limit)
+  return typeof target?.[Symbol.iterator] === 'function' ? [...target].filter(Boolean).slice(0, limit) : []
 }
 
 export function useSeatMotion(root = null) {

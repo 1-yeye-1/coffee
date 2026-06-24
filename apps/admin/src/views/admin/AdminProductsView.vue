@@ -41,7 +41,6 @@ const columns = [
 
 const fields = [
   { key: 'name', label: '名称' },
-  { key: 'slug', label: 'Slug' },
   { key: 'productType', label: '商品类型', type: 'select', options: productTypes, default: 'coffee' },
   { key: 'supportsBrewMethod', label: '咖啡商品支持制作方式', type: 'checkbox', default: true },
   { key: 'imageUrl', label: '商品示例图', type: 'image' },

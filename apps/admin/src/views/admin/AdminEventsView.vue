@@ -13,7 +13,7 @@ const columns = [
   { key: 'status', label: '状态' }, { key: 'actions', label: '操作' },
 ]
 const fields = [
-  { key: 'title', label: '活动标题' }, { key: 'slug', label: 'Slug' },
+  { key: 'title', label: '活动标题' },
   { key: 'category', label: '分类', type: 'select', options: categories },
   { key: 'coverUrl', label: '活动海报', type: 'image', uploadScene: 'event' },
   { key: 'date', label: '日期', type: 'date' }, { key: 'time', label: '时间' }, { key: 'location', label: '地点' },

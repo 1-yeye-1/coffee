@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { resolveUploadUrl } from '@/api/upload'
-import { BaseBadge, BaseButton, EmptyState } from '@/components/base'
+import { BaseBadge, BaseButton, BaseSkeleton, EmptyState, ErrorPanel } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
 import { useEventsStore } from '@/stores/events'
 import { useAnimeMotion } from '@/composables/useAnimeMotion'
@@ -48,7 +48,14 @@ onMounted(async () => {
 <template>
   <div class="engagement-page cb-fade-in"><main class="cb-container engagement-content">
     <BaseButton variant="ghost" size="sm" @click="router.push('/events')">返回活动中心</BaseButton>
-    <template v-if="event">
+    <BaseSkeleton v-if="eventsStore.loading" variant="card" />
+    <ErrorPanel
+      v-else-if="eventsStore.apiError"
+      title="活动详情加载失败"
+      :message="eventsStore.apiError"
+      @retry="eventsStore.fetchEventDetail(route.params.slug)"
+    />
+    <template v-else-if="event">
       <section class="detail-hero-grid">
         <div class="detail-cover"><img v-if="event.coverUrl" class="event-cover-image" :src="resolveUploadUrl(event.coverUrl)" :alt="event.title" decoding="async" /><strong v-else>{{ event.category }} · {{ event.date }}</strong></div>
         <div class="detail-copy"><div class="cb-cluster"><BaseBadge variant="neutral">{{ event.category }}</BaseBadge><BaseBadge :variant="canRegister ? 'success' : 'neutral'">{{ actionLabel }}</BaseBadge></div><h1>{{ event.title }}</h1><p class="page-subtitle">{{ event.summary }}</p><div class="detail-list"><div class="detail-list__row"><span>时间</span><strong>{{ event.date }} {{ event.time }}</strong></div><div class="detail-list__row"><span>地点</span><strong>{{ event.location }}</strong></div><div class="detail-list__row"><span>报名</span><strong>{{ event.attendees }} / {{ event.capacity }} 人</strong></div></div><p v-if="error" class="form-error">{{ error }}</p><BaseButton :loading="busy" :disabled="registration?.registrationStatus !== 'registered' && !canRegister" @click="act($event)">{{ actionLabel }}</BaseButton></div>

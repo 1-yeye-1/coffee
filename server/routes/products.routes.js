@@ -3,9 +3,12 @@ import {
   createProductReview,
   deleteOwnProductReview,
   findProductBySlug,
+  likeProductReview,
   listProductReviews,
   listProducts,
   listProductRecommendations,
+  replyProductReview,
+  unlikeProductReview,
 } from '../services/products.service.js'
 import { failure, paginated, success } from '../utils/response.js'
 
@@ -31,7 +34,19 @@ export function registerProductsRoutes(router) {
   })
 
   router.post('/api/products/:id/reviews', requireUser, async (req, res) => {
-    return success(res, await createProductReview(req.params.id, req.user.id, req.body), '评价发布成功', 201)
+    return success(res, await createProductReview(req.params.id, req.user.id, req.body), '评价已发布', 201)
+  })
+
+  router.post('/api/products/:id/reviews/:reviewId/replies', requireUser, async (req, res) => {
+    return success(res, await replyProductReview(req.params.id, req.params.reviewId, req.user.id, req.body), '回复已发布', 201)
+  })
+
+  router.post('/api/products/reviews/:id/like', requireUser, async (req, res) => {
+    return success(res, await likeProductReview(req.params.id, req.user.id), '已点赞')
+  })
+
+  router.delete('/api/products/reviews/:id/like', requireUser, async (req, res) => {
+    return success(res, await unlikeProductReview(req.params.id, req.user.id), '已取消点赞')
   })
 
   router.delete('/api/products/reviews/:id', requireUser, async (req, res) => {

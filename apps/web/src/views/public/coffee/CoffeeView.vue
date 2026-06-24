@@ -13,6 +13,7 @@ import {
   BaseSkeleton,
   BaseTabs,
   EmptyState,
+  ErrorPanel,
 } from '@/components/base'
 import { useProductsStore } from '@/stores/products'
 import { debounce } from '@/utils'
@@ -81,6 +82,10 @@ function scrollToProducts() {
   document.querySelector('#coffee-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+function handleImageError(event) {
+  event.currentTarget.hidden = true
+}
+
 async function openTodayRecommendation() {
   sort.value = 'recommended'
   productType.value = 'all'
@@ -98,6 +103,7 @@ watch(page, loadProducts)
 onMounted(loadProducts)
 onBeforeUnmount(scheduleLoad.cancel)
 watch(() => visibleProducts.value.map((product) => product.id).join(','), async () => {
+  if (productsStore.loading) return
   await nextTick()
   revealCards('.catalog-card', { key: 'products', limit: 20 })
   bindTiltCards()
@@ -135,7 +141,7 @@ watch(() => visibleProducts.value.map((product) => product.id).join(','), async 
           <BaseInput v-model="keyword" search placeholder="搜索商品名、风味、产地" />
           <BaseSelect v-model="sort" aria-label="商品排序" :options="sortOptions" />
         </div>
-        <BaseTabs v-model="productType" class="catalog-tabs" :tabs="productTypes" />
+        <BaseTabs v-model="productType" class="catalog-tabs" variant="coffee" aria-label="商品分类" :tabs="productTypes" />
       </div>
     </div>
 
@@ -158,13 +164,13 @@ watch(() => visibleProducts.value.map((product) => product.id).join(','), async 
         <div class="catalog-stat"><strong>{{ recommendedCount }}</strong><span>今日推荐</span></div>
       </section>
 
-      <p v-if="productsStore.error" class="text-muted" role="status">API 暂不可用，当前展示本地数据。</p>
+      <ErrorPanel v-if="productsStore.error" title="商品加载失败" :message="productsStore.error" @retry="loadProducts" />
 
       <div id="coffee-products" class="catalog-grid">
         <BaseSkeleton v-if="productsStore.loading" v-for="index in pageSize" :key="`product-loading-${index}`" variant="card" />
         <BaseCard v-for="product in visibleProducts" :key="product.id" class="catalog-card" variant="interactive" data-cursor="BUY" data-tilt-card @click="router.push(`/coffee/${product.slug}`)">
           <div class="catalog-card__visual" data-tilt-layer="1.35">
-            <img v-if="product.imageUrl" class="catalog-card__image" :src="resolveUploadUrl(product.imageUrl)" :alt="product.name" loading="lazy" decoding="async" />
+            <img v-if="product.imageUrl" class="catalog-card__image" :src="resolveUploadUrl(product.imageUrl)" :alt="product.name" loading="lazy" decoding="async" @error="handleImageError" />
             <div v-else class="product-art catalog-card__visual-inner" :class="`tone-${product.tone}`">
               <div class="product-art__cup" />
               <span class="product-art__label">{{ product.origin }}</span>
@@ -244,6 +250,7 @@ watch(() => visibleProducts.value.map((product) => product.id).join(','), async 
   font-size: var(--cb-font-size-xs);
   letter-spacing: 0.12em;
 }
+.catalog-card__visual { aspect-ratio: 4 / 3; background: linear-gradient(135deg, var(--cb-bg-soft), color-mix(in srgb, var(--cb-color-coffee) 12%, var(--cb-bg-surface))); }
 .catalog-card__image {
   display: block;
   width: 100%;

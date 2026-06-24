@@ -7,16 +7,21 @@ gsap.registerPlugin(ScrollTrigger)
 
 const MAX_ITEMS = 20
 const MOTION = Object.freeze({
-  duration: 0.56,
-  durationFast: 0.38,
-  stagger: 0.065,
-  staggerList: 0.045,
-  distance: 22,
-  ease: 'power3.out',
+  duration: 0.28,
+  durationFast: 0.18,
+  stagger: 0.035,
+  staggerList: 0.025,
+  distance: 14,
+  ease: 'power2.out',
 })
 
 function prefersReducedMotion() {
   return !isMotionEnabled() || (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+}
+
+function allowsRichMotion() {
+  if (typeof window === 'undefined') return false
+  return window.location.pathname === '/' || Boolean(document.querySelector('.hero'))
 }
 
 function scopeOf(root) {
@@ -26,9 +31,9 @@ function scopeOf(root) {
 function resolveTargets(root, target, limit = MAX_ITEMS) {
   const scope = scopeOf(root)
   if (!scope || !target) return []
-  if (typeof target === 'string') return [...scope.querySelectorAll(target)].slice(0, limit)
+  if (typeof target === 'string') return typeof scope.querySelectorAll === 'function' ? [...scope.querySelectorAll(target)].slice(0, limit) : []
   if (target instanceof Element) return [target]
-  return [...target].filter(Boolean).slice(0, limit)
+  return typeof target?.[Symbol.iterator] === 'function' ? [...target].filter(Boolean).slice(0, limit) : []
 }
 
 // GSAP owns structural motion: page, section, list and complex overlay transitions.
@@ -79,7 +84,7 @@ export function useGsapReveal(root = null) {
   function reveal(target, options = {}) {
     const targets = resolveTargets(root, target, options.limit ?? MAX_ITEMS)
     if (!targets.length) return null
-    if (prefersReducedMotion()) return finish(targets)
+    if (prefersReducedMotion() || !allowsRichMotion()) return finish(targets)
     return track(inContext(() => gsap.fromTo(targets,
       { opacity: 0, y: options.y ?? MOTION.distance },
       {
@@ -109,7 +114,7 @@ export function useGsapReveal(root = null) {
   function revealOnScroll(target, options = {}) {
     const targets = resolveTargets(root, target, options.limit ?? MAX_ITEMS)
     if (!targets.length) return []
-    if (prefersReducedMotion()) {
+    if (prefersReducedMotion() || !allowsRichMotion()) {
       finish(targets)
       return []
     }
@@ -118,7 +123,7 @@ export function useGsapReveal(root = null) {
       {
         opacity: 1,
         y: 0,
-        duration: options.duration ?? 0.6,
+        duration: Math.min(options.duration ?? 0.26, 0.3),
         delay: Math.min(index, 4) * 0.025,
         ease: MOTION.ease,
         clearProps: 'transform,opacity',
@@ -130,9 +135,9 @@ export function useGsapReveal(root = null) {
   function slideStep(target, direction = 1) {
     const targets = resolveTargets(root, target, 1)
     if (!targets.length) return null
-    if (prefersReducedMotion()) return finish(targets)
+    if (prefersReducedMotion() || !allowsRichMotion()) return finish(targets)
     return track(inContext(() => gsap.fromTo(targets, { opacity: 0, x: 34 * direction }, {
-      opacity: 1, x: 0, duration: 0.45, ease: MOTION.ease, clearProps: 'transform,opacity',
+      opacity: 1, x: 0, duration: 0.24, ease: MOTION.ease, clearProps: 'transform,opacity',
     })), 'step')
   }
 
@@ -146,26 +151,26 @@ export function useGsapReveal(root = null) {
   function zoomIn(target) {
     const targets = resolveTargets(root, target, 1)
     if (!targets.length) return null
-    if (prefersReducedMotion()) return finish(targets)
+    if (prefersReducedMotion() || !allowsRichMotion()) return finish(targets)
     return track(inContext(() => gsap.fromTo(targets, { opacity: 0, scale: 0.94 }, {
-      opacity: 1, scale: 1, duration: 0.42, ease: MOTION.ease, clearProps: 'transform,opacity',
+      opacity: 1, scale: 1, duration: 0.24, ease: MOTION.ease, clearProps: 'transform,opacity',
     })), 'zoom')
   }
 
   function animateProgress(target, options = {}) {
     const targets = resolveTargets(root, target)
     if (!targets.length) return null
-    if (prefersReducedMotion()) return finish(targets)
+    if (prefersReducedMotion() || !allowsRichMotion()) return finish(targets)
     const horizontal = options.axis === 'x'
     const property = horizontal ? 'scaleX' : 'scaleY'
     return track(inContext(() => gsap.fromTo(targets,
       { [property]: 0, transformOrigin: horizontal ? 'left' : 'bottom' },
-      { [property]: 1, duration: 0.6, stagger: 0.05, ease: 'power2.out', clearProps: 'transform' },
+      { [property]: 1, duration: 0.24, stagger: 0.025, ease: MOTION.ease, clearProps: 'transform' },
     )), `progress:${String(target)}`)
   }
 
   function revealModal(element, done, leaving = false) {
-    if (!element || prefersReducedMotion()) {
+    if (!element || prefersReducedMotion() || !allowsRichMotion()) {
       if (element) finish([element, element.querySelector('.base-modal__dialog')].filter(Boolean))
       done?.()
       return null
@@ -173,14 +178,14 @@ export function useGsapReveal(root = null) {
     const dialog = element.querySelector('.base-modal__dialog')
     return track(inContext(() => {
       const timeline = gsap.timeline({ onComplete: done })
-      if (leaving) timeline.to(dialog, { opacity: 0, scale: 0.96, y: 8, duration: 0.18 }).to(element, { opacity: 0, duration: 0.16 }, '<')
-      else timeline.fromTo(element, { opacity: 0 }, { opacity: 1, duration: 0.2 }).fromTo(dialog, { opacity: 0, scale: 0.96, y: 12 }, { opacity: 1, scale: 1, y: 0, duration: 0.34, ease: MOTION.ease }, '<')
+      if (leaving) timeline.to(dialog, { opacity: 0, scale: 0.98, y: 6, duration: 0.16 }).to(element, { opacity: 0, duration: 0.15 }, '<')
+      else timeline.fromTo(element, { opacity: 0 }, { opacity: 1, duration: 0.16 }).fromTo(dialog, { opacity: 0, scale: 0.98, y: 8 }, { opacity: 1, scale: 1, y: 0, duration: 0.24, ease: MOTION.ease }, '<')
       return timeline
     }), 'modal')
   }
 
   function revealDrawer(element, done, leaving = false, side = 'right') {
-    if (!element || prefersReducedMotion()) {
+    if (!element || prefersReducedMotion() || !allowsRichMotion()) {
       if (element) finish([element, element.querySelector('.base-drawer__panel')].filter(Boolean))
       done?.()
       return null
@@ -189,22 +194,25 @@ export function useGsapReveal(root = null) {
     const offset = side === 'left' ? -42 : 42
     return track(inContext(() => {
       const timeline = gsap.timeline({ onComplete: done })
-      if (leaving) timeline.to(panel, { opacity: 0, x: offset, duration: 0.22 }).to(element, { opacity: 0, duration: 0.18 }, '<')
-      else timeline.fromTo(element, { opacity: 0 }, { opacity: 1, duration: 0.2 }).fromTo(panel, { opacity: 0, x: offset }, { opacity: 1, x: 0, duration: 0.38, ease: MOTION.ease }, '<')
+      if (leaving) timeline.to(panel, { opacity: 0, x: offset, duration: 0.18 }).to(element, { opacity: 0, duration: 0.15 }, '<')
+      else timeline.fromTo(element, { opacity: 0 }, { opacity: 1, duration: 0.16 }).fromTo(panel, { opacity: 0, x: offset }, { opacity: 1, x: 0, duration: 0.24, ease: MOTION.ease }, '<')
       return timeline
     }), 'drawer')
   }
 
   function floatVisual(target) {
     const targets = resolveTargets(root, target, 1)
-    if (!targets.length || prefersReducedMotion()) return null
-    return track(inContext(() => gsap.to(targets, { y: -7, duration: 2.8, repeat: -1, yoyo: true, ease: 'sine.inOut' })), 'float')
+    if (!targets.length || prefersReducedMotion() || !allowsRichMotion()) return null
+    return track(inContext(() => {
+      gsap.set(targets, { transformOrigin: 'center center', willChange: 'transform' })
+      return gsap.to(targets, { y: -4, duration: 0.3, repeat: 0, ease: MOTION.ease })
+    }), 'float')
   }
 
   function bindParallax(surface, target) {
     const host = resolveTargets(root, surface, 1)[0]
     const visual = resolveTargets(root, target, 1)[0]
-    if (!host || !visual || prefersReducedMotion()) return () => {}
+    if (!host || !visual || prefersReducedMotion() || !allowsRichMotion()) return () => {}
     let frame = 0
     let pendingEvent = null
     const update = () => {
@@ -213,13 +221,13 @@ export function useGsapReveal(root = null) {
       const bounds = host.getBoundingClientRect()
       const x = (event.clientX - bounds.left) / bounds.width - 0.5
       const y = (event.clientY - bounds.top) / bounds.height - 0.5
-      gsap.to(visual, { x: x * 18, y: y * 12, rotateX: y * -3, rotateY: x * 4, duration: 0.45, overwrite: true, ease: 'power2.out' })
+      gsap.to(visual, { x: x * 12, y: y * 8, rotateX: y * -2, rotateY: x * 3, duration: 0.24, overwrite: true, ease: MOTION.ease })
     }
     const move = (event) => {
       pendingEvent = event
       if (!frame) frame = requestAnimationFrame(update)
     }
-    const reset = () => gsap.to(visual, { x: 0, y: 0, rotateX: 0, rotateY: 0, duration: 0.5, overwrite: true })
+    const reset = () => gsap.to(visual, { x: 0, y: 0, rotateX: 0, rotateY: 0, duration: 0.24, overwrite: true })
     host.addEventListener('pointermove', move, { passive: true })
     host.addEventListener('pointerleave', reset)
     const dispose = () => {

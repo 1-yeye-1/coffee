@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 
-import { getPointsCenter, redeemPointsCoupon } from '@/api/account'
+import { dailyCheckin, getPointsCenter, redeemPointsCoupon } from '@/api/account'
 import { BaseBadge, BaseButton, BaseCard, BaseTable, BaseToast, ErrorPanel } from '@/components/base'
 import '@/assets/styles/pages/engagement.css'
 
@@ -10,7 +10,9 @@ const balance = ref(0)
 const coupons = ref([])
 const redemptions = ref([])
 const birthdayBenefit = ref(null)
+const membership = ref(null)
 const loading = ref(false)
+const checkingIn = ref(false)
 const redeemingId = ref(null)
 const toastVisible = ref(false)
 const toastTitle = ref('')
@@ -36,6 +38,7 @@ function applyData(data) {
   coupons.value = data.coupons
   redemptions.value = data.redemptions
   birthdayBenefit.value = data.birthdayBenefit
+  membership.value = data.membership
 }
 
 async function load() {
@@ -67,6 +70,22 @@ async function redeem(coupon) {
   }
 }
 
+async function checkin() {
+  if (checkingIn.value || membership.value?.checkedInToday) return
+  checkingIn.value = true
+  error.value = ''
+  try {
+    applyData((await dailyCheckin()).data)
+    toastTitle.value = '签到成功'
+    toastMessage.value = `获得 ${membership.value?.checkinReward?.points || 10} 积分和 ${membership.value?.checkinReward?.growthValue || 10} 成长值。`
+    toastVisible.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    checkingIn.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -82,6 +101,25 @@ onMounted(load)
     <section class="points-hero member-panel">
       <div><span>当前积分余额</span><strong>{{ balance.toLocaleString('zh-CN') }}</strong><small>积分</small></div>
       <BaseBadge :variant="birthdayBenefit?.status === 'claimed' ? 'success' : 'premium'">{{ birthdayBenefit?.message || '正在检查生日福利…' }}</BaseBadge>
+    </section>
+
+    <section class="checkin-panel member-panel">
+      <div>
+        <BaseBadge variant="premium">{{ membership?.currentLevel || '普通会员' }}</BaseBadge>
+        <h3>今日签到</h3>
+        <p class="text-muted">
+          签到可获得 {{ membership?.checkinReward?.points || 10 }} 积分和 {{ membership?.checkinReward?.growthValue || 10 }} 成长值。
+        </p>
+      </div>
+      <div class="checkin-panel__progress">
+        <strong>{{ membership?.growthValue || 0 }}</strong>
+        <span>成长值</span>
+        <small v-if="membership?.nextLevel">距离 {{ membership.nextLevel }} 还差 {{ membership.remaining }} 成长值</small>
+        <small v-else>已达到最高等级</small>
+      </div>
+      <BaseButton :loading="checkingIn" :disabled="loading || membership?.checkedInToday" @click="checkin">
+        {{ membership?.checkedInToday ? '今日已签到' : '立即签到' }}
+      </BaseButton>
     </section>
 
     <section>
@@ -120,8 +158,13 @@ onMounted(load)
 .points-hero{display:flex;align-items:center;justify-content:space-between;gap:var(--cb-space-5);background:linear-gradient(135deg,var(--cb-color-coffee),var(--cb-bg-dark));color:var(--cb-color-cream)}
 .points-hero>div{display:flex;align-items:baseline;gap:var(--cb-space-2)}.points-hero span{opacity:.78}.points-hero strong{font-family:var(--cb-font-display);font-size:clamp(2.5rem,6vw,4rem)}
 .points-heading{display:flex;align-items:end;justify-content:space-between;gap:var(--cb-space-4)}
+.checkin-panel{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:var(--cb-space-5)}
+.checkin-panel h3{margin:var(--cb-space-2) 0 var(--cb-space-1)}
+.checkin-panel__progress{display:grid;gap:.15rem;text-align:right}
+.checkin-panel__progress strong{font-family:var(--cb-font-display);font-size:var(--cb-font-size-2xl);color:var(--cb-color-coffee)}
+.checkin-panel__progress span,.checkin-panel__progress small{color:var(--cb-text-muted)}
 .coupon-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--cb-space-5)}
 .coupon-card{display:grid;gap:var(--cb-space-3)}.coupon-card p{color:var(--cb-text-secondary)}.coupon-card small{color:var(--cb-text-muted)}.coupon-card :deep(.base-button){margin-top:auto}
 .points-toast{position:fixed;z-index:var(--cb-z-toast);right:var(--cb-space-5);bottom:var(--cb-space-5);width:min(calc(100% - var(--cb-space-8)),24rem)}
-@media(max-width:48rem){.coupon-grid{grid-template-columns:1fr}.points-hero{align-items:flex-start;flex-direction:column}}
+@media(max-width:48rem){.coupon-grid{grid-template-columns:1fr}.points-hero{align-items:flex-start;flex-direction:column}.checkin-panel{grid-template-columns:1fr}.checkin-panel__progress{text-align:left}}
 </style>

@@ -115,12 +115,15 @@ async function main() {
   assert([401, 403].includes(adminOrdersDenied.payload.code), 'admin token should not access user orders')
   logPass('admin token blocked from user orders')
 
+  const registerCaptcha = await request('GET', '/auth/captcha')
+  const registerCaptchaCode = 'C3R7X'
+  const { hashPassword } = await import('../server/utils/crypto.js')
+  await pool.query('UPDATE image_captchas SET code_hash = ? WHERE captcha_id = ?', [await hashPassword(registerCaptchaCode), registerCaptcha.payload.data.captchaId])
   const registerCode = await request('POST', '/auth/send-code', {
-    body: { phone: smokePhone, scene: 'register' },
+    body: { phone: smokePhone, scene: 'register', captchaId: registerCaptcha.payload.data.captchaId, captchaCode: registerCaptchaCode },
   })
   assert(!registerCode.payload.data.devCode, 'verification code must not be returned to frontend')
   const smokeCode = '123456'
-  const { hashPassword } = await import('../server/utils/crypto.js')
   await pool.query(
     `UPDATE verification_codes SET code_hash = ?
      WHERE phone = ? AND scene = 'register'
@@ -465,7 +468,10 @@ async function main() {
     && guestBooking.payload.data.booking.date === bookingDate && guestBooking.payload.data.booking.timeSlot === '09:00-11:00'
     && guestBooking.payload.data.booking.seatCode === freeSeats[1].code && guestBooking.payload.data.booking.createdAt, 'guest reservation card fields incomplete')
   await request('POST', '/bookings/guest', { body: { phone: guestPhone, captchaId: captcha.payload.data.captchaId, captchaCode: guestCode, name: '游客测试', date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[1].seatId, peopleCount: 1 }, expectedStatus: 400 })
-  await request('POST', '/auth/send-code', { body: { phone: guestPhone, scene: 'login' } })
+  const loginCaptcha = await request('GET', '/auth/captcha')
+  const loginCaptchaCode = 'B8L2Q'
+  await pool.query('UPDATE image_captchas SET code_hash = ? WHERE captcha_id = ?', [await hashGuestCode(loginCaptchaCode), loginCaptcha.payload.data.captchaId])
+  await request('POST', '/auth/send-code', { body: { phone: guestPhone, scene: 'login', captchaId: loginCaptcha.payload.data.captchaId, captchaCode: loginCaptchaCode } })
   const guestLoginCode = '654322'
   await pool.query(`UPDATE verification_codes SET code_hash = ? WHERE phone = ? AND scene = 'login' ORDER BY id DESC LIMIT 1`, [await hashGuestCode(guestLoginCode), guestPhone])
   const guestLogin = await request('POST', '/auth/login', { body: { phone: guestPhone, code: guestLoginCode } })

@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { resolveUploadUrl } from '@/api/upload'
 
-import { BaseBadge, BaseButton, BaseCard, BaseTabs } from '@/components/base'
+import { BaseBadge, BaseButton, BaseCard, BaseSkeleton, BaseTabs, EmptyState, ErrorPanel } from '@/components/base'
 import { useEventsStore } from '@/stores/events'
 import { useGsapReveal } from '@/composables/useGsapReveal'
 import { useTiltCard } from '@/composables/useTiltCard'
@@ -20,10 +20,20 @@ const categories = ['全部', '读书会', '咖啡课', '文化沙龙', '创意�
 const visibleEvents = computed(() =>
   category.value === '全部' ? eventsStore.items : eventsStore.items.filter((event) => event.category === category.value),
 )
+function handleImageError(event) {
+  event.currentTarget.hidden = true
+}
+function eventTarget(event) {
+  return `/events/${event.slug || event.id}`
+}
+function openEvent(event) {
+  router.push(eventTarget(event))
+}
 onMounted(() => {
   eventsStore.fetchEvents()
 })
 watch([visibleEvents, view], async () => {
+  if (eventsStore.loading) return
   await nextTick()
   revealCards('.event-card', { key: 'events', limit: 20 })
   bindTiltCards()
@@ -53,8 +63,9 @@ watch([visibleEvents, view], async () => {
       </section>
 
       <section class="section-block">
+        <ErrorPanel v-if="eventsStore.apiError" title="活动加载失败" :message="eventsStore.apiError" @retry="eventsStore.fetchEvents" />
         <div class="section-block__header">
-          <BaseTabs v-model="category" :tabs="categories" />
+          <BaseTabs v-model="category" variant="events" aria-label="活动分类" :tabs="categories" />
           <div class="cb-cluster">
             <BaseButton size="sm" :variant="view === 'list' ? 'primary' : 'ghost'" @click="view = 'list'">列表</BaseButton>
             <BaseButton size="sm" :variant="view === 'calendar' ? 'primary' : 'ghost'" @click="view = 'calendar'">日历</BaseButton>
@@ -62,9 +73,10 @@ watch([visibleEvents, view], async () => {
         </div>
 
         <div v-if="view === 'list'" class="event-grid">
-          <BaseCard v-for="event in visibleEvents" :key="event.id" class="event-card" variant="interactive" data-cursor="JOIN" data-tilt-card @click="router.push(`/events/${event.slug}`)">
+          <BaseSkeleton v-if="eventsStore.loading" v-for="index in 6" :key="`event-loading-${index}`" variant="card" />
+          <BaseCard v-for="event in visibleEvents" :key="event.id" class="event-card" variant="interactive" data-cursor="JOIN" data-tilt-card @click="openEvent(event)">
             <div class="event-card__visual" data-tilt-layer="1.3">
-              <img v-if="event.coverUrl" class="event-card__image" :src="resolveUploadUrl(event.coverUrl)" :alt="event.title" loading="lazy" decoding="async" />
+              <img v-if="event.coverUrl" class="event-card__image" :src="resolveUploadUrl(event.coverUrl)" :alt="event.title" loading="lazy" decoding="async" @error="handleImageError" />
               <template v-else><span>{{ event.category }}</span><strong>{{ event.date.slice(5).replace('-', '.') }}</strong></template>
             </div>
             <div class="event-card__meta" data-tilt-layer="0.65">
@@ -78,12 +90,23 @@ watch([visibleEvents, view], async () => {
               <div><span>地点</span><strong>{{ event.location.split(' · ')[0] }}</strong></div>
               <div><span>人数</span><strong>{{ event.attendees }} / {{ event.capacity }}</strong></div>
             </div>
-            <BaseButton variant="outline" @click.stop="router.push(`/events/${event.slug}`)">查看活动</BaseButton>
+            <BaseButton variant="outline" @click.stop="openEvent(event)">查看活动</BaseButton>
           </BaseCard>
+          <EmptyState v-if="!eventsStore.loading && !eventsStore.apiError && !visibleEvents.length" title="暂无匹配活动" description="当前分类暂时没有活动，请查看其他分类。" action-label="查看全部活动" @action="category = '全部'" />
         </div>
 
         <div v-else class="detail-panel calendar-list">
-          <div v-for="event in visibleEvents" :key="event.id" class="calendar-item">
+          <div
+            v-for="event in visibleEvents"
+            :key="event.id"
+            class="calendar-item"
+            role="button"
+            tabindex="0"
+            data-cursor="VIEW"
+            @click="openEvent(event)"
+            @keydown.enter.prevent="openEvent(event)"
+            @keydown.space.prevent="openEvent(event)"
+          >
             <div><strong>{{ event.date }}</strong><p>{{ event.title }}</p></div>
             <span>{{ event.time }}</span>
           </div>
@@ -94,5 +117,17 @@ watch([visibleEvents, view], async () => {
 </template>
 
 <style scoped>
+.event-card__visual { aspect-ratio: 16 / 10; background: linear-gradient(135deg, var(--cb-bg-soft), color-mix(in srgb, var(--cb-color-gold) 18%, var(--cb-bg-surface))); }
 .event-card__image { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.calendar-item {
+  cursor: pointer;
+  transition: border-color var(--cb-duration-fast) var(--cb-ease-standard), box-shadow var(--cb-duration-fast) var(--cb-ease-standard), transform var(--cb-duration-fast) var(--cb-ease-standard);
+}
+.calendar-item:hover,
+.calendar-item:focus-visible {
+  border-color: color-mix(in srgb, var(--cb-color-gold) 54%, var(--cb-border-soft));
+  box-shadow: var(--cb-shadow-hover);
+  outline: 0;
+  transform: translateY(-0.125rem);
+}
 </style>

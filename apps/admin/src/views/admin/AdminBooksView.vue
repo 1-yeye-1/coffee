@@ -8,15 +8,25 @@ const statuses = [
   { label: '隐藏', value: 'hidden' },
 ]
 const columns = [
-  { key: 'visual', label: '封面' }, { key: 'primary', label: '图书' }, { key: 'category', label: '分类' },
-  { key: 'rating', label: '评分' }, { key: 'stock', label: '库存' }, { key: 'status', label: '状态' }, { key: 'actions', label: '操作' },
+  { key: 'visual', label: '封面' },
+  { key: 'primary', label: '图书' },
+  { key: 'category', label: '分类' },
+  { key: 'rating', label: '评分' },
+  { key: 'stock', label: '库存' },
+  { key: 'status', label: '状态' },
+  { key: 'actions', label: '操作' },
 ]
 const fields = [
-  { key: 'title', label: '书名' }, { key: 'slug', label: 'Slug' }, { key: 'author', label: '作者' },
+  { key: 'title', label: '书名' },
+  { key: 'author', label: '作者' },
   { key: 'category', label: '分类', type: 'select', options: categories },
   { key: 'coverUrl', label: '图书封面', type: 'image', uploadScene: 'book' },
-  { key: 'rating', label: '评分', type: 'number' }, { key: 'stock', label: '库存', type: 'number' },
-  { key: 'publisher', label: '出版社' }, { key: 'year', label: '出版年份', type: 'number' },
+  { key: 'rating', label: '评分', type: 'number' },
+  { key: 'stock', label: '库存', type: 'number' },
+  { key: 'seatId', label: '绑定座位ID', type: 'number' },
+  { key: 'locationLabel', label: '位置说明' },
+  { key: 'publisher', label: '出版社' },
+  { key: 'year', label: '出版年份', type: 'number' },
   { key: 'summary', label: '简介', type: 'textarea' },
   { key: 'status', label: '状态', type: 'select', options: statuses, default: 'available' },
 ]
@@ -29,5 +39,14 @@ const stats = [
 </script>
 
 <template>
-  <AdminCrudView type="books" title="图书管理" description="维护图书馆藏、封面、分类、库存和状态。" singular="图书" :columns="columns" :fields="fields" :stats="stats" :category-options="categories" />
+  <AdminCrudView
+    type="books"
+    title="图书管理"
+    description="维护图书馆藏、封面、分类、库存、位置和状态。"
+    singular="图书"
+    :columns="columns"
+    :fields="fields"
+    :stats="stats"
+    :category-options="categories"
+  />
 </template>

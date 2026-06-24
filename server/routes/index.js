@@ -9,6 +9,7 @@ import { registerBookingRoutes } from './booking.routes.js'
 import { registerCartRoutes } from './cart.routes.js'
 import { registerCommunityRoutes } from './community.routes.js'
 import { registerEventsRoutes } from './events.routes.js'
+import { registerHomeRoutes } from './home.routes.js'
 import { registerNotificationsRoutes } from './notifications.routes.js'
 import { registerOrdersRoutes } from './orders.routes.js'
 import { registerProductsRoutes } from './products.routes.js'
@@ -69,6 +70,7 @@ export function createRouter() {
   registerAuthRoutes(router)
   registerBooksRoutes(router)
   registerProductsRoutes(router)
+  registerHomeRoutes(router)
   registerSearchRoutes(router)
   registerEventsRoutes(router)
   registerCommunityRoutes(router)

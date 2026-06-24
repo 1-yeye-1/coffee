@@ -47,7 +47,9 @@ watch(() => [props.loading, props.items], async () => {
       <thead>
         <tr>
           <th v-for="column in columns" :key="column.key" scope="col">
-            {{ column.label }}
+            <slot :name="`head-${column.key}`" :column="column">
+              {{ column.label }}
+            </slot>
           </th>
         </tr>
       </thead>

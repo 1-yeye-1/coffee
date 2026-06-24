@@ -17,12 +17,14 @@ const likeUsers = ref([])
 const actionTarget = ref(null)
 const actionReason = ref('')
 const actionLoading = ref(false)
+const selectedPostIds = ref([])
 const pageRef = ref(null)
 const { revealCards, revealTab } = useGsapReveal(pageRef)
 const { pulseBadge, flashRow } = useAnimeMotion()
 const filters = reactive({ keyword: String(route.query.keyword || ''), status: 'all', featured: 'all', media: 'all' })
 
 const columns = [
+  { key: 'select', label: '' },
   { key: 'title', label: '标题 / 摘要' },
   { key: 'author', label: '作者' },
   { key: 'media', label: '媒体' },
@@ -84,6 +86,8 @@ const visible = computed(() => rows.value.filter((item) => {
   return matchesKeyword && matchesStatus && matchesFeatured && matchesMedia
 }))
 
+const allVisibleSelected = computed(() => visible.value.length > 0 && visible.value.every((item) => selectedPostIds.value.includes(item.id)))
+
 const stats = computed(() => [
   { label: '全部内容', value: rows.value.length, mark: 'A' },
   { label: '待审核', value: rows.value.filter((item) => item.status === 'pending').length, mark: 'P' },
@@ -108,6 +112,31 @@ function formatDate(value) {
 
 async function refresh() {
   await adminStore.fetchAdminCollection('posts')
+  selectedPostIds.value = selectedPostIds.value.filter((id) => adminStore.posts.some((item) => item.id === id))
+}
+
+function toggleSelectPost(id) {
+  selectedPostIds.value = selectedPostIds.value.includes(id)
+    ? selectedPostIds.value.filter((itemId) => itemId !== id)
+    : [...selectedPostIds.value, id]
+}
+
+function toggleSelectVisible() {
+  selectedPostIds.value = allVisibleSelected.value ? [] : visible.value.map((item) => item.id)
+}
+
+async function batchReview(status) {
+  const ids = [...selectedPostIds.value]
+  if (!ids.length) return
+  actionLoading.value = true
+  try {
+    for (const id of ids) await adminStore.reviewPost(id, status, actionReason.value)
+    selectedPostIds.value = []
+    actionReason.value = ''
+    await refresh()
+  } finally {
+    actionLoading.value = false
+  }
 }
 
 async function openDetail(item) {
@@ -119,6 +148,14 @@ async function openDetail(item) {
     likeUsers.value = likes.data?.items || []
   }
   catch { likeUsers.value = [] }
+}
+
+
+function showCommentMedia() {
+  detailTab.value = 'preview'
+  nextTick(() => {
+    pageRef.value?.querySelector('.detail-media')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
 }
 
 function askAction(type, item, status = '') {
@@ -188,6 +225,15 @@ watch(detailTab, async () => {
       <BaseSelect v-model="filters.media" label="媒体" :options="mediaOptions" />
     </section>
 
+
+    <section class="community-batch-bar">
+      <label><input type="checkbox" :checked="allVisibleSelected" :disabled="!visible.length" @change="toggleSelectVisible" /> &#20840;&#36873;&#24403;&#21069;&#21015;&#34920;</label>
+      <span>&#24050;&#36873;&#25321; {{ selectedPostIds.length }} &#26465;</span>
+      <BaseButton size="sm" variant="outline" :disabled="!selectedPostIds.length || actionLoading" :loading="actionLoading" @click="batchReview('published')">&#20840;&#37096;&#36890;&#36807;&#23457;&#26680;</BaseButton>
+      <BaseButton size="sm" variant="ghost" :disabled="!selectedPostIds.length || actionLoading" @click="batchReview('rejected')">&#20840;&#37096;&#39539;&#22238;</BaseButton>
+      <BaseButton size="sm" variant="danger" :disabled="!selectedPostIds.length || actionLoading" @click="batchReview('hidden')">&#20840;&#37096;&#38544;&#34255;</BaseButton>
+    </section>
+
     <BaseTable
       v-if="visible.length || adminStore.apiLoading"
       :columns="columns"
@@ -195,6 +241,15 @@ watch(detailTab, async () => {
       :loading="adminStore.apiLoading"
       empty-text="暂无社区内容"
     >
+
+      <template #head-select>
+        <input class="row-select" type="checkbox" :checked="allVisibleSelected" :disabled="!visible.length" aria-label="Select current list" @change="toggleSelectVisible" />
+      </template>
+
+      <template #cell-select="{ item }">
+        <input class="row-select" type="checkbox" :checked="selectedPostIds.includes(item.id)" :aria-label="`\u9009\u62e9\u5e16\u5b50 ${item.title}`" @change="toggleSelectPost(item.id)" />
+      </template>
+
       <template #cell-title="{ item }">
         <div class="post-title-cell">
           <div>
@@ -295,7 +350,7 @@ watch(detailTab, async () => {
           </BaseButton>
         </div>
         </template>
-        <section v-else-if="detailTab === 'comments'" class="moderation-list"><article v-for="comment in detail.comments || []" :key="comment.id"><header><strong>{{ comment.user?.nickname || comment.author || '匿名用户' }}</strong><BaseBadge :variant="comment.status === 'published' ? 'success' : comment.status === 'pending' ? 'warning' : 'neutral'">{{ { published:'正常', pending:'待审核', hidden:'已隐藏', deleted:'已删除' }[comment.status] || comment.status }}</BaseBadge></header><p>{{ comment.content }}</p><small>{{ formatDate(comment.createdAt) }}</small><footer><BaseButton v-if="comment.status !== 'published'" size="sm" variant="outline" @click="askAction('comment', comment, 'published')">恢复</BaseButton><BaseButton v-if="comment.status !== 'hidden'" size="sm" variant="ghost" @click="askAction('comment', comment, 'hidden')">隐藏</BaseButton><BaseButton v-if="comment.status !== 'deleted'" size="sm" variant="danger" @click="askAction('comment', comment, 'deleted')">删除</BaseButton></footer></article><EmptyState v-if="!detail.comments?.length" title="暂无评论" /></section>
+        <section v-else-if="detailTab === 'comments'" class="moderation-list"><article v-for="comment in detail.comments || []" :key="comment.id"><header><strong>{{ comment.user?.nickname || comment.author || '匿名用户' }}</strong><BaseBadge :variant="comment.status === 'published' ? 'success' : comment.status === 'pending' ? 'warning' : 'neutral'">{{ { published:'正常', pending:'待审核', hidden:'已隐藏', deleted:'已删除' }[comment.status] || comment.status }}</BaseBadge></header><p>{{ comment.content }}</p><small>{{ formatDate(comment.createdAt) }}</small><footer><BaseButton v-if="detail.mediaUrl" size="sm" variant="outline" @click="showCommentMedia">&#26597;&#30475;&#23186;&#20307;/&#35814;&#24773;</BaseButton><BaseButton v-if="comment.status !== 'published'" size="sm" variant="outline" @click="askAction('comment', comment, 'published')">恢复</BaseButton><BaseButton v-if="comment.status !== 'hidden'" size="sm" variant="ghost" @click="askAction('comment', comment, 'hidden')">隐藏</BaseButton><BaseButton v-if="comment.status !== 'deleted'" size="sm" variant="danger" @click="askAction('comment', comment, 'deleted')">删除</BaseButton></footer></article><EmptyState v-if="!detail.comments?.length" title="暂无评论" /></section>
         <section v-else-if="detailTab === 'likes'" class="moderation-list"><article v-for="user in likeUsers" :key="user.userId"><strong>{{ user.nickname || user.username }}</strong><p>{{ user.phoneMasked || '隐私号码' }}</p><small>{{ formatDate(user.likedAt) }}</small></article><p v-if="!likeUsers.length" class="text-muted">暂无点赞用户</p></section>
         <section v-else class="moderation-list"><article v-for="report in detail.reports || []" :key="report.id"><header><strong>{{ report.reason || '内容举报' }}</strong><BaseBadge :variant="report.status === 'pending' ? 'warning' : report.status === 'resolved' ? 'success' : 'neutral'">{{ report.status === 'pending' ? '待处理' : report.status === 'resolved' ? '已处理' : '已驳回' }}</BaseBadge></header><p>{{ report.description || '未填写补充说明' }}</p><small>{{ report.reporter?.nickname }} · {{ formatDate(report.createdAt) }}</small><footer v-if="report.status === 'pending'"><BaseButton size="sm" variant="outline" @click="askAction('report', report, 'dismiss')">驳回举报</BaseButton><BaseButton size="sm" variant="ghost" @click="askAction('report', report, 'hide')">隐藏内容</BaseButton><BaseButton v-if="report.commentId" size="sm" variant="danger" @click="askAction('report', report, 'delete')">删除评论</BaseButton></footer></article><EmptyState v-if="!detail.reports?.length" title="暂无举报记录" /></section>
       </article>
@@ -369,6 +424,21 @@ watch(detailTab, async () => {
   color: var(--cb-text-secondary);
 }
 
+
+.community-batch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cb-space-3);
+  align-items: center;
+  padding: var(--cb-space-3) var(--cb-space-4);
+  border: 0.0625rem solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-xl);
+  background: var(--cb-bg-surface);
+}
+.community-batch-bar label { display: inline-flex; gap: var(--cb-space-2); align-items: center; font-weight: var(--cb-font-semibold); }
+.community-batch-bar span { margin-right: auto; color: var(--cb-text-secondary); }
+.row-select { width: 1rem; height: 1rem; accent-color: var(--cb-color-coffee); }
+
 .community-toolbar {
   display: grid;
   grid-template-columns: minmax(16rem, 1.5fr) repeat(3, minmax(0, 1fr));
@@ -434,12 +504,39 @@ watch(detailTab, async () => {
   display: grid;
   min-width: 15rem;
   gap: var(--cb-space-2);
+  align-items: start;
 }
 
 .action-group {
   display: flex;
   flex-wrap: wrap;
   gap: var(--cb-space-2);
+  padding: var(--cb-space-2);
+  border: 0.0625rem solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-lg);
+  background: color-mix(in srgb, var(--cb-bg-soft) 72%, transparent);
+}
+
+.action-group:first-child {
+  background: transparent;
+  border-color: transparent;
+  padding: 0;
+}
+
+.action-group--danger {
+  border-color: color-mix(in srgb, var(--cb-danger) 26%, var(--cb-border-soft));
+  background: color-mix(in srgb, var(--cb-danger) 8%, transparent);
+}
+
+:deep(.base-table tbody tr) {
+  transition:
+    background-color var(--cb-duration-fast) var(--cb-ease-standard),
+    box-shadow var(--cb-duration-fast) var(--cb-ease-standard);
+}
+
+:deep(.base-table tbody tr:hover) {
+  background: color-mix(in srgb, var(--cb-color-gold) 7%, var(--cb-bg-surface));
+  box-shadow: inset 0 0 0 0.0625rem color-mix(in srgb, var(--cb-color-gold) 18%, transparent);
 }
 
 .post-detail,
@@ -485,8 +582,9 @@ watch(detailTab, async () => {
 .moderation-tabs button{padding:var(--cb-space-2) var(--cb-space-4);color:var(--cb-text-secondary);background:transparent;border:0;border-radius:var(--cb-radius-pill)}
 .moderation-tabs button.is-active{color:var(--cb-text-inverse);background:var(--cb-color-coffee);box-shadow:var(--cb-shadow-sm)}
 .moderation-list{display:grid;gap:var(--cb-space-3)}
-.moderation-list article{padding:var(--cb-space-4);border:1px solid var(--cb-border-soft);border-radius:var(--cb-radius-lg);background:var(--cb-bg-soft)}
+.moderation-list article{display:grid;gap:var(--cb-space-2);padding:var(--cb-space-4);border:1px solid var(--cb-border-soft);border-radius:var(--cb-radius-lg);background:var(--cb-bg-soft)}
 .moderation-list article header,.moderation-list article footer{display:flex;flex-wrap:wrap;gap:var(--cb-space-2);align-items:center;justify-content:space-between}
+.moderation-list article footer{justify-content:flex-start;padding-top:var(--cb-space-2);border-top:1px solid var(--cb-border-soft)}
 .moderation-list small{color:var(--cb-text-muted)}
 .moderation-confirm :deep(.base-textarea),.moderation-confirm :deep(textarea){width:100%;min-height:8rem}
 

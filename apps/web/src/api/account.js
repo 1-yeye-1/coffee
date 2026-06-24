@@ -18,6 +18,7 @@ export const verifyCurrentPhone = (payload) => request('/account/security/verify
 export const changePhone = (payload) => request('/account/security/phone', { method: 'PATCH', body: payload })
 export const getPointRecords = () => request('/account/points')
 export const getPointsCenter = () => request('/account/points-center')
+export const dailyCheckin = () => request('/account/points-center/checkin', { method: 'POST' })
 export const redeemPointsCoupon = (couponId, requestKey) => request(`/account/points-center/redeem/${couponId}`, { method: 'POST', body: { requestKey } })
 export const getAddresses = () => request('/account/addresses')
 export const createAddress = (payload) => request('/account/addresses', { method: 'POST', body: payload })

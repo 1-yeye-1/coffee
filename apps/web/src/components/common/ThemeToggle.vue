@@ -1,57 +1,41 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 
 const STORAGE_KEY = 'coffee-book-theme'
-const themes = ['light', 'dark', 'system']
+const themes = ['light', 'dark']
 const labels = {
-  light: '浅色主题',
-  dark: '深色主题',
-  system: '跟随系统',
+  light: '浅色模式',
+  dark: '深色模式',
 }
 
-const theme = ref('system')
-let mediaQuery
+const theme = ref('light')
 
 function applyTheme(value) {
-  if (value === 'system') {
-    delete document.documentElement.dataset.theme
-  } else {
-    document.documentElement.dataset.theme = value
-  }
+  document.documentElement.dataset.theme = value
   document.documentElement.dataset.themePreference = value
 }
 
 function setTheme(value) {
-  theme.value = themes.includes(value) ? value : 'system'
+  theme.value = themes.includes(value) ? value : 'light'
   localStorage.setItem(STORAGE_KEY, theme.value)
   applyTheme(theme.value)
 }
 
 function cycleTheme() {
-  const currentIndex = themes.indexOf(theme.value)
-  setTheme(themes[(currentIndex + 1) % themes.length])
-}
-
-function handleSystemChange() {
-  if (theme.value === 'system') applyTheme('system')
+  setTheme(theme.value === 'light' ? 'dark' : 'light')
 }
 
 onMounted(() => {
   const savedTheme = localStorage.getItem(STORAGE_KEY)
-  theme.value = themes.includes(savedTheme) ? savedTheme : 'system'
-  applyTheme(theme.value)
-  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-  mediaQuery.addEventListener('change', handleSystemChange)
+  setTheme(themes.includes(savedTheme) ? savedTheme : 'light')
 })
-
-onBeforeUnmount(() => mediaQuery?.removeEventListener('change', handleSystemChange))
 </script>
 
 <template>
   <button
     class="theme-toggle"
     type="button"
-    :aria-label="`${labels[theme]}，点击切换主题`"
+    :aria-label="`${labels[theme]}，点击切换`"
     :title="labels[theme]"
     @click="cycleTheme"
   >
@@ -59,12 +43,8 @@ onBeforeUnmount(() => mediaQuery?.removeEventListener('change', handleSystemChan
       <circle cx="12" cy="12" r="4" />
       <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41" />
     </svg>
-    <svg v-else-if="theme === 'dark'" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />
-    </svg>
     <svg v-else viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="13" rx="2" />
-      <path d="M8 21h8M12 17v4" />
+      <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />
     </svg>
     <span class="theme-toggle__label">{{ labels[theme] }}</span>
   </button>
@@ -108,4 +88,3 @@ onBeforeUnmount(() => mediaQuery?.removeEventListener('change', handleSystemChan
   clip-path: inset(50%);
 }
 </style>
-

@@ -10,6 +10,14 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  variant: {
+    type: String,
+    default: 'default',
+  },
+  ariaLabel: {
+    type: String,
+    default: '内容分组',
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'change'])
@@ -57,8 +65,8 @@ function handleKeydown(event, index) {
 </script>
 
 <template>
-  <div class="base-tabs">
-    <div class="base-tabs__list" role="tablist" aria-label="内容分组">
+  <div class="base-tabs" :class="`base-tabs--${variant}`">
+    <div class="base-tabs__list" role="tablist" :aria-label="ariaLabel">
       <button
         v-for="(tab, index) in tabs"
         :id="`tab-${tab.value}`"
@@ -98,17 +106,29 @@ function handleKeydown(event, index) {
 <style scoped>
 .base-tabs {
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--cb-bg-elevated) 82%, transparent);
+  border: 0.0625rem solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-pill);
 }
 
 .base-tabs__list {
   display: flex;
-  gap: var(--cb-space-1);
+  max-width: 100%;
+  flex-wrap: nowrap;
+  gap: var(--cb-space-2);
   overflow-x: auto;
-  border-bottom: 0.0625rem solid var(--cb-border-soft);
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  border-bottom: 0;
 }
 
 .base-tabs__tab {
   position: relative;
+  flex: 0 0 auto;
   min-height: 2.75rem;
   padding: var(--cb-space-3) var(--cb-space-4);
   color: var(--cb-text-muted);
@@ -116,6 +136,37 @@ function handleKeydown(event, index) {
   white-space: nowrap;
   background: transparent;
   border: 0;
+  scroll-snap-align: start;
+}
+
+.base-tabs--books,
+.base-tabs--coffee,
+.base-tabs--events,
+.base-tabs--community {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.base-tabs--events .base-tabs__tab,
+.base-tabs--community .base-tabs__tab {
+  min-width: auto;
+  padding-inline: var(--cb-space-3);
+  text-align: center;
+}
+
+.base-tabs--events,
+.base-tabs--community {
+  margin-bottom: var(--cb-space-3);
+  border-radius: var(--cb-radius-xl);
+}
+
+.base-tabs--community {
+  border-radius: var(--cb-radius-xl);
+}
+
+.base-tabs--community .base-tabs__tab--active {
+  color: var(--cb-text-inverse);
+  background: var(--cb-color-coffee);
 }
 
 .base-tabs__tab::after {
@@ -137,6 +188,8 @@ function handleKeydown(event, index) {
 
 .base-tabs__tab--active {
   color: var(--cb-color-coffee);
+  background: var(--cb-bg-surface);
+  box-shadow: var(--cb-shadow-sm);
 }
 
 .base-tabs__tab--active::after {
@@ -151,6 +204,25 @@ function handleKeydown(event, index) {
 .base-tabs__panel {
   padding-block: var(--cb-space-5);
   outline: 0;
+}
+
+.base-tabs--events .base-tabs__panel,
+.base-tabs--community .base-tabs__panel {
+  padding-block: var(--cb-space-2);
+}
+
+:global(html[data-theme="dark"]) .base-tabs {
+  background: color-mix(in srgb, var(--cb-bg-elevated) 86%, transparent);
+  border-color: color-mix(in srgb, var(--cb-color-gold) 22%, var(--cb-border-soft));
+}
+
+:global(html[data-theme="dark"]) .base-tabs__tab {
+  color: var(--cb-text-secondary);
+}
+
+:global(html[data-theme="dark"]) .base-tabs__tab--active {
+  color: var(--cb-color-gold);
+  background: color-mix(in srgb, var(--cb-color-gold) 12%, var(--cb-bg-surface));
 }
 
 .base-tabs-enter-active,

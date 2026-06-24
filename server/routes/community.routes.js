@@ -5,11 +5,14 @@ import {
   createPost,
   deleteComment,
   findPost,
+  getCommunityStats,
+  likeComment,
   listPostLikes,
   listPosts,
   togglePostLike,
+  unlikeComment,
 } from '../services/community.service.js'
-import { failure, paginated, success } from '../utils/response.js'
+import { dbSuccess, failure, paginated, success } from '../utils/response.js'
 
 function requireBodyFields(res, payload, fields) {
   const missing = fields.find((field) => !String(payload[field] || '').trim())
@@ -24,6 +27,10 @@ export function registerCommunityRoutes(router) {
   router.get('/api/posts', async (req, res) => {
     const result = await listPosts(req.query)
     return paginated(res, result.items, result.meta)
+  })
+
+  router.get('/api/posts/stats', async (_req, res) => {
+    return dbSuccess(res, await getCommunityStats())
   })
 
   router.get('/api/posts/:id', async (req, res) => {
@@ -43,9 +50,30 @@ export function registerCommunityRoutes(router) {
     return success(res, await createComment(req.params.id, req.body, req.user), '评论成功', 201)
   })
 
+  router.post('/api/posts/:id/comments/:commentId/replies', requireUser, async (req, res) => {
+    if (!requireBodyFields(res, req.body, ['content'])) return false
+    if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
+    return success(
+      res,
+      await createComment(req.params.id, { ...req.body, parentId: req.params.commentId }, req.user),
+      '回复成功',
+      201,
+    )
+  })
+
   router.delete('/api/posts/:id/comments/:commentId', requireUser, async (req, res) => {
     if (!await deleteComment(req.params.id, req.params.commentId, req.user.id)) return failure(res, 404, '评论不存在或无权删除', 404)
     return success(res, {}, '评论已删除')
+  })
+
+  router.post('/api/posts/:id/comments/:commentId/like', requireUser, async (req, res) => {
+    if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
+    return success(res, await likeComment(req.params.id, req.params.commentId, req.user.id), '已点赞')
+  })
+
+  router.delete('/api/posts/:id/comments/:commentId/like', requireUser, async (req, res) => {
+    if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
+    return success(res, await unlikeComment(req.params.id, req.params.commentId, req.user.id), '已取消点赞')
   })
 
   router.post('/api/posts/:id/like', requireUser, async (req, res) => {

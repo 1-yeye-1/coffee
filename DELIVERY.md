@@ -74,7 +74,7 @@ npm run dev:all
 2. 创建后端 `.env`，配置 `DB_HOST`、`DB_USER`、`DB_PASSWORD`、`JWT_SECRET`、`CORS_ORIGIN`。
 3. 执行 `npm install`。
 4. 配置 `DB_NAME` 后执行 `npm run db:init`，完成建表、幂等 seed 和数据库一致性检查。
-5. `db:init` 已包含幂等 seed；仅需单独补数据时执行 `npm run db:seed`。
+5. `db:init` 已包含幂等 seed；仅需单独补数据时执行 `npm run db:seed`，演示环境可继续执行 `npm run db:demo` 写入幂等演示账号和行为数据。
 6. 配置 `apps/web/.env` 和 `apps/admin/.env` 的 `VITE_API_BASE_URL`。
 7. 执行 `npm run build` 生成 `dist/web` 和 `dist/admin`。
 8. 使用 Nginx 或静态服务器托管前台、后台静态资源。
@@ -149,3 +149,28 @@ node scripts/check-project.js
 11. 访问 `http://127.0.0.1:5174/users`，操作：管理用户，预期：积分、生日、优惠券数量、会员等级和账号状态清晰可见。
 12. 访问 `http://127.0.0.1:5174/uploads`，操作：查看上传记录，预期：筛选、预览和删除可用。
 13. 访问 `http://127.0.0.1:5174/logs`，操作：按用户、角色、动作和时间查看日志，预期：普通用户与管理员关键操作均可筛选并查看详情。
+
+## 12. Phase 18：性能优化与交付展示
+
+- 路由拆包审计完成：除前台首页和后台仪表盘外，主要业务页面均为动态 import。
+- 图书、商品、活动、社区及后台缩略图统一延迟加载、异步解码；卡片图片容器保留稳定尺寸，降低 layout shift。
+- 图书、商品、活动、社区补齐可重试错误状态；活动和社区增加列表 Skeleton 与统一 EmptyState。
+- 预约、积分中心及后台表格继续复用既有 Skeleton、EmptyState、ErrorPanel 和 `aria-busy` 反馈。
+- GSAP / Anime.js 列表动画保留数量上限与卸载清理；Cursor 保持 RAF、失焦停止和设备降级策略。
+- 前台 title 随路由变化，description / keywords 动态同步；后台增加 `noindex,nofollow`。
+- README 已补充项目亮点、截图槽位、完整功能清单、运行方式与验证命令。
+
+## 13. Phase 18 最终验证
+
+交付前执行以下命令：
+
+```bash
+npm run build
+npm run smoke:web
+npm run smoke:api
+npm run check:motion
+node scripts/check-project.js
+git diff --check
+```
+
+2026-06-23 最终验证：以上六条命令全部通过。Web / Admin 构建分别转换 275 / 182 个模块；Web smoke 验证前后台路由与异步 chunk；API smoke 完整通过商城、图书、活动、社区、预约、积分、年度生日券及后台管理回归；Motion、项目结构与补丁格式检查均通过。

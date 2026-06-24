@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import { BaseBadge, BaseButton, BaseInput, BaseModal, BaseSelect, BaseTable } from '@/components/base'
 import { useAdminStore } from '@/stores/admin'
@@ -12,6 +12,8 @@ const level = ref('all')
 const modalOpen = ref(false)
 const saving = ref(false)
 const editingId = ref(null)
+const selectedIds = ref([])
+const batchLoading = ref(false)
 const form = reactive({ nickname: '', phone: '', email: '', level: '普通会员', points: 0, status: 'active' })
 
 const statusOptions = [
@@ -21,12 +23,15 @@ const statusOptions = [
 ]
 const levelOptions = ['普通会员', '银卡会员', '金卡会员', '黑金会员'].map((item) => ({ label: item, value: item }))
 const columns = [
+  { key: 'select', label: '' },
   { key: 'avatar', label: '头像' },
   { key: 'nickname', label: '昵称' },
   { key: 'phone', label: '手机号' },
   { key: 'email', label: '邮箱' },
   { key: 'level', label: '等级' },
+  { key: 'growthValue', label: '成长值' },
   { key: 'points', label: '积分' },
+  { key: 'lastCheckinDate', label: '最近签到' },
   { key: 'birthday', label: '生日' },
   { key: 'couponCount', label: '优惠券' },
   { key: 'orders', label: '订单' },
@@ -49,8 +54,44 @@ const stats = computed(() => [
   ['会员用户', adminStore.users.filter((item) => item.level !== '普通会员').length],
 ])
 
+const allVisibleSelected = computed(() => visible.value.length > 0 && visible.value.every((item) => selectedIds.value.includes(item.id)))
+
+function toggleSelect(id) {
+  selectedIds.value = selectedIds.value.includes(id)
+    ? selectedIds.value.filter((itemId) => itemId !== id)
+    : [...selectedIds.value, id]
+}
+
+function toggleSelectAll() {
+  selectedIds.value = allVisibleSelected.value ? [] : visible.value.map((item) => item.id)
+}
+
+async function batchUserStatus(nextStatus) {
+  const ids = [...selectedIds.value]
+  if (!ids.length || batchLoading.value) return
+  if (nextStatus === 'disabled' && !window.confirm(`\u6279\u91cf\u7981\u7528 ${ids.length} \u4e2a\u7528\u6237\uff1f`)) return
+  batchLoading.value = true
+  adminStore.apiError = ''
+  let failed = 0
+  try {
+    for (const id of ids) {
+      try { await adminStore.updateUser(id, { status: nextStatus }) }
+      catch { failed += 1 }
+    }
+    selectedIds.value = []
+    await adminStore.fetchAdminCollection('users')
+    if (failed) adminStore.apiError = `\u6279\u91cf\u64cd\u4f5c\u5b8c\u6210\uff0c${failed} \u9879\u5931\u8d25`
+  } finally {
+    batchLoading.value = false
+  }
+}
+
 onMounted(() => {
   adminStore.fetchAdminCollection('users')
+})
+watch(visible, (list) => {
+  const ids = new Set(list.map((item) => item.id))
+  selectedIds.value = selectedIds.value.filter((id) => ids.has(id))
 })
 
 function edit(item) {
@@ -108,12 +149,28 @@ async function toggle(item) {
       />
     </section>
 
+    <section class="admin-batch-bar">
+      <label>
+        <input class="admin-select-head" type="checkbox" :checked="allVisibleSelected" :disabled="!visible.length || batchLoading" @change="toggleSelectAll" />
+        <span>&#20840;&#36873;&#24403;&#21069;&#39029;</span>
+      </label>
+      <span class="admin-batch-bar__count">&#24050;&#36873;&#25321; {{ selectedIds.length }} &#39033;</span>
+      <BaseButton size="sm" variant="outline" :disabled="!selectedIds.length || batchLoading" :loading="batchLoading" @click="batchUserStatus('active')">&#25209;&#37327;&#21551;&#29992;</BaseButton>
+      <BaseButton size="sm" variant="danger" :disabled="!selectedIds.length || batchLoading" :loading="batchLoading" @click="batchUserStatus('disabled')">&#25209;&#37327;&#31105;&#29992;</BaseButton>
+    </section>
+
     <BaseTable
       :columns="columns"
       :items="visible"
       :loading="adminStore.apiLoading"
       empty-text="暂无匹配用户"
     >
+      <template #head-select>
+        <input class="admin-select-head" type="checkbox" :checked="allVisibleSelected" :disabled="!visible.length || batchLoading" aria-label="Select current page" @change="toggleSelectAll" />
+      </template>
+      <template #cell-select="{ item }">
+        <input class="admin-select-cell" type="checkbox" :checked="selectedIds.includes(item.id)" :aria-label="`select ${item.nickname || item.username || item.id}`" @change="toggleSelect(item.id)" />
+      </template>
       <template #cell-avatar="{ item }">
         <span class="admin-user-avatar">{{ (item.nickname || item.username || '用').slice(0, 1) }}</span>
       </template>
@@ -121,6 +178,8 @@ async function toggle(item) {
       <template #cell-birthday="{ value }">{{ value || '未设置' }}</template>
       <template #cell-couponCount="{ value }">{{ value || 0 }} 张</template>
       <template #cell-level="{ value }"><BaseBadge variant="premium">{{ value }}</BaseBadge></template>
+      <template #cell-growthValue="{ value }">{{ Number(value || 0).toLocaleString('zh-CN') }}</template>
+      <template #cell-lastCheckinDate="{ value }">{{ value || '未签到' }}</template>
       <template #cell-status="{ value }">
         <BaseBadge :variant="value === 'active' ? 'success' : 'neutral'">
           {{ value === 'active' ? '启用' : '禁用' }}

@@ -18,16 +18,16 @@ import {
   useAvatarHistory,
   verifyCurrentPhone,
 } from '../services/account.service.js'
-import { failure, success } from '../utils/response.js'
-import { getPointsCenter, redeemCoupon } from '../services/points.service.js'
+import { dbSuccess, failure, success } from '../utils/response.js'
+import { dailyCheckin, getPointsCenter, redeemCoupon } from '../services/points.service.js'
 
 export function registerAccountRoutes(router) {
   router.get('/api/account/overview', requireUser, async (req, res) => {
-    return success(res, await getAccountOverview(req.user.id))
+    return dbSuccess(res, await getAccountOverview(req.user.id))
   })
 
-  router.get('/api/users/me/overview', requireUser, async (req, res) => success(res, await getAccountOverview(req.user.id)))
-  router.get('/api/users/me/points', requireUser, async (req, res) => success(res, await listPointRecords(req.user.id)))
+  router.get('/api/users/me/overview', requireUser, async (req, res) => dbSuccess(res, await getAccountOverview(req.user.id)))
+  router.get('/api/users/me/points', requireUser, async (req, res) => dbSuccess(res, await listPointRecords(req.user.id)))
   router.get('/api/users/me/favorites', requireUser, async (req, res) => success(res, await listFavorites(req.user.id)))
   router.post('/api/users/me/favorites', requireUser, async (req, res) => success(res, await addFavorite(req.user.id, req.body), 'Favorite added', 201))
   router.delete('/api/users/me/favorites/:id', requireUser, async (req, res) => {
@@ -68,15 +68,19 @@ export function registerAccountRoutes(router) {
   })
 
   router.get('/api/account/points', requireUser, async (req, res) => {
-    return success(res, await listPointRecords(req.user.id))
+    return dbSuccess(res, await listPointRecords(req.user.id))
   })
 
   router.get('/api/account/points-center', requireUser, async (req, res) => {
-    return success(res, await getPointsCenter(req.user.id))
+    return dbSuccess(res, await getPointsCenter(req.user.id))
+  })
+
+  router.post('/api/account/points-center/checkin', requireUser, async (req, res) => {
+    return dbSuccess(res, await dailyCheckin(req.user.id), '签到成功')
   })
 
   router.post('/api/account/points-center/redeem/:couponId', requireUser, async (req, res) => {
-    return success(res, await redeemCoupon(req.user.id, req.params.couponId, req.body.requestKey), '兑换成功')
+    return dbSuccess(res, await redeemCoupon(req.user.id, req.params.couponId, req.body.requestKey), '兑换成功')
   })
 
   router.get('/api/account/addresses', requireUser, async (req, res) => {

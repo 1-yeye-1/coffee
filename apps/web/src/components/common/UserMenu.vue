@@ -1,8 +1,9 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseButton } from '@/components/base'
+import { resolveUploadUrl } from '@/api/upload'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 
@@ -11,6 +12,8 @@ const notificationsStore = useNotificationsStore()
 const router = useRouter()
 const open = ref(false)
 const menuRef = ref(null)
+const avatarFailed = ref(false)
+const avatarUrl = computed(() => authStore.user?.avatar ? resolveUploadUrl(authStore.user.avatar) : '')
 
 function close() {
   open.value = false
@@ -34,6 +37,14 @@ async function logout() {
 function refreshUnread() {
   if (authStore.isAuthenticated) notificationsStore.fetchUnreadCount()
 }
+
+function handleAvatarError() {
+  avatarFailed.value = true
+}
+
+watch(() => authStore.user?.avatar, () => {
+  avatarFailed.value = false
+})
 
 onMounted(() => {
   document.addEventListener('click', handleDocumentClick)
@@ -65,7 +76,8 @@ onBeforeUnmount(() => {
       @click.stop="open = !open"
     >
       <span class="user-menu__avatar" aria-hidden="true">
-        {{ authStore.user?.nickname?.slice(0, 1) || 'C' }}
+        <img v-if="avatarUrl && !avatarFailed" :src="avatarUrl" alt="" decoding="async" @error="handleAvatarError" />
+        <span v-else>{{ authStore.user?.nickname?.slice(0, 1) || 'C' }}</span>
       </span>
       <span class="user-menu__name">{{ authStore.user?.nickname || 'Coffee Member' }}</span>
       <span aria-hidden="true">⌄</span>
@@ -116,6 +128,13 @@ onBeforeUnmount(() => {
   font-weight: var(--cb-font-bold);
   background: var(--cb-color-coffee);
   border-radius: var(--cb-radius-pill);
+  overflow: hidden;
+}
+
+.user-menu__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .user-menu__name {

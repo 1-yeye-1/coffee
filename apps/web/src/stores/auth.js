@@ -58,6 +58,29 @@ export const useAuthStore = defineStore('auth', {
         this.loading = false
       }
     },
+    async loginBySms(payload) {
+      return this.loginWith(authApi.loginBySms, payload)
+    },
+    async loginByPassword(payload) {
+      return this.loginWith(authApi.loginByPassword, payload)
+    },
+    async loginWith(requester, payload) {
+      this.loading = true
+      this.error = ''
+      try {
+        const response = await requester(payload)
+        this.user = response.data.user
+        this.accessToken = response.data.token
+        this.persist()
+        window.dispatchEvent(new CustomEvent('coffee-book:auth-login'))
+        return this.user
+      } catch (error) {
+        this.error = error.message
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
     async register(payload) {
       this.loading = true
       this.error = ''

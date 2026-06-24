@@ -11,6 +11,7 @@ const rows = ref([])
 const detail = ref(null)
 const detailOpen = ref(false)
 const exportMessage = ref('')
+const selectedIds = ref([])
 const meta = reactive({ page: 1, pageSize: 15, total: 0 })
 const filters = reactive({
   userName: '',
@@ -24,6 +25,7 @@ const filters = reactive({
 })
 
 const columns = [
+  { key: 'select', label: '' },
   { key: 'createdAt', label: '时间' },
   { key: 'userName', label: '用户' },
   { key: 'role', label: '角色' },
@@ -82,6 +84,7 @@ const actionText = {
 }
 
 const pageCount = computed(() => Math.max(1, Math.ceil(meta.total / meta.pageSize)))
+const allVisibleSelected = computed(() => rows.value.length > 0 && rows.value.every((item) => selectedIds.value.includes(item.id)))
 
 function params(page = meta.page) {
   return { ...filters, page, pageSize: meta.pageSize }
@@ -93,6 +96,7 @@ async function load(page = meta.page) {
   try {
     const response = await getAdminLogs(params(page))
     rows.value = response.data
+    selectedIds.value = []
     Object.assign(meta, response.meta)
   } catch (err) {
     error.value = err.message
@@ -117,6 +121,16 @@ async function exportLogs() {
   } catch (err) {
     exportMessage.value = err.message || '导出功能暂未开放'
   }
+}
+
+function toggleSelect(id) {
+  selectedIds.value = selectedIds.value.includes(id)
+    ? selectedIds.value.filter((itemId) => itemId !== id)
+    : [...selectedIds.value, id]
+}
+
+function toggleSelectAll() {
+  selectedIds.value = allVisibleSelected.value ? [] : rows.value.map((item) => item.id)
 }
 
 function applyFilters() {
@@ -152,7 +166,19 @@ onMounted(() => load(1))
       <BaseButton @click="applyFilters">筛选</BaseButton>
     </section>
 
+    <section class="admin-batch-bar">
+      <label><input class="admin-select-head" type="checkbox" :checked="allVisibleSelected" :disabled="!rows.length" @change="toggleSelectAll" /> <span>&#20840;&#36873;&#24403;&#21069;&#39029;</span></label>
+      <span class="admin-batch-bar__count">&#24050;&#36873;&#25321; {{ selectedIds.length }} &#39033;</span>
+      <BaseButton size="sm" variant="outline" disabled>&#26085;&#24535;&#20165;&#25903;&#25345;&#26597;&#30475;&#65292;&#19981;&#25191;&#34892;&#25209;&#37327;&#21024;&#38500;</BaseButton>
+    </section>
+
     <BaseTable :columns="columns" :items="rows" :loading="loading" empty-text="暂无操作日志">
+      <template #head-select>
+        <input class="admin-select-head" type="checkbox" :checked="allVisibleSelected" :disabled="!rows.length" aria-label="Select current page" @change="toggleSelectAll" />
+      </template>
+      <template #cell-select="{ item }">
+        <input class="admin-select-cell" type="checkbox" :checked="selectedIds.includes(item.id)" :aria-label="`select log ${item.id}`" @change="toggleSelect(item.id)" />
+      </template>
       <template #cell-createdAt="{ value }">{{ new Date(value).toLocaleString('zh-CN') }}</template>
       <template #cell-userName="{ item }">{{ item.userName || `用户 ${item.userId || '-'}` }}</template>
       <template #cell-role="{ value }"><BaseBadge :variant="value === 'admin' ? 'premium' : 'info'">{{ value === 'admin' ? '管理员' : '普通用户' }}</BaseBadge></template>

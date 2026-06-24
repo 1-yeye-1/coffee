@@ -1,11 +1,11 @@
 /* Shared, low-cost interaction primitives for both storefront and admin. */
 :root {
   --cb-motion-instant: 150ms;
-  --cb-motion-quick: 220ms;
-  --cb-motion-base: 320ms;
-  --cb-motion-emphasis: 520ms;
-  --cb-motion-enter: cubic-bezier(0.16, 1, 0.3, 1);
-  --cb-motion-exit: cubic-bezier(0.4, 0, 1, 1);
+  --cb-motion-quick: 200ms;
+  --cb-motion-base: 260ms;
+  --cb-motion-emphasis: 300ms;
+  --cb-motion-enter: cubic-bezier(0.2, 0, 0, 1);
+  --cb-motion-exit: cubic-bezier(0.2, 0, 0, 1);
 }
 
 :where(a[href], button:not(:disabled), [role="button"]:not([aria-disabled="true"]), [role="link"], [data-cursor]) {
@@ -16,11 +16,11 @@
   cursor: not-allowed !important;
 }
 
-:where([draggable="true"], [data-draggable="true"]) {
+:where(.admin-seat-map [draggable="true"], .admin-seat-map [data-draggable="true"], .floor-map [draggable="true"], .floor-map [data-draggable="true"], .map-seat) {
   cursor: grab;
 }
 
-:where([draggable="true"], [data-draggable="true"]).is-dragging {
+:where(.admin-seat-map [draggable="true"], .admin-seat-map [data-draggable="true"], .floor-map [draggable="true"], .floor-map [data-draggable="true"], .map-seat).is-dragging {
   cursor: grabbing;
 }
 
@@ -55,7 +55,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   :where(.base-card, .catalog-card, .event-card, .post-card, .metric-card):not([data-tilt-card]):hover {
-    transform: translate3d(0, -0.3rem, 0);
+    transform: translate3d(0, -0.25rem, 0);
   }
 
   :where(.base-card, .catalog-card, .event-card, .post-card) :where(img, picture) {
@@ -80,10 +80,6 @@
     box-shadow var(--cb-motion-quick) var(--cb-ease-standard);
 }
 
-:where(.error-panel, .empty-state) {
-  animation: cb-state-enter var(--cb-motion-base) var(--cb-motion-enter) both;
-}
-
 html[data-theme="dark"] .base-button:not(.base-button--outline):not(.base-button--ghost):not(.base-button--danger) {
   color: var(--cream-50);
   background-image: linear-gradient(110deg, var(--coffee-900), var(--coffee-700), #7b5134) !important;
@@ -94,11 +90,6 @@ html[data-theme="dark"] .base-button:not(.base-button--outline):not(.base-button
     color: var(--cream-50);
     background-image: linear-gradient(110deg, var(--coffee-900), var(--coffee-700), #7b5134) !important;
   }
-}
-
-@keyframes cb-state-enter {
-  from { opacity: 0; transform: translate3d(0, 0.5rem, 0); }
-  to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -115,7 +106,4 @@ html[data-theme="dark"] .base-button:not(.base-button--outline):not(.base-button
     transform: none !important;
   }
 
-  :where(.error-panel, .empty-state) {
-    animation: none !important;
-  }
 }

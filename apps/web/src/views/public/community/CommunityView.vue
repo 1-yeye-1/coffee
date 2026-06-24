@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { BaseBadge, BaseButton, BaseTabs } from '@/components/base'
+import { BaseBadge, BaseButton, BaseSkeleton, BaseTabs, EmptyState, ErrorPanel } from '@/components/base'
 import CommunityPostCard from '@/components/community/CommunityPostCard.vue'
 import { useAnimeMotion } from '@/composables/useAnimeMotion'
 import { useCommunityMotion } from '@/composables/useCommunityMotion'
@@ -11,6 +11,7 @@ import { useGsapReveal } from '@/composables/useGsapReveal'
 import { useTiltCard } from '@/composables/useTiltCard'
 import { useAuthStore } from '@/stores/auth'
 import { useCommunityStore } from '@/stores/community'
+import { resolveUploadUrl } from '@/api/upload'
 import '@/assets/styles/pages/engagement.css'
 
 const route = useRoute()
@@ -43,6 +44,10 @@ const todayPosts = computed(() => communityStore.posts.filter((post) => new Date
 const todayComments = computed(() => communityStore.posts.reduce((total, post) => total + (post.comments || []).filter((comment) => new Date(comment.createdAt).toDateString() === todayKey).length, 0))
 const hotAuthor = computed(() => users.value[0]?.name || '等待你的分享')
 
+function isAvatarImage(value) {
+  return /^(https?:\/\/|data:|blob:|\/uploads\/)/.test(String(value || ''))
+}
+
 async function toggleFavorite(post, event) {
   if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: `/community/${post.slug}` } })
   await communityStore.toggleFavorite(post.id)
@@ -72,11 +77,12 @@ async function animateCommunity() {
 }
 
 onMounted(async () => {
-  if (!communityStore.posts.length) await communityStore.fetchPosts()
+  await communityStore.fetchPosts({ sort: feed.value === 'latest' ? 'latest' : 'hot' })
   animateCommunity()
 })
 
 watch(() => `${feed.value}:${visiblePosts.value.map((post) => post.id).join(',')}`, async () => {
+  if (communityStore.loading) return
   await nextTick()
   revealCards('.post-card', { key: 'posts', limit: 20 })
   bindTiltCards('.post-media[data-tilt-card]')
@@ -101,12 +107,13 @@ watch(() => `${feed.value}:${visiblePosts.value.map((post) => post.id).join(',')
 
     <main class="cb-container engagement-content engagement-layout">
       <section>
-        <BaseTabs v-model="feed" :tabs="tabs" />
-        <div class="post-grid"><CommunityPostCard v-for="post in visiblePosts" :key="post.id" :post="post" :liked="communityStore.likedIds.includes(post.id)" :favorite="communityStore.favoriteIds.includes(post.id)" @open="router.push(`/community/${post.slug}`)" @comment="openComments(post, $event)" @like="toggleLike(post, $event)" @favorite="toggleFavorite(post, $event)" /></div>
-        <div v-if="!visiblePosts.length" class="empty-state community-empty"><span aria-hidden="true">◇</span><h2>社区正在等待第一篇分享</h2><p>写下今天的阅读、咖啡或城市片段。</p></div>
+        <BaseTabs v-model="feed" variant="community" aria-label="社区排序" :tabs="tabs" />
+        <ErrorPanel v-if="communityStore.apiError" title="社区内容加载失败" :message="communityStore.apiError" @retry="communityStore.fetchPosts" />
+        <div class="post-grid"><BaseSkeleton v-if="communityStore.loading" v-for="index in 6" :key="`post-loading-${index}`" variant="card" /><CommunityPostCard v-for="post in visiblePosts" :key="post.id" :post="post" :liked="communityStore.likedIds.includes(post.id)" :favorite="communityStore.favoriteIds.includes(post.id)" @open="router.push(`/community/${post.slug}`)" @comment="openComments(post, $event)" @like="toggleLike(post, $event)" @favorite="toggleFavorite(post, $event)" /></div>
+        <EmptyState v-if="!communityStore.loading && !communityStore.apiError && !visiblePosts.length" class="community-empty" title="社区正在等待第一篇分享" description="写下今天的阅读、咖啡或城市片段。" action-label="发布帖子" @action="router.push('/community/create')"><template #icon>◇</template></EmptyState>
       </section>
 
-      <aside class="side-panel"><h2 class="section-title">热门话题</h2><div class="topic-cloud"><span v-for="topic in topics" :key="topic"># {{ topic }}</span></div><h2 class="section-title section-block">活跃用户</h2><div class="user-grid"><div v-for="user in users" :key="user.name" class="user-card"><span class="avatar">{{ user.avatar }}</span><div><strong>{{ user.name }}</strong><p>{{ user.posts }} 篇分享</p></div></div></div></aside>
+      <aside class="side-panel"><h2 class="section-title">热门话题</h2><div class="topic-cloud"><span v-for="topic in topics" :key="topic"># {{ topic }}</span></div><h2 class="section-title section-block">活跃用户</h2><div class="user-grid"><div v-for="user in users" :key="user.name" class="user-card"><span class="avatar"><img v-if="isAvatarImage(user.avatar)" :src="resolveUploadUrl(user.avatar)" alt="" loading="lazy" decoding="async" /><template v-else>{{ user.avatar }}</template></span><div><strong>{{ user.name }}</strong><p>{{ user.posts }} 篇分享</p></div></div></div></aside>
     </main>
   </div>
 </template>
@@ -114,4 +121,6 @@ watch(() => `${feed.value}:${visiblePosts.value.map((post) => post.id).join(',')
 <style scoped>
 .community-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--cb-space-3);padding-top:var(--cb-space-6)}.community-stat{display:grid;padding:var(--cb-space-4);gap:var(--cb-space-2);background:var(--cb-bg-surface);border:.0625rem solid var(--cb-border-soft);border-radius:var(--cb-radius-lg);box-shadow:var(--cb-shadow-sm)}.community-stat span{color:var(--cb-text-muted);font-size:var(--cb-font-size-sm)}.community-stat strong{font-size:var(--cb-font-size-2xl)}.community-empty{display:grid;min-height:16rem;place-content:center;text-align:center;animation:gentle-float 3s ease-in-out infinite alternate}.community-empty>span{color:var(--cb-color-gold);font-size:var(--cb-font-size-5xl)}
 :global(.community-like-particle),:global(.community-bookmark-flight){position:fixed;z-index:var(--cb-z-toast);color:var(--cb-color-gold);font-weight:var(--cb-font-bold);pointer-events:none;translate:-50% -50%;will-change:transform,opacity}:global(.community-like-particle){color:var(--cb-danger)}
+.user-card .avatar { overflow: hidden; }
+.user-card .avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 </style>
