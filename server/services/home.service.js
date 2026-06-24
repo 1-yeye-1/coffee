@@ -29,6 +29,18 @@ async function listHomeBooks() {
   return { items: rows, meta: pageMeta(total, 4) }
 }
 
+async function listHomeLiteBooks() {
+  const [rows] = await pool.execute(
+    `SELECT id, slug, title, author, category, rating, stock, status,
+      cover_tone AS coverTone, cover_url AS coverUrl, summary, description, updated_at AS updatedAt
+     FROM books
+     WHERE status IN ('available', 'active')
+     ORDER BY id ASC
+     LIMIT 3`,
+  )
+  return { items: rows, meta: pageMeta(rows.length, 3) }
+}
+
 async function listHomeProducts() {
   const [rows] = await pool.execute(
     `SELECT id, slug, name, category, image_url AS imageUrl, price, stock, status,
@@ -49,6 +61,25 @@ async function listHomeProducts() {
   }
 }
 
+async function listHomeLiteProducts() {
+  const [rows] = await pool.execute(
+    `SELECT id, slug, name, category, image_url AS imageUrl, price, stock, status,
+      flavor, tone, origin, description, updated_at AS updatedAt
+     FROM products
+     WHERE status = 'active'
+     ORDER BY id ASC
+     LIMIT 3`,
+  )
+  return {
+    items: rows.map((item) => ({
+      ...item,
+      price: Number(item.price),
+      flavor: parseJsonArray(item.flavor),
+    })),
+    meta: pageMeta(rows.length, 3),
+  }
+}
+
 async function listHomeEvents() {
   const [rows] = await pool.execute(
     `SELECT id, slug, title, category, DATE_FORMAT(event_date, '%Y-%m-%d') AS date,
@@ -64,6 +95,22 @@ async function listHomeEvents() {
   )
   const [[{ total }]] = await pool.execute("SELECT COUNT(*) AS total FROM events WHERE status IN ('published', 'ongoing', 'open', 'active')")
   return { items: rows, meta: pageMeta(total, 3) }
+}
+
+async function listHomeLiteEvents() {
+  const [rows] = await pool.execute(
+    `SELECT id, slug, title, category, DATE_FORMAT(event_date, '%Y-%m-%d') AS date,
+      event_time AS time, location, capacity, attendees, status, tone, summary, cover_url AS coverUrl
+     FROM events
+     WHERE status IN ('published', 'ongoing', 'open', 'active')
+     ORDER BY CASE
+       WHEN event_date >= CURRENT_DATE AND attendees < capacity THEN 0
+       ELSE 1 END ASC,
+       CASE WHEN event_date >= CURRENT_DATE THEN event_date END ASC,
+       event_date DESC, id ASC
+     LIMIT 3`,
+  )
+  return { items: rows, meta: pageMeta(rows.length, 3) }
 }
 
 async function listHomePosts() {
@@ -101,4 +148,20 @@ export async function getHomeSnapshot() {
     getCommunityStats(),
   ])
   return { books, products, events, posts, communityStats }
+}
+
+export async function getHomeLiteSnapshot() {
+  const [books, products, events] = await Promise.all([
+    listHomeLiteBooks(),
+    listHomeLiteProducts(),
+    listHomeLiteEvents(),
+  ])
+  return {
+    hero: null,
+    books,
+    products,
+    events,
+    posts: { items: [], meta: pageMeta(0, 0) },
+    communityStats: { members: 0, monthlyShares: 0, posts: 0, comments: 0 },
+  }
 }

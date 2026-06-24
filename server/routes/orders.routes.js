@@ -7,14 +7,17 @@ import {
   listOrders,
   payOrder,
 } from '../services/orders.service.js'
+import { rateLimit } from '../middlewares/security.js'
 import { failure, paginated, success } from '../utils/response.js'
 
 export function registerOrdersRoutes(router) {
-  router.post('/api/orders', requireUser, async (req, res) => {
+  const orderWriteLimit = rateLimit({ key: 'order-write', limit: 40 })
+
+  router.post('/api/orders', orderWriteLimit, requireUser, async (req, res) => {
     return success(res, await createOrder(req.user.id, req.body), '订单创建成功', 201)
   })
 
-  router.post('/api/orders/buy-now', requireUser, async (req, res) => {
+  router.post('/api/orders/buy-now', orderWriteLimit, requireUser, async (req, res) => {
     return success(res, await createBuyNowOrder(req.user.id, req.body), '订单创建成功', 201)
   })
 
@@ -29,11 +32,11 @@ export function registerOrdersRoutes(router) {
     return success(res, order)
   })
 
-  router.patch('/api/orders/:id/pay', requireUser, async (req, res) => {
+  router.patch('/api/orders/:id/pay', orderWriteLimit, requireUser, async (req, res) => {
     return success(res, await payOrder(req.params.id, req.user.id), '已提交支付，等待后台确认')
   })
 
-  router.patch('/api/orders/:id/cancel', requireUser, async (req, res) => {
+  router.patch('/api/orders/:id/cancel', orderWriteLimit, requireUser, async (req, res) => {
     return success(res, await changeOrderStatus(req.params.id, 'cancelled', req.user.id), '订单已取消')
   })
 

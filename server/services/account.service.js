@@ -9,6 +9,8 @@ const userSelect = `
   id, username, nickname, email, phone, avatar, status, points, level,
   growth_value AS growthValue, DATE_FORMAT(last_checkin_date, '%Y-%m-%d') AS lastCheckinDate,
   profile_public AS profilePublic, gender, DATE_FORMAT(birthday, '%Y-%m-%d') AS birthday, bio,
+  disabled_reason AS disabledReason, booking_limit_until AS bookingLimitUntil,
+  post_limit_until AS postLimitUntil,
   created_at AS createdAt, updated_at AS updatedAt
 `
 

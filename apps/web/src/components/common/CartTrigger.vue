@@ -1,15 +1,18 @@
 <script setup>
 import { nextTick, ref, watch } from 'vue'
 import { useCartStore } from '@/stores/cart'
-import { useAnimeMotion } from '@/composables/useAnimeMotion'
 
 const cartStore = useCartStore()
 const triggerRef = ref(null)
-const { bounceCart } = useAnimeMotion()
 watch(() => cartStore.itemCount, async (value, previous) => {
   if (value === previous) return
   await nextTick()
-  bounceCart(triggerRef.value?.$el || triggerRef.value)
+  const element = triggerRef.value?.$el || triggerRef.value
+  element?.animate?.([
+    { transform: 'scale(1)' },
+    { transform: 'scale(1.08)' },
+    { transform: 'scale(1)' },
+  ], { duration: 180, easing: 'ease-out' })
 })
 </script>
 

@@ -12,6 +12,7 @@ import {
   togglePostLike,
   unlikeComment,
 } from '../services/community.service.js'
+import { rateLimit } from '../middlewares/security.js'
 import { dbSuccess, failure, paginated, success } from '../utils/response.js'
 
 function requireBodyFields(res, payload, fields) {
@@ -24,6 +25,9 @@ function requireBodyFields(res, payload, fields) {
 }
 
 export function registerCommunityRoutes(router) {
+  const communityWriteLimit = rateLimit({ key: 'community-write', limit: 60 })
+  const communityReportLimit = rateLimit({ key: 'community-report', limit: 20 })
+
   router.get('/api/posts', async (req, res) => {
     const result = await listPosts(req.query)
     return paginated(res, result.items, result.meta)
@@ -39,18 +43,18 @@ export function registerCommunityRoutes(router) {
     return success(res, post)
   })
 
-  router.post('/api/posts', requireUser, async (req, res) => {
+  router.post('/api/posts', communityWriteLimit, requireUser, async (req, res) => {
     if (!requireBodyFields(res, req.body, ['title', 'content'])) return false
     return success(res, await createPost(req.body, req.user), '发布成功，等待审核', 201)
   })
 
-  router.post('/api/posts/:id/comments', requireUser, async (req, res) => {
+  router.post('/api/posts/:id/comments', communityWriteLimit, requireUser, async (req, res) => {
     if (!requireBodyFields(res, req.body, ['content'])) return false
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
     return success(res, await createComment(req.params.id, req.body, req.user), '评论成功', 201)
   })
 
-  router.post('/api/posts/:id/comments/:commentId/replies', requireUser, async (req, res) => {
+  router.post('/api/posts/:id/comments/:commentId/replies', communityWriteLimit, requireUser, async (req, res) => {
     if (!requireBodyFields(res, req.body, ['content'])) return false
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
     return success(
@@ -66,7 +70,7 @@ export function registerCommunityRoutes(router) {
     return success(res, {}, '评论已删除')
   })
 
-  router.post('/api/posts/:id/comments/:commentId/like', requireUser, async (req, res) => {
+  router.post('/api/posts/:id/comments/:commentId/like', communityWriteLimit, requireUser, async (req, res) => {
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
     return success(res, await likeComment(req.params.id, req.params.commentId, req.user.id), '已点赞')
   })
@@ -76,7 +80,7 @@ export function registerCommunityRoutes(router) {
     return success(res, await unlikeComment(req.params.id, req.params.commentId, req.user.id), '已取消点赞')
   })
 
-  router.post('/api/posts/:id/like', requireUser, async (req, res) => {
+  router.post('/api/posts/:id/like', communityWriteLimit, requireUser, async (req, res) => {
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
     return success(res, await togglePostLike(req.params.id, req.user.id))
   })
@@ -86,7 +90,7 @@ export function registerCommunityRoutes(router) {
     return success(res, { items: await listPostLikes(req.params.id) })
   })
 
-  router.post('/api/posts/:id/reports', requireUser, async (req, res) => {
+  router.post('/api/posts/:id/reports', communityReportLimit, requireUser, async (req, res) => {
     if (!requireBodyFields(res, req.body, ['reason'])) return false
     return success(res, await createContentReport(req.params.id, req.body, req.user.id), '举报已提交', 201)
   })

@@ -1,9 +1,9 @@
 /* Shared, low-cost interaction primitives for both storefront and admin. */
 :root {
-  --cb-motion-instant: 150ms;
-  --cb-motion-quick: 200ms;
-  --cb-motion-base: 260ms;
-  --cb-motion-emphasis: 300ms;
+  --cb-motion-instant: 120ms;
+  --cb-motion-quick: 160ms;
+  --cb-motion-base: 220ms;
+  --cb-motion-emphasis: 240ms;
   --cb-motion-enter: cubic-bezier(0.2, 0, 0, 1);
   --cb-motion-exit: cubic-bezier(0.2, 0, 0, 1);
 }
@@ -38,7 +38,7 @@
 
 .route-page-enter-from {
   opacity: 0;
-  transform: translate3d(0, 0.75rem, 0);
+  transform: translate3d(0, 0.5rem, 0);
 }
 
 .route-page-leave-to {

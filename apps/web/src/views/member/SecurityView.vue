@@ -32,7 +32,7 @@ const form = reactive({
 const currentPhone = computed(() => authStore.user?.phone || '')
 
 function isPhone(value) {
-  return /^1\d{10}$/.test(String(value || '').trim())
+  return /^\d{11}$/.test(String(value || '').trim())
 }
 
 function startCountdown(target, seconds = 60) {

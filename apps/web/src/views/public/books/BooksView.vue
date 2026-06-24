@@ -171,6 +171,9 @@ watch(() => visibleBooks.value.map((book) => book.id).join(','), async () => {
             <h2>{{ book.title }}</h2>
             <span class="catalog-card__author">{{ book.author }}</span>
             <BaseBadge :variant="book.stock > 0 ? 'success' : 'danger'">{{ book.status }}</BaseBadge>
+            <BaseBadge v-if="book.isRecommended || book.isFeatured" variant="premium">推荐</BaseBadge>
+            <BaseBadge v-if="book.isNew" variant="success">新书</BaseBadge>
+            <BaseBadge v-if="book.stock > 0 && book.stock <= book.lowStockThreshold" variant="warning">低库存</BaseBadge>
             <p>{{ book.summary }}</p>
             <div class="catalog-card__actions">
               <BaseButton size="sm" @click.stop="router.push(`/books/${book.slug}`)">查看详情</BaseButton>

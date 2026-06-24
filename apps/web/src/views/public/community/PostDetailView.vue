@@ -19,6 +19,7 @@ const comment = ref('')
 const isAnonymous = ref(false)
 const activeReplyId = ref(null)
 const replyContent = ref('')
+const commentRestrictionNotice = ref('')
 const likedCommentIds = ref(new Set())
 const toastVisible = ref(false)
 const toastTitle = ref('评论成功')
@@ -56,6 +57,19 @@ const formatDate = (value) => new Intl.DateTimeFormat('zh-CN', { dateStyle: 'med
 const commentCount = computed(() => Array.isArray(post.value?.comments) ? post.value.comments.length : 0)
 const isAvatarImage = (value) => /^(https?:\/\/|data:|blob:|\/uploads\/)/.test(String(value || ''))
 
+function formatRestrictionTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
 function showToast(title, message) {
   toastTitle.value = title
   toastMessage.value = message
@@ -63,26 +77,60 @@ function showToast(title, message) {
   nextTick(() => { toastVisible.value = true })
 }
 
+function friendlyCommunityRestriction(error) {
+  const rawMessage = String(error?.message || '')
+  const risk = error?.data?.risk || error?.data || {}
+  const reason = risk.reason || risk.penaltyReason || risk.limitReason || ''
+  const restoreAt = risk.restoreAt || risk.until || risk.endAt || risk.postLimitUntil || risk.commentLimitUntil || ''
+  const isCommunityRisk = error?.status === 403
+    || error?.statusCode === 403
+    || reason
+    || restoreAt
+    || /\u9650\u5236|\u98ce\u63a7|\u7981\u8a00|\u53d1\u5e16|\u8bc4\u8bba|\u4e92\u52a8|\u6062\u590d\u65f6\u95f4/.test(rawMessage)
+  if (!isCommunityRisk) return ''
+
+  const restoreMatch = rawMessage.match(/\u6062\u590d\u65f6\u95f4(?:\u4e3a|\uff1a|:)?\s*([^\uff0c\u3002\uff1b;]+)/)
+  const reasonMatch = rawMessage.match(/\u539f\u56e0(?:\u4e3a|\uff1a|:)?\s*([^\uff0c\u3002\uff1b;]+)/)
+  const parts = ['\u5f53\u524d\u65e0\u6cd5\u8bc4\u8bba\uff0c\u4f60\u7684\u793e\u533a\u4e92\u52a8\u6743\u9650\u6682\u65f6\u53d7\u9650\u3002']
+  if (reason || reasonMatch?.[1]) parts.push(`\u9650\u5236\u539f\u56e0\uff1a${reason || reasonMatch[1]}\u3002`)
+  if (restoreAt || restoreMatch?.[1]) parts.push(`\u6062\u590d\u65f6\u95f4\uff1a${formatRestrictionTime(restoreAt || restoreMatch[1])}\u3002`)
+  return parts.join('')
+}
+
 async function submitComment() {
   if (!comment.value.trim()) return
   if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
-  await communityStore.addComment(post.value.id, comment.value, isAnonymous.value)
-  comment.value = ''
-  commentsOpen.value = true
-  await nextTick()
-  const comments = commentsRef.value?.querySelectorAll('.comment') || []
-  highlightPost(comments[comments.length - 1])
-  showToast('评论成功', '你的评论已发布。')
+  commentRestrictionNotice.value = ''
+  try {
+    await communityStore.addComment(post.value.id, comment.value, isAnonymous.value)
+    comment.value = ''
+    commentsOpen.value = true
+    await nextTick()
+    const comments = commentsRef.value?.querySelectorAll('.comment') || []
+    highlightPost(comments[comments.length - 1])
+    showToast('\u8bc4\u8bba\u6210\u529f', '\u4f60\u7684\u8bc4\u8bba\u5df2\u53d1\u5e03\u3002')
+  } catch (error) {
+    const message = friendlyCommunityRestriction(error) || '\u5f53\u524d\u65e0\u6cd5\u8bc4\u8bba\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002'
+    commentRestrictionNotice.value = message
+    showToast('\u8bc4\u8bba\u5931\u8d25', message)
+  }
 }
 
 async function submitReply(parent) {
   if (!replyContent.value.trim()) return
   if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
-  await communityStore.replyComment(post.value.id, parent.id, replyContent.value)
-  replyContent.value = ''
-  activeReplyId.value = null
-  commentsOpen.value = true
-  showToast('回复成功', '你的回复已发布。')
+  commentRestrictionNotice.value = ''
+  try {
+    await communityStore.replyComment(post.value.id, parent.id, replyContent.value)
+    replyContent.value = ''
+    activeReplyId.value = null
+    commentsOpen.value = true
+    showToast('\u56de\u590d\u6210\u529f', '\u4f60\u7684\u56de\u590d\u5df2\u53d1\u5e03\u3002')
+  } catch (error) {
+    const message = friendlyCommunityRestriction(error) || '\u5f53\u524d\u65e0\u6cd5\u56de\u590d\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002'
+    commentRestrictionNotice.value = message
+    showToast('\u56de\u590d\u5931\u8d25', message)
+  }
 }
 
 async function toggleCommentLike(item) {
@@ -222,6 +270,7 @@ watch(postParam, (value) => {
           </div>
           <div class="comment-composer">
             <BaseTextarea v-model="comment" label="发表评论" placeholder="写下你的想法..." :maxlength="300" show-count />
+            <p v-if="commentRestrictionNotice" class="comment-restriction-notice" role="alert">{{ commentRestrictionNotice }}</p>
             <div class="comment-composer__actions">
               <label class="anonymous-toggle"><input v-model="isAnonymous" type="checkbox" /> 匿名评论</label>
               <BaseButton :disabled="!comment.trim()" @click="submitComment">发表评论</BaseButton>
@@ -386,6 +435,17 @@ watch(postParam, (value) => {
   background: color-mix(in srgb, var(--cb-bg-soft) 72%, transparent);
   border: 0.0625rem solid var(--cb-border-soft);
   border-radius: var(--cb-radius-xl);
+}
+.comment-restriction-notice {
+  margin: 0;
+  padding: var(--cb-space-3);
+  color: var(--cb-danger);
+  background: color-mix(in srgb, var(--cb-danger) 10%, var(--cb-bg-surface));
+  border: 0.0625rem solid color-mix(in srgb, var(--cb-danger) 28%, transparent);
+  border-radius: var(--cb-radius-lg);
+  font-size: var(--cb-font-size-sm);
+  line-height: var(--cb-line-relaxed);
+  overflow-wrap: anywhere;
 }
 .comment-reply-form {
   display: grid;

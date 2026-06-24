@@ -1,13 +1,12 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 
-import NotificationDrawer from './NotificationDrawer.vue'
-
 const authStore = useAuthStore()
 const notificationsStore = useNotificationsStore()
+const NotificationDrawer = defineAsyncComponent(() => import('./NotificationDrawer.vue'))
 const open = ref(false)
 
 async function refresh() {
@@ -17,6 +16,7 @@ async function refresh() {
 
 function toggle() {
   open.value = !open.value
+  if (open.value && (import.meta.env.DEV || import.meta.env.VITE_HOME_PERF === '1')) console.info(`[home-perf] header-lazy-loaded: ${Math.round(performance.now())}ms`)
 }
 
 onMounted(() => {
@@ -55,7 +55,7 @@ watch(open, (value) => {
         {{ notificationsStore.unreadCount > 99 ? '99+' : notificationsStore.unreadCount }}
       </span>
     </button>
-    <NotificationDrawer v-model="open" />
+    <NotificationDrawer v-if="open" v-model="open" />
   </div>
 </template>
 

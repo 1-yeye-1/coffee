@@ -16,7 +16,7 @@ const adminColumns = `
   id, username, phone, nickname, avatar, status, last_login_at AS lastLoginAt,
   created_at AS createdAt, updated_at AS updatedAt
 `
-const phonePattern = /^1\d{10}$/
+const phonePattern = /^\d{11}$/
 const codeScenes = new Set(['login', 'register', 'change_phone_old', 'change_phone_new', 'booking_guest'])
 
 export function normalizePhone(phone) {
@@ -25,7 +25,7 @@ export function normalizePhone(phone) {
 
 export function assertPhone(phone) {
   if (!phonePattern.test(normalizePhone(phone))) {
-    throw Object.assign(new Error('请输入 11 位中国大陆手机号'), { statusCode: 400 })
+    throw Object.assign(new Error('请输入 11 位手机号'), { statusCode: 400 })
   }
 }
 

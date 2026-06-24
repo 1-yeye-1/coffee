@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { defineAsyncComponent, onMounted, ref } from 'vue'
 
 import NotificationBell from '@/components/notifications/NotificationBell.vue'
 
@@ -7,10 +7,10 @@ import CartTrigger from './CartTrigger.vue'
 import CursorSettings from './CursorSettings.vue'
 import GlobalSearchTrigger from './GlobalSearchTrigger.vue'
 import LayoutShell from './LayoutShell.vue'
-import MobileNavigation from './MobileNavigation.vue'
 import ThemeToggle from './ThemeToggle.vue'
 import UserMenu from './UserMenu.vue'
 
+const MobileNavigation = defineAsyncComponent(() => import('./MobileNavigation.vue'))
 const mobileOpen = ref(false)
 const navigation = [
   { label: '首页', to: '/' },
@@ -24,6 +24,18 @@ const navigation = [
 function isActive(path, currentPath) {
   return path === '/' ? currentPath === path : currentPath.startsWith(path)
 }
+
+function logHeaderPerf(label) {
+  if (!(import.meta.env.DEV || import.meta.env.VITE_HOME_PERF === '1') || typeof performance === 'undefined') return
+  console.info(`[home-perf] ${label}: ${Math.round(performance.now())}ms`)
+}
+
+function openMobileMenu() {
+  mobileOpen.value = true
+  logHeaderPerf('header-lazy-loaded')
+}
+
+onMounted(() => logHeaderPerf('header-interactive'))
 </script>
 
 <template>
@@ -57,7 +69,7 @@ function isActive(path, currentPath) {
           type="button"
           aria-label="打开移动端菜单"
           :aria-expanded="mobileOpen"
-          @click="mobileOpen = true"
+          @click="openMobileMenu"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 7h16M4 12h16M4 17h16" />
@@ -66,7 +78,7 @@ function isActive(path, currentPath) {
       </div>
     </LayoutShell>
 
-    <MobileNavigation v-model="mobileOpen" :items="navigation" />
+    <MobileNavigation v-if="mobileOpen" v-model="mobileOpen" :items="navigation" />
   </header>
 </template>
 

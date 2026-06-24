@@ -39,7 +39,7 @@ export function useTiltCard(root = null, options = {}) {
     card.classList.remove('is-tilting')
     const targets = [card, ...card.querySelectorAll(LAYER_SELECTOR)]
     if (immediate || reducedMedia?.matches) gsap.set(targets, { clearProps: 'transform,willChange' })
-    else gsap.to(targets, { x: 0, y: 0, rotateX: 0, rotateY: 0, duration: 0.48, ease: 'power3.out', overwrite: true, clearProps: 'transform,willChange' })
+    else gsap.to(targets, { x: 0, y: 0, rotateX: 0, rotateY: 0, duration: 0.22, ease: 'power3.out', overwrite: true, clearProps: 'transform,willChange' })
     card.style.removeProperty('--tilt-shadow-x')
     card.style.removeProperty('--tilt-shadow-y')
   }
@@ -61,10 +61,10 @@ export function useTiltCard(root = null, options = {}) {
         card.classList.add('is-tilting')
         card.style.setProperty('--tilt-shadow-x', `${(-rotateY * 0.7).toFixed(2)}px`)
         card.style.setProperty('--tilt-shadow-y', `${(rotateX * 0.7 + 10).toFixed(2)}px`)
-        gsap.to(card, { rotateX, rotateY, y: -4, duration: 0.22, ease: 'power2.out', overwrite: true, transformPerspective: 900 })
+        gsap.to(card, { rotateX, rotateY, y: -4, duration: 0.18, ease: 'power2.out', overwrite: true, transformPerspective: 900 })
         card.querySelectorAll(LAYER_SELECTOR).forEach((layer) => {
           const depth = Math.min(Math.max(Number(layer.dataset.tiltLayer) || 1, 0.5), 2)
-          gsap.to(layer, { x: x * 5 * depth, y: y * 4 * depth, duration: 0.28, ease: 'power2.out', overwrite: true })
+          gsap.to(layer, { x: x * 5 * depth, y: y * 4 * depth, duration: 0.2, ease: 'power2.out', overwrite: true })
         })
       })
     }

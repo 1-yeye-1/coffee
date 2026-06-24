@@ -103,7 +103,7 @@ coffee-book/
 └─ DELIVERY.md
 ```
 
-更详细说明见 [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)。
+更详细说明见 [`docs/项目结构说明.md`](docs/项目结构说明.md)。
 
 ## 5. 环境要求
 
@@ -251,10 +251,12 @@ server/public/uploads/
 
 ## 11. 更多文档
 
-- [项目结构说明](docs/PROJECT_STRUCTURE.md)
-- [接口文档](docs/API.md)
-- [数据库设计](docs/DATABASE.md)
-- [系统架构说明](docs/ARCHITECTURE.md)
-- [演示指南](docs/DEMO_GUIDE.md)
-- [测试说明](docs/TESTING.md)
+- [项目结构说明](docs/项目结构说明.md)
+- [接口文档](docs/接口文档.md)
+- [数据库设计](docs/数据库设计说明.md)
+- [系统架构说明](docs/系统架构说明.md)
+- [演示指南](docs/演示指南.md)
+- [测试说明](docs/测试说明.md)
+- [安全测试报告](docs/安全测试报告.md)
+- [前后台闭环人工回归清单](docs/前后台闭环人工回归清单.md)
 - [交付说明](DELIVERY.md)

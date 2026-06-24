@@ -29,6 +29,7 @@ const selectedIds = ref([])
 const batchLoading = ref(false)
 let dragState = null
 let suppressedClickId = null
+let refreshTimer = 0
 
 const { revealCards, revealSeatMap, animateProgress } = useGsapReveal(pageRef)
 const { pulseSeat, wiggleIcon, flashRow, successCheck } = useAnimeMotion()
@@ -162,6 +163,10 @@ async function refresh() {
 
 const scheduleRefresh = debounce(refresh, 200)
 
+function refreshWhenVisible() {
+  if (document.visibilityState === 'visible') refresh()
+}
+
 function toggleSelect(id) {
   selectedIds.value = selectedIds.value.includes(id)
     ? selectedIds.value.filter((itemId) => itemId !== id)
@@ -248,8 +253,16 @@ onMounted(async () => {
   await refresh()
   await nextTick()
   revealCards('.admin-stat', { key: 'seat-stats', stagger: 0.055 })
+  window.addEventListener('focus', refreshWhenVisible)
+  document.addEventListener('visibilitychange', refreshWhenVisible)
+  refreshTimer = window.setInterval(refreshWhenVisible, 15000)
 })
-onBeforeUnmount(scheduleRefresh.cancel)
+onBeforeUnmount(() => {
+  scheduleRefresh.cancel()
+  window.removeEventListener('focus', refreshWhenVisible)
+  document.removeEventListener('visibilitychange', refreshWhenVisible)
+  window.clearInterval(refreshTimer)
+})
 </script>
 
 <template>

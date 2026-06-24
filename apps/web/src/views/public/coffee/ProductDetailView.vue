@@ -201,6 +201,10 @@ onMounted(loadProduct)
           <div class="cb-cluster">
             <BaseBadge variant="neutral">{{ product?.category || '商品' }}</BaseBadge>
             <BaseBadge :variant="stock > 0 ? 'success' : 'danger'">{{ stock > 0 ? '有库存' : '已售罄' }}</BaseBadge>
+            <BaseBadge v-if="product?.isFeatured" variant="premium">推荐</BaseBadge>
+            <BaseBadge v-if="product?.isNew" variant="success">新品</BaseBadge>
+            <BaseBadge v-if="product?.isHot" variant="warning">热销</BaseBadge>
+            <BaseBadge v-if="stock > 0 && stock <= product?.lowStockThreshold" variant="warning">低库存</BaseBadge>
           </div>
           <h1>{{ product?.name || '商品详情' }}</h1>
           <div class="catalog-price-row">

@@ -115,8 +115,10 @@ onBeforeUnmount(restorePage)
 
 .base-drawer__panel {
   display: flex;
-  width: min(90vw, 28rem);
+  width: clamp(24rem, 72vw, 72rem);
+  max-width: 100vw;
   height: 100%;
+  min-width: 0;
   flex-direction: column;
   color: var(--cb-text-primary);
   background: var(--cb-bg-elevated);
@@ -165,8 +167,26 @@ onBeforeUnmount(restorePage)
 }
 
 .base-drawer__body {
+  min-width: 0;
   padding: var(--cb-space-5);
+  overflow-x: hidden;
   overflow-y: auto;
+}
+
+.base-drawer__body > :deep(*) {
+  max-width: 100%;
+}
+
+@media (max-width: 48rem) {
+  .base-drawer__panel {
+    width: 100vw;
+  }
+
+  .base-drawer__header,
+  .base-drawer__footer,
+  .base-drawer__body {
+    padding: var(--cb-space-4);
+  }
 }
 
 .base-drawer-left-enter-active,

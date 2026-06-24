@@ -14,7 +14,7 @@ body{color:var(--text-main);background-color:var(--page-bg);background-image:lin
 .admin-stat:hover,.community-stat:hover{transform:translateY(-4px);box-shadow:var(--shadow-card)!important}
 .admin-stat strong,.community-stat strong{color:var(--coffee-800);font-size:2rem!important}
 .admin-filter-bar,.community-toolbar,.admin-toolbar{padding:1.25rem!important;border:1px solid var(--field-border)!important;border-radius:20px!important;background:color-mix(in srgb,var(--panel-bg) 76%,transparent)!important;box-shadow:var(--cb-shadow-md);backdrop-filter:blur(20px)}
-.base-table-wrap{overflow:hidden!important;border-color:var(--border-soft)!important;border-radius:20px!important;box-shadow:var(--shadow-card)!important}
+.base-table-wrap{overflow-x:auto!important;overflow-y:hidden!important;border-color:var(--border-soft)!important;border-radius:20px!important;box-shadow:var(--shadow-card)!important}
 .base-table th{padding-block:1rem!important;color:var(--cb-text-primary)!important;background:var(--cb-bg-soft)!important;text-transform:none;letter-spacing:.02em}
 .base-table td{padding-block:1rem!important}.base-table tbody tr{transition:background var(--transition-fast),box-shadow var(--transition-fast)}
 .base-table tbody tr:hover{background:color-mix(in srgb,var(--gold-400) 10%,var(--table-bg))!important;box-shadow:inset 3px 0 var(--gold-500)}

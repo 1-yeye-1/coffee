@@ -25,6 +25,12 @@ const normalize = (book = {}) => ({
   locationLabel: book.locationLabel || '',
   reviewAverage: Number(book.reviewAverage) || 0,
   reviewCount: Number(book.reviewCount) || 0,
+  isRecommended: Boolean(book.isRecommended),
+  isFeatured: Boolean(book.isFeatured),
+  isNew: Boolean(book.isNew),
+  lowStockThreshold: Number(book.lowStockThreshold || 3),
+  shelfArea: book.shelfArea || '',
+  shelfCode: book.shelfCode || '',
 })
 
 function safeSlug(value) {

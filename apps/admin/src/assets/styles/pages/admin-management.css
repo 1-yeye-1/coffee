@@ -217,11 +217,21 @@
   display: grid;
   min-width: 0;
   flex: 1;
+  height: 12rem;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--cb-space-2);
   justify-items: center;
 }
 
+.admin-bar em {
+  color: var(--cb-text-primary);
+  font-size: var(--cb-font-size-sm);
+  font-style: normal;
+  font-weight: var(--cb-font-bold);
+}
+
 .admin-bar span {
+  align-self: end;
   width: min(100%, 2.5rem);
   min-height: var(--cb-space-2);
   background: linear-gradient(var(--cb-color-gold), var(--cb-color-coffee));

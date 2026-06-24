@@ -8,6 +8,7 @@ import {
   listSpaces,
   listBookings,
 } from '../services/booking.service.js'
+import { rateLimit } from '../middlewares/security.js'
 import { failure, success } from '../utils/response.js'
 
 function requireBodyFields(res, payload, fields) {
@@ -20,6 +21,8 @@ function requireBodyFields(res, payload, fields) {
 }
 
 export function registerBookingRoutes(router) {
+  const bookingWriteLimit = rateLimit({ key: 'booking-write', limit: 40 })
+
   router.get('/api/spaces', async (_req, res) => {
     return success(res, await listSpaces())
   })
@@ -34,7 +37,7 @@ export function registerBookingRoutes(router) {
     return success(res, await listSpaceSlots(req.params.slug))
   })
 
-  router.post('/api/bookings', requireUser, async (req, res) => {
+  router.post('/api/bookings', bookingWriteLimit, requireUser, async (req, res) => {
     if (!requireBodyFields(res, req.body, ['date', 'timeSlot', 'seatId', 'peopleCount'])) return false
     return success(res, await createBooking(req.body, req.user.id), '预约成功', 201)
   })
@@ -44,7 +47,7 @@ export function registerBookingRoutes(router) {
     return success(res, result.items)
   })
 
-  router.post('/api/bookings/guest', async (req, res) => {
+  router.post('/api/bookings/guest', bookingWriteLimit, async (req, res) => {
     if (!requireBodyFields(res, req.body, ['phone', 'captchaId', 'captchaCode', 'name', 'date', 'timeSlot', 'seatId', 'peopleCount'])) return false
     const result = await createGuestBooking(req.body)
     return success(res, result, result.accountCreated

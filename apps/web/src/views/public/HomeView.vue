@@ -1,57 +1,87 @@
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { fetchHomeSnapshot } from '@/api/home'
+import { fetchHomeLiteSnapshot, fetchHomeSnapshot } from '@/api/home'
 import { resolveUploadUrl } from '@/api/upload'
-import { BaseBadge, BaseButton, BaseCard, BaseSkeleton, BaseToast, ErrorPanel } from '@/components/base'
+import BaseBadge from '@/components/base/BaseBadge.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
+import BaseCard from '@/components/base/BaseCard.vue'
+import BaseSkeleton from '@/components/base/BaseSkeleton.vue'
+import BaseToast from '@/components/base/BaseToast.vue'
+import ErrorPanel from '@/components/base/ErrorPanel.vue'
 import { useCommunityStore } from '@/stores/community'
 import { useBooksStore } from '@/stores/books'
 import { useEventsStore } from '@/stores/events'
 import { useProductsStore } from '@/stores/products'
-import { useAnimeMotion } from '@/composables/useAnimeMotion'
-import { useGsapNumber } from '@/composables/useGsapNumber'
-import { useGsapReveal } from '@/composables/useGsapReveal'
-import { useTiltCard } from '@/composables/useTiltCard'
 
 const router = useRouter()
 const communityStore = useCommunityStore()
 const booksStore = useBooksStore()
 const eventsStore = useEventsStore()
 const productsStore = useProductsStore()
+const HomeMotionRuntime = defineAsyncComponent(() => import('@/components/home/HomeMotionRuntime.vue'))
 const HOME_CACHE_KEY = 'coffee-book-home-cache-v2'
 const HOME_CACHE_TTL = 1000 * 60 * 10
+const HOME_LITE_TIMEOUT_MS = 1200
+const HOME_SNAPSHOT_TIMEOUT_MS = 1800
+const HOME_ERROR_MESSAGE = 'Home content is temporarily unavailable. Please try again later.'
+const perfEnabled = import.meta.env.DEV || import.meta.env.VITE_HOME_PERF === '1'
+const homePerfStart = typeof performance !== 'undefined' ? performance.now() : Date.now()
 const databasePosts = computed(() => communityStore.posts.slice(0, 3))
 const homeRef = ref(null)
 const toastVisible = ref(false)
 const homeLoading = ref(true)
 const homeError = ref('')
 const homeAnimated = ref(false)
+const homeAnimationScheduled = ref(false)
+const motionReady = ref(false)
 const communityStats = ref({ members: 0, monthlyShares: 0, posts: 0, comments: 0 })
-const { revealCards, revealOnScroll, floatVisual, bindParallax } = useGsapReveal(homeRef)
-const { animateCounts } = useGsapNumber()
-const { wiggleIcon } = useAnimeMotion()
-const { bindTiltCards } = useTiltCard(homeRef)
+let liteRequest = null
+let fullRequest = null
+let deferredModulesLoaded = false
+let homeAbortController = null
+let fullHomeTimer = 0
+let motionTimer = 0
+let scrollDeferredBound = false
+let fullHomeScrollHandler = null
 
-const books = computed(() => booksStore.items.slice(0, 4).map((book) => ({ ...book, description: book.summary || book.description, tone: book.coverTone || 'forest' })))
-const coffees = computed(() => productsStore.items.slice(0, 4).map((product) => ({ ...product, flavor: Array.isArray(product.flavor) ? product.flavor.join('、') : product.flavor, price: `¥${product.price}`, stock: product.stock > 0 ? '现货' : '售罄', badge: product.stock > 0 ? 'success' : 'neutral', tone: product.tone || 'floral' })))
-const events = computed(() => eventsStore.items.slice(0, 3).map((event) => ({ ...event, date: event.date.slice(5).replace('-', '.'), weekday: new Intl.DateTimeFormat('zh-CN', { weekday: 'short' }).format(new Date(`${event.date}T00:00:00`)), attendees: `${event.attendees} / ${event.capacity} 人`, badge: event.attendees >= event.capacity ? 'warning' : 'success' })))
+const books = computed(() => booksStore.items.slice(0, 4).map((book) => ({
+  ...book,
+  description: book.summary || book.description,
+  tone: book.coverTone || 'forest',
+})))
+const coffees = computed(() => productsStore.items.slice(0, 4).map((product) => ({
+  ...product,
+  flavor: Array.isArray(product.flavor) ? product.flavor.join('\u3001') : product.flavor,
+  price: '\u00a5' + product.price,
+  stock: product.stock > 0 ? '\u73b0\u8d27' : '\u552e\u7f44',
+  badge: product.stock > 0 ? 'success' : 'neutral',
+  tone: product.tone || 'floral',
+})))
+const events = computed(() => eventsStore.items.slice(0, 3).map((event) => ({
+  ...event,
+  date: event.date.slice(5).replace('-', '.'),
+  weekday: new Intl.DateTimeFormat('zh-CN', { weekday: 'short' }).format(new Date(event.date + 'T00:00:00')),
+  attendees: event.attendees + ' / ' + event.capacity + ' \u4eba',
+  badge: event.attendees >= event.capacity ? 'warning' : 'success',
+})))
 const stats = computed(() => [
-  { label: '精选图书', value: booksStore.meta?.total || booksStore.items.length },
-  { label: '咖啡商品', value: productsStore.meta?.total || productsStore.items.length },
-  { label: '文化活动', value: eventsStore.items.length },
-  { label: '社区帖子', value: communityStats.value.posts },
+  { label: '\u7cbe\u9009\u56fe\u4e66', value: booksStore.meta?.total || booksStore.items.length },
+  { label: '\u5496\u5561\u5546\u54c1', value: productsStore.meta?.total || productsStore.items.length },
+  { label: '\u6587\u5316\u6d3b\u52a8', value: eventsStore.items.length },
+  { label: '\u793e\u533a\u5e16\u5b50', value: communityStats.value.posts },
 ])
 
 const communityMetrics = computed(() => [
-  { label: '社区成员', value: communityStats.value.members },
-  { label: '每月分享', value: communityStats.value.monthlyShares },
+  { label: '\u793e\u533a\u6210\u5458', value: communityStats.value.members },
+  { label: '\u6bcf\u6708\u5206\u4eab', value: communityStats.value.monthlyShares },
 ])
 
 const benefits = [
-  { index: '01', title: '积分返利', description: '每一次阅读、消费与活动参与都能积累积分，兑换更多生活灵感。' },
-  { index: '02', title: '活动优先报名', description: '提前锁定读书会、工作坊与城市文化活动中的珍贵席位。' },
-  { index: '03', title: '会员专属折扣', description: '精选图书、精品咖啡与空间预约均可享受会员专属价格。' },
+  { index: '01', title: '\u79ef\u5206\u8fd4\u5229', description: '\u6bcf\u4e00\u6b21\u9605\u8bfb\u3001\u6d88\u8d39\u4e0e\u6d3b\u52a8\u53c2\u4e0e\u90fd\u80fd\u79ef\u7d2f\u79ef\u5206\uff0c\u5151\u6362\u66f4\u591a\u751f\u6d3b\u7075\u611f\u3002' },
+  { index: '02', title: '\u6d3b\u52a8\u4f18\u5148\u62a5\u540d', description: '\u63d0\u524d\u9501\u5b9a\u8bfb\u4e66\u4f1a\u3001\u5de5\u4f5c\u574a\u4e0e\u57ce\u5e02\u6587\u5316\u6d3b\u52a8\u4e2d\u7684\u73cd\u8d35\u5e2d\u4f4d\u3002' },
+  { index: '03', title: '\u4f1a\u5458\u4e13\u5c5e\u6298\u6263', description: '\u7cbe\u9009\u56fe\u4e66\u3001\u7cbe\u54c1\u5496\u5561\u4e0e\u7a7a\u95f4\u9884\u7ea6\u5747\u53ef\u4eab\u53d7\u4f1a\u5458\u4e13\u5c5e\u4ef7\u683c\u3002' },
 ]
 
 function navigate(path) {
@@ -66,6 +96,11 @@ function handleHomeImageError(event) {
   event.currentTarget.hidden = true
 }
 
+function logHomePerf(label, startedAt = homePerfStart) {
+  if (!perfEnabled || typeof performance === 'undefined') return
+  console.info(`[home-perf] ${label}: ${Math.round(performance.now() - startedAt)}ms`)
+}
+
 function versionedUploadUrl(url, version) {
   const resolved = resolveUploadUrl(url)
   if (!resolved || !version) return resolved
@@ -78,8 +113,17 @@ function isAvatarImage(value) {
 
 function runIdle(callback) {
   if (typeof window === 'undefined') return callback()
-  if ('requestIdleCallback' in window) return window.requestIdleCallback(callback, { timeout: 900 })
-  return window.setTimeout(callback, 80)
+  if ('requestIdleCallback' in window) return window.requestIdleCallback(callback, { timeout: 300 })
+  return window.setTimeout(callback, 24)
+}
+
+function runAfterPaint(callback) {
+  if (typeof window === 'undefined') return callback()
+  window.requestAnimationFrame(() => window.requestAnimationFrame(callback))
+}
+
+function reducedMotion() {
+  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 function readHomeCache() {
@@ -117,6 +161,7 @@ function hydrateHomeCache() {
   if (!eventsStore.items.length && Array.isArray(cache.events)) eventsStore.$patch({ items: cache.events })
   if (!communityStore.posts.length && Array.isArray(cache.posts)) communityStore.$patch({ posts: cache.posts })
   if (cache.communityStats) communityStats.value = cache.communityStats
+  logHomePerf('cache-hit')
   return true
 }
 
@@ -150,71 +195,166 @@ function applyHomeSnapshot(snapshot) {
 
 const hasHomeData = computed(() => books.value.length || coffees.value.length || events.value.length || databasePosts.value.length)
 
-async function animateHome() {
-  if (homeLoading.value || homeAnimated.value) return
-  homeAnimated.value = true
-  await nextTick()
-  revealCards('.hero__stagger', { key: 'hero', y: 26, duration: 0.58, stagger: 0.08 })
-  revealOnScroll('[data-reveal]', { limit: 20 })
-  floatVisual('.hero-art__card')
-  bindParallax('.hero', '.hero-art')
-  animateCounts(homeRef.value?.querySelectorAll('[data-count]') || [], stats.value.map((item) => item.value), { suffix: '+' })
-  bindTiltCards()
+function wiggleIcon(element) {
+  if (!element || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  element.animate?.([
+    { transform: 'rotate(0deg) scale(1)' },
+    { transform: 'rotate(-8deg) scale(1.08)' },
+    { transform: 'rotate(6deg) scale(1)' },
+  ], { duration: 180, easing: 'ease-out' })
 }
 
-async function waitForHomeImages() {
+async function waitForHeroImages() {
+  const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
   await nextTick()
-  const images = Array.from(homeRef.value?.querySelectorAll('img') || [])
-  await Promise.all(images.map((image) => {
+  const images = Array.from(homeRef.value?.querySelectorAll('.hero img, .hero-art img') || [])
+  if (!images.length) {
+    logHomePerf('hero-ready', startedAt)
+    return
+  }
+  await Promise.race([
+    Promise.all(images.map((image) => {
     if (image.complete) return image.decode?.().catch(() => {}) || Promise.resolve()
     return new Promise((resolve) => {
       image.addEventListener('load', resolve, { once: true })
       image.addEventListener('error', resolve, { once: true })
-      window.setTimeout(resolve, 900)
+      window.setTimeout(resolve, 320)
     })
-  }))
+    })),
+    new Promise((resolve) => window.setTimeout(resolve, 360)),
+  ])
+  logHomePerf('hero-ready', startedAt)
 }
 
 function scheduleHomeAnimation() {
-  if (!hasHomeData.value || homeLoading.value || homeAnimated.value) return
+  if (!hasHomeData.value || homeLoading.value || homeAnimated.value || homeAnimationScheduled.value) return
+  if (reducedMotion()) {
+    homeAnimated.value = true
+    return
+  }
+  homeAnimationScheduled.value = true
   runIdle(async () => {
-    await waitForHomeImages()
-    await animateHome()
+    try {
+      await waitForHeroImages()
+      window.clearTimeout(motionTimer)
+      motionTimer = window.setTimeout(() => {
+        runIdle(() => {
+          motionReady.value = true
+          homeAnimated.value = true
+          logHomePerf('motion-runtime-ready')
+        })
+      }, 800)
+    } finally {
+      homeAnimationScheduled.value = false
+    }
   })
 }
 
-async function refreshHomeData() {
-  homeLoading.value = !hasHomeData.value
-  homeError.value = ''
-  try {
-    applyHomeSnapshot((await fetchHomeSnapshot()).data)
-  } catch {
-    const results = await Promise.allSettled([
-      booksStore.fetchBooks({ page: 1, pageSize: 4 }),
-      productsStore.fetchProducts({ page: 1, pageSize: 4 }),
-      eventsStore.fetchEvents({ page: 1, pageSize: 3 }),
-      communityStore.fetchPosts({ status: 'published', pageSize: 3, sort: 'hot' }),
-      communityStore.fetchStats().then((stats) => { communityStats.value = stats }),
-    ])
-    if (results.every((result) => result.status === 'rejected') && !hasHomeData.value) {
-      homeError.value = '首页内容暂时加载失败，请稍后重试。'
+function bindDeferredHomeTriggers() {
+  if (scrollDeferredBound || typeof window === 'undefined') return
+  scrollDeferredBound = true
+  fullHomeScrollHandler = () => {
+    window.removeEventListener('scroll', fullHomeScrollHandler)
+    fullHomeScrollHandler = null
+    window.clearTimeout(fullHomeTimer)
+    logHomePerf('full-home-deferred')
+    runIdle(loadDeferredHomeData)
+  }
+  window.addEventListener('scroll', fullHomeScrollHandler, { passive: true, once: true })
+  fullHomeTimer = window.setTimeout(() => {
+    if (fullHomeScrollHandler) {
+      window.removeEventListener('scroll', fullHomeScrollHandler)
+      fullHomeScrollHandler = null
     }
-    if (!hasHomeData.value && (booksStore.error || productsStore.error || eventsStore.apiError || communityStore.apiError)) {
-      homeError.value = '首页内容暂时加载失败，请稍后重试。'
-    }
-  } finally {
-    homeLoading.value = false
+    logHomePerf('full-home-deferred')
+    runIdle(loadDeferredHomeData)
+  }, 1800)
+}
+
+async function loadFallbackHomeModules() {
+  if (deferredModulesLoaded) return
+  deferredModulesLoaded = true
+  const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
+  logHomePerf('fallback-modules-delayed')
+  const results = await Promise.allSettled([
+    booksStore.fetchBooks({ page: 1, pageSize: 4 }),
+    productsStore.fetchProducts({ page: 1, pageSize: 4 }),
+    eventsStore.fetchEvents({ page: 1, pageSize: 3 }),
+    communityStore.fetchPosts({ status: 'published', page: 1, pageSize: 3, sort: 'hot' }),
+    communityStore.fetchStats().then((stats) => { communityStats.value = stats }),
+  ])
+  logHomePerf('deferred-modules', startedAt)
+  if (results.every((result) => result.status === 'rejected') && !hasHomeData.value) {
+    homeError.value = HOME_ERROR_MESSAGE
   }
   writeHomeCache()
   scheduleHomeAnimation()
 }
 
+async function refreshHomeData() {
+  if (liteRequest) return liteRequest
+  homeLoading.value = !hasHomeData.value
+  homeError.value = ''
+  homeAbortController?.abort()
+  homeAbortController = new AbortController()
+  const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
+  const loadingCap = window.setTimeout(() => {
+    if (!hasHomeData.value) homeLoading.value = false
+  }, 900)
+  liteRequest = fetchHomeLiteSnapshot({ timeoutMs: HOME_LITE_TIMEOUT_MS, signal: homeAbortController.signal })
+    .then((response) => {
+      applyHomeSnapshot(response.data)
+      logHomePerf('lite-data', startedAt)
+      writeHomeCache()
+      scheduleHomeAnimation()
+      bindDeferredHomeTriggers()
+    })
+    .catch((error) => {
+      logHomePerf('lite-data-failed', startedAt)
+      if (!hasHomeData.value) homeError.value = error?.message || HOME_ERROR_MESSAGE
+      runIdle(loadFallbackHomeModules)
+    })
+    .finally(() => {
+      window.clearTimeout(loadingCap)
+      homeLoading.value = false
+      logHomePerf('first-data', startedAt)
+      liteRequest = null
+    })
+  return liteRequest
+}
+
+async function loadDeferredHomeData() {
+  if (fullRequest || deferredModulesLoaded) return fullRequest
+  deferredModulesLoaded = true
+  const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
+  logHomePerf('full-home-start', startedAt)
+  fullRequest = fetchHomeSnapshot({ timeoutMs: HOME_SNAPSHOT_TIMEOUT_MS, signal: homeAbortController?.signal })
+    .then((response) => {
+      applyHomeSnapshot(response.data)
+      logHomePerf('deferred-modules', startedAt)
+      logHomePerf('full-home-done', startedAt)
+      writeHomeCache()
+      scheduleHomeAnimation()
+    })
+    .catch(() => loadFallbackHomeModules())
+    .finally(() => { fullRequest = null })
+  return fullRequest
+}
+
 onMounted(() => {
-  hydrateHomeCache()
+  logHomePerf('mounted')
+  const hadCache = hydrateHomeCache()
+  if (hadCache) homeLoading.value = false
   scheduleHomeAnimation()
-  refreshHomeData()
+  runAfterPaint(refreshHomeData)
 })
 
+onBeforeUnmount(() => {
+  homeAbortController?.abort()
+  window.clearTimeout(fullHomeTimer)
+  window.clearTimeout(motionTimer)
+  if (fullHomeScrollHandler) window.removeEventListener('scroll', fullHomeScrollHandler)
+})
 </script>
 
 <template>
@@ -237,7 +377,7 @@ onMounted(() => {
             <BaseButton size="lg" variant="outline" @click="navigate('/coffee')">探索咖啡商城</BaseButton>
           </div>
           <div class="hero__note hero__stagger">
-            <span aria-hidden="true" @pointerenter="wiggleIcon($event.currentTarget)">✦</span>
+            <span aria-hidden="true" @pointerenter="wiggleIcon($event.currentTarget)">✓</span>
             <span>Curated for slow mornings and thoughtful evenings.</span>
           </div>
         </div>
@@ -280,13 +420,13 @@ onMounted(() => {
           <BaseSkeleton v-if="homeLoading && !books.length" v-for="index in 4" :key="`home-book-loading-${index}`" variant="card" />
           <BaseCard v-for="book in books" :key="book.id || book.slug" class="book-card" variant="interactive" data-cursor="READ" data-tilt-card @click="navigate(`/books/${book.slug}`)">
             <div class="book-card__cover" :class="`book-card__cover--${book.tone}`" data-tilt-layer="1.4">
-              <img v-if="book.coverUrl" class="book-card__image" :src="versionedUploadUrl(book.coverUrl, book.updatedAt)" :alt="book.title" loading="eager" decoding="async" @error="handleHomeImageError" />
+              <img v-if="book.coverUrl" class="book-card__image" :src="versionedUploadUrl(book.coverUrl, book.updatedAt)" :alt="book.title" loading="lazy" decoding="async" @error="handleHomeImageError" />
               <span>{{ book.category }}</span><strong>{{ book.title }}</strong><small>COFFEE BOOK EDITION</small>
             </div>
             <div class="book-card__content" data-tilt-layer="0.7">
               <div class="card-topline"><BaseBadge variant="neutral">{{ book.category }}</BaseBadge><span>★ {{ book.rating }}</span></div>
               <h3>{{ book.title }}</h3><small>{{ book.author }}</small><p>{{ book.description }}</p>
-              <BaseButton variant="ghost" size="sm" @click.stop="navigate(`/books/${book.slug}`)">查看详情　→</BaseButton>
+              <BaseButton variant="ghost" size="sm" @click.stop="navigate(`/books/${book.slug}`)">查看详情 →</BaseButton>
             </div>
           </BaseCard>
         </div>
@@ -304,7 +444,7 @@ onMounted(() => {
           <BaseSkeleton v-if="homeLoading && !coffees.length" v-for="index in 4" :key="`home-coffee-loading-${index}`" variant="card" />
           <BaseCard v-for="coffee in coffees" :key="coffee.id || coffee.slug" class="coffee-card" variant="interactive" data-cursor="BUY" data-tilt-card @click="navigate(`/coffee/${coffee.slug}`)">
             <div class="coffee-card__visual" :class="`coffee-card__visual--${coffee.tone}`" data-tilt-layer="1.4">
-              <img v-if="coffee.imageUrl" class="coffee-card__image" :src="versionedUploadUrl(coffee.imageUrl, coffee.updatedAt)" :alt="coffee.name" loading="eager" decoding="async" @error="handleHomeImageError" />
+              <img v-if="coffee.imageUrl" class="coffee-card__image" :src="versionedUploadUrl(coffee.imageUrl, coffee.updatedAt)" :alt="coffee.name" loading="lazy" decoding="async" @error="handleHomeImageError" />
               <div class="coffee-card__cup"><span /></div>
               <span class="coffee-card__bean coffee-card__bean--one" />
               <span class="coffee-card__bean coffee-card__bean--two" />
@@ -358,7 +498,7 @@ onMounted(() => {
           <BaseSkeleton v-if="homeLoading && !databasePosts.length" v-for="index in 3" :key="`home-post-loading-${index}`" variant="text" :lines="2" />
           <article v-for="post in databasePosts" :key="post.id" class="post-item" role="link" tabindex="0" data-cursor="VIEW" @click="navigate(`/community/${post.slug || post.id}`)" @keydown.enter="navigate(`/community/${post.slug || post.id}`)" @keydown.space.prevent="navigate(`/community/${post.slug || post.id}`)">
             <span class="post-item__avatar"><img v-if="isAvatarImage(post.avatar)" :src="resolveUploadUrl(post.avatar)" alt="" loading="lazy" decoding="async" @error="handleHomeImageError" /><template v-else>{{ post.avatar }}</template></span>
-            <div><h3>{{ post.title }}</h3><div class="post-item__meta"><span>{{ post.author }} · {{ new Date(post.createdAt).toLocaleDateString('zh-CN') }}</span><span>♡ {{ post.likes }}　☵ {{ post.commentsCount }}</span></div></div>
+            <div><h3>{{ post.title }}</h3><div class="post-item__meta"><span>{{ post.author }} · {{ new Date(post.createdAt).toLocaleDateString('zh-CN') }}</span><span>♥ {{ post.likes }}　☕ {{ post.commentsCount }}</span></div></div>
             <span class="post-item__arrow" aria-hidden="true">→</span>
           </article>
         </div>
@@ -374,7 +514,7 @@ onMounted(() => {
         </div>
         <div class="booking-panel__availability">
           <BaseBadge variant="success">今日可预约</BaseBadge>
-          <div class="booking-panel__time">14:00 — 18:00</div>
+          <div class="booking-panel__time">14:00 – 18:00</div>
           <div class="booking-panel__seats"><span>剩余座位</span><strong>12</strong></div>
           <div class="booking-panel__slots"><span>14:00</span><span>15:30</span><span>17:00</span></div>
         </div>
@@ -408,6 +548,7 @@ onMounted(() => {
         商品已加入购物车，本阶段仅展示交互反馈。
       </BaseToast>
     </div>
+    <HomeMotionRuntime v-if="motionReady" :stats-values="stats.map((item) => item.value)" />
   </div>
 </template>
 

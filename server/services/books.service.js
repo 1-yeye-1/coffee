@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
 import { bookFavoriteCountSql } from './stats.service.js'
+import { writeAudit } from './admin.service.js'
 
 const columns = `
   id, slug, title, author, category, rating, stock, status,
@@ -10,6 +11,10 @@ const columns = `
   language, author_bio AS authorBio,
   ${bookFavoriteCountSql('books')} AS favorites,
   seat_id AS seatId, location_label AS locationLabel,
+  is_recommended AS isRecommended, is_featured AS isFeatured, is_new AS isNew,
+  shelf_area AS shelfArea, shelf_code AS shelfCode, borrow_count AS borrowCount,
+  favorite_count AS favoriteCount, damaged_count AS damagedCount, lost_count AS lostCount,
+  low_stock_threshold AS lowStockThreshold,
   (SELECT COALESCE(ROUND(AVG(br.rating), 1), 0) FROM book_reviews br WHERE br.book_id = books.id AND br.status = 'published' AND br.parent_id IS NULL) AS reviewAverage,
   (SELECT COUNT(*) FROM book_reviews br WHERE br.book_id = books.id AND br.status = 'published' AND br.parent_id IS NULL) AS reviewCount,
   created_at AS createdAt, updated_at AS updatedAt
@@ -44,6 +49,10 @@ async function uniqueBookSlug(base, excludeId = null) {
   }
 }
 
+function flagValue(value) {
+  return value === true || value === 1 || value === '1' || value === 'true'
+}
+
 function assertBookStatus(status) {
   if (!validBookStatuses.has(status)) throw Object.assign(new Error('图书状态无效'), { statusCode: 400 })
 }
@@ -54,6 +63,13 @@ function buildFilters(query) {
   if (keyword) { clauses.push('(title LIKE ? OR author LIKE ? OR summary LIKE ?)'); const pattern = `%${keyword}%`; params.push(pattern, pattern, pattern) }
   if (query.category && query.category !== 'all') { clauses.push('category = ?'); params.push(query.category) }
   if (query.status) { clauses.push('status = ?'); params.push(query.status) }
+  if (query.author) { clauses.push('author LIKE ?'); params.push(`%${String(query.author).trim()}%`) }
+  if (query.stockMin !== undefined && query.stockMin !== '') { clauses.push('stock >= ?'); params.push(Number(query.stockMin) || 0) }
+  if (query.stockMax !== undefined && query.stockMax !== '') { clauses.push('stock <= ?'); params.push(Number(query.stockMax) || 0) }
+  if (query.ratingMin !== undefined && query.ratingMin !== '') { clauses.push('rating >= ?'); params.push(Number(query.ratingMin) || 0) }
+  if (query.ratingMax !== undefined && query.ratingMax !== '') { clauses.push('rating <= ?'); params.push(Number(query.ratingMax) || 0) }
+  if (query.isRecommended !== undefined && query.isRecommended !== '' && query.isRecommended !== 'all') { clauses.push('is_recommended = ?'); params.push(['1', 'true', true, 1].includes(query.isRecommended) ? 1 : 0) }
+  if (query.year) { clauses.push('year = ?'); params.push(Number(query.year) || 0) }
   return { where: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', params }
 }
 export async function listBooks(query = {}) {
@@ -77,13 +93,17 @@ export async function createBook(payload) {
   const slug = payload.slug || await uniqueBookSlug(payload.title)
   const [result] = await pool.execute(
     `INSERT INTO books (slug, title, author, category, rating, stock, status, cover_tone, cover_url, summary,
-      description, isbn, publisher, year, pages, language, author_bio, seat_id, location_label)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      description, isbn, publisher, year, pages, language, author_bio, seat_id, location_label,
+      is_recommended, is_featured, is_new, shelf_area, shelf_code, low_stock_threshold)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [slug, payload.title, payload.author, payload.category || '', Number(payload.rating) || 0,
       Number(payload.stock) || 0, payload.status || 'available', payload.coverTone || null, payload.coverUrl || null,
       payload.summary || null, payload.description || null, payload.isbn || null, payload.publisher || null,
       payload.year || null, payload.pages || null, payload.language || null, payload.authorBio || null,
-      Number(payload.seatId || payload.seat_id) || null, payload.locationLabel || payload.location_label || null],
+      Number(payload.seatId || payload.seat_id) || null, payload.locationLabel || payload.location_label || null,
+      flagValue(payload.isRecommended || payload.is_recommended) ? 1 : 0, flagValue(payload.isFeatured || payload.is_featured) ? 1 : 0,
+      flagValue(payload.isNew || payload.is_new) ? 1 : 0, payload.shelfArea || payload.shelf_area || null,
+      payload.shelfCode || payload.shelf_code || null, Math.max(0, Number(payload.lowStockThreshold ?? payload.low_stock_threshold ?? 3) || 3)],
   )
   return findBookById(result.insertId)
 }
@@ -95,12 +115,16 @@ export async function updateBook(id, payload) {
   assertBookStatus(next.status || 'available')
   await pool.execute(
     `UPDATE books SET slug=?, title=?, author=?, category=?, rating=?, stock=?, status=?, cover_tone=?, cover_url=?,
-      summary=?, description=?, isbn=?, publisher=?, year=?, pages=?, language=?, author_bio=?, seat_id=?, location_label=? WHERE id=?`,
+      summary=?, description=?, isbn=?, publisher=?, year=?, pages=?, language=?, author_bio=?, seat_id=?, location_label=?,
+      is_recommended=?, is_featured=?, is_new=?, shelf_area=?, shelf_code=?, low_stock_threshold=? WHERE id=?`,
     [next.slug, next.title, next.author, next.category || '', Number(next.rating) || 0,
       Number(next.stock) || 0, next.status || 'available', next.coverTone || null, next.coverUrl || null,
       next.summary || null, next.description || null, next.isbn || null, next.publisher || null,
       next.year || null, next.pages || null, next.language || null, next.authorBio || null,
-      Number(next.seatId || next.seat_id) || null, next.locationLabel || next.location_label || null, id],
+      Number(next.seatId || next.seat_id) || null, next.locationLabel || next.location_label || null,
+      flagValue(next.isRecommended ?? next.is_recommended) ? 1 : 0, flagValue(next.isFeatured ?? next.is_featured) ? 1 : 0,
+      flagValue(next.isNew ?? next.is_new) ? 1 : 0, next.shelfArea || next.shelf_area || null,
+      next.shelfCode || next.shelf_code || null, Math.max(0, Number(next.lowStockThreshold ?? next.low_stock_threshold ?? 3) || 3), id],
   )
   return findBookById(id)
 }
@@ -256,4 +280,103 @@ export async function updateBookStatus(id, status) {
 export async function deleteBook(id) {
   const [result] = await pool.execute('DELETE FROM books WHERE id = ?', [id])
   return result.affectedRows > 0
+}
+
+
+export async function getBookAdminStats() {
+  const [[row]] = await pool.execute(`SELECT
+    COUNT(*) AS total,
+    SUM(status IN ('available','active')) AS visible,
+    SUM(status = 'hidden') AS hidden,
+    SUM(stock <= low_stock_threshold) AS lowStock,
+    SUM(is_recommended = 1 OR is_featured = 1) AS recommended,
+    SUM(COALESCE(favorite_count, 0)) AS favorites
+    FROM books`)
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Number(value || 0)]))
+}
+
+export async function getBookStockLogs(bookId, limit = 20) {
+  const [rows] = await pool.execute(
+    `SELECT l.id, l.book_id AS bookId, l.change_type AS changeType, l.change_amount AS changeAmount,
+      l.before_stock AS beforeStock, l.after_stock AS afterStock, l.reason, l.operator_id AS operatorId,
+      a.username AS operatorName, l.created_at AS createdAt
+     FROM book_stock_logs l LEFT JOIN admin_users a ON a.id = l.operator_id
+     WHERE l.book_id = ? ORDER BY l.created_at DESC, l.id DESC LIMIT ${Math.min(100, Math.max(1, Number(limit) || 20))}`,
+    [bookId],
+  )
+  return rows
+}
+
+export async function getBookAdminDetail(id) {
+  const book = await findBookById(id)
+  if (!book) return null
+  return { ...book, stockLogs: await getBookStockLogs(id) }
+}
+
+export async function updateBookFlags(id, flags = {}, operatorId = null, connection = pool) {
+  const allowed = { isRecommended: 'is_recommended', isFeatured: 'is_featured', isNew: 'is_new' }
+  const fields = []
+  const params = []
+  for (const [key, column] of Object.entries(allowed)) {
+    if (flags[key] !== undefined) {
+      fields.push(`${column} = ?`)
+      params.push(flagValue(flags[key]) ? 1 : 0)
+    }
+  }
+  if (!fields.length) throw Object.assign(new Error('????????????'), { statusCode: 400 })
+  params.push(id)
+  const [result] = await connection.execute(`UPDATE books SET ${fields.join(', ')} WHERE id = ?`, params)
+  if (!result.affectedRows) return null
+  await writeAudit(operatorId, 'book.flags.update', 'books', { id, flags, operatorType: 'admin' }, connection)
+  return findBookById(id)
+}
+
+export async function adjustBookStock(id, payload = {}, operatorId = null) {
+  const amount = Number(payload.amount ?? payload.changeAmount)
+  const mode = String(payload.changeType || payload.type || 'adjust')
+  const reason = String(payload.reason || '').trim()
+  if (!Number.isInteger(amount)) throw Object.assign(new Error('?????????????'), { statusCode: 400 })
+  if (!reason) throw Object.assign(new Error('????????????'), { statusCode: 400 })
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [[book]] = await connection.execute('SELECT id, stock FROM books WHERE id = ? FOR UPDATE', [id])
+    if (!book) { await connection.rollback(); return null }
+    const beforeStock = Number(book.stock || 0)
+    const afterStock = mode === 'in' ? beforeStock + Math.abs(amount) : mode === 'out' || mode === 'damaged' || mode === 'lost' ? beforeStock - Math.abs(amount) : amount
+    if (!Number.isInteger(afterStock) || afterStock < 0) throw Object.assign(new Error('???????????'), { statusCode: 400 })
+    const extraSet = mode === 'damaged' ? ', damaged_count = damaged_count + ?' : mode === 'lost' ? ', lost_count = lost_count + ?' : ''
+    const params = extraSet ? [afterStock, Math.abs(amount), id] : [afterStock, id]
+    await connection.execute(`UPDATE books SET stock = ?${extraSet} WHERE id = ?`, params)
+    await connection.execute(
+      `INSERT INTO book_stock_logs (book_id, change_type, change_amount, before_stock, after_stock, reason, operator_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, mode, afterStock - beforeStock, beforeStock, afterStock, reason, operatorId],
+    )
+    await writeAudit(operatorId, 'book.stock.adjust', 'books', { id, changeType: mode, beforeStock, afterStock, reason, operatorType: 'admin' }, connection)
+    await connection.commit()
+    return getBookAdminDetail(id)
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export async function batchUpdateBooks(ids = [], payload = {}, operatorId = null) {
+  const uniqueIds = [...new Set(ids.map((id) => Number(id)).filter(Boolean))]
+  if (!uniqueIds.length) throw Object.assign(new Error('?????'), { statusCode: 400 })
+  const updated = []
+  const errors = []
+  for (const id of uniqueIds) {
+    try {
+      if (payload.status) updated.push(await updateBookStatus(id, payload.status))
+      else updated.push(await updateBookFlags(id, payload, operatorId))
+      await writeAudit(operatorId, 'book.batch.update', 'books', { id, payload, operatorType: 'admin' })
+    } catch (error) {
+      errors.push({ id, message: error.message })
+    }
+  }
+  return { updated: updated.filter(Boolean), errors }
 }

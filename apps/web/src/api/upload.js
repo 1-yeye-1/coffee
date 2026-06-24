@@ -1,7 +1,7 @@
 import { request } from './request'
 
-const defaultOrigin = import.meta.env.DEV ? 'http://127.0.0.1:4173' : ''
-const apiOrigin = String(import.meta.env.VITE_API_BASE_URL || defaultOrigin).replace(/\/api\/?$/, '').replace(/\/$/, '')
+const defaultBase = import.meta.env.DEV ? 'http://127.0.0.1:4173/api' : '/api'
+const apiOrigin = String(import.meta.env.VITE_API_BASE_URL || defaultBase).replace(/\/api\/?$/, '').replace(/\/$/, '')
 
 function buildFormData(file) {
   const formData = new FormData()
@@ -10,8 +10,9 @@ function buildFormData(file) {
 }
 
 export function resolveUploadUrl(url) {
-  if (!url || /^(https?:\/\/|data:|blob:)/.test(url)) return url
-  return `${apiOrigin}${url}`
+  const raw = url == null ? '' : String(url).trim()
+  if (!raw || /^(https?:\/\/|data:|blob:)/i.test(raw)) return raw
+  return `${apiOrigin}${raw.startsWith('/') ? raw : `/${raw}`}`
 }
 
 export const uploadAvatar = (file) => request('/upload/avatar', {

@@ -9,30 +9,51 @@ import {
   getFinanceDashboard,
   listAdminBooks,
   listAdminProducts,
+  getAdminUserDetail,
   listAdminUsers,
+  applyUserRisk,
   updateAdminUser,
   writeAudit,
 } from '../services/admin.service.js'
-import { listBookings, updateBookingStatus } from '../services/booking.service.js'
-import { createBook, deleteBook, findBookById, updateBook, updateBookStatus } from '../services/books.service.js'
+import {
+  batchUpdateBookingStatus,
+  getBookingAdminStats,
+  getBookingDetail,
+  listBookings,
+  updateBookingStatusAdmin,
+} from '../services/booking.service.js'
+import { adjustBookStock, batchUpdateBooks, createBook, deleteBook, findBookById, getBookAdminDetail, getBookAdminStats, updateBook, updateBookFlags, updateBookStatus } from '../services/books.service.js'
 import {
   findPost,
   listPosts,
+  applyUserPenalty,
   processContentReport,
   updateCommentStatus,
   updatePostStatus,
 } from '../services/community.service.js'
-import { createEvent, deleteEvent, findEventById, listEvents, updateEvent } from '../services/events.service.js'
-import { createProduct, deleteProduct, findProductById, updateProduct, updateProductStatus } from '../services/products.service.js'
 import {
+  createEvent,
+  deleteEvent,
+  exportAdminEventRegistrations,
+  findEventById,
+  listAdminEventRegistrations,
+  listEvents,
+  updateAdminEventRegistrationStatus,
+  updateEvent,
+} from '../services/events.service.js'
+import { adjustProductStock, batchUpdateProducts, createProduct, deleteProduct, findProductById, getProductAdminDetail, getProductAdminStats, updateProduct, updateProductFlags, updateProductStatus } from '../services/products.service.js'
+import {
+  batchUpdateOrders,
   changeOrderStatus,
   confirmOrderPayment,
   expireOrderPayment,
+  getOrderAdminStats,
   getOrderDetail,
   listOrders,
   rejectOrderPayment,
 } from '../services/orders.service.js'
 import { signAdminToken } from '../utils/jwt.js'
+import { rateLimit } from '../middlewares/security.js'
 import { searchAdmin } from '../services/admin-search.service.js'
 import { dbSuccess, failure, paginated, success } from '../utils/response.js'
 
@@ -46,7 +67,9 @@ function requireFields(res, payload, fields) {
 }
 
 export function registerAdminRoutes(router) {
-  router.post('/api/admin/auth/login', async (req, res) => {
+  const adminAuthRateLimit = rateLimit({ key: 'admin-auth', limit: 30 })
+
+  router.post('/api/admin/auth/login', adminAuthRateLimit, async (req, res) => {
     const admin = await authenticateAdmin(req.body)
     await logAdminAction({ admin, action: 'auth.login', module: 'auth', targetType: 'admin', targetId: admin.id, description: `管理员 ${admin.username} 登录后台`, req })
     return success(res, { token: signAdminToken(admin), admin }, '后台登录成功')
@@ -84,6 +107,18 @@ export function registerAdminRoutes(router) {
     return paginated(res, result.items, result.meta)
   })
 
+  router.get('/api/admin/users/:id/detail', requireAdmin, async (req, res) => {
+    const user = await getAdminUserDetail(req.params.id)
+    if (!user) return failure(res, 404, '?????', 404)
+    return success(res, user)
+  })
+
+  router.patch('/api/admin/users/:id/risk', requireAdmin, async (req, res) => {
+    const user = await applyUserRisk(req.params.id, req.body, req.user.id)
+    if (!user) return failure(res, 404, '?????', 404)
+    return success(res, user, '?????????')
+  })
+
   router.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
     const user = await updateAdminUser(req.params.id, req.body, req.user.id)
     if (!user) return failure(res, 404, '用户不存在', 404)
@@ -97,9 +132,17 @@ export function registerAdminRoutes(router) {
     return success(res, user, '用户状态已更新')
   })
 
+  router.get('/api/admin/books/stats', requireAdmin, async (_req, res) => success(res, await getBookAdminStats()))
+
   router.get('/api/admin/books', requireAdmin, async (req, res) => {
     const result = await listAdminBooks(req.query)
     return paginated(res, result.items, result.meta)
+  })
+
+  router.get('/api/admin/books/:id/detail', requireAdmin, async (req, res) => {
+    const book = await getBookAdminDetail(req.params.id)
+    if (!book) return failure(res, 404, '?????', 404)
+    return success(res, book)
   })
 
   router.post('/api/admin/books', requireAdmin, async (req, res) => {
@@ -124,15 +167,37 @@ export function registerAdminRoutes(router) {
     return success(res, book)
   })
 
+  router.patch('/api/admin/books/:id/flags', requireAdmin, async (req, res) => {
+    const book = await updateBookFlags(req.params.id, req.body, req.user.id)
+    if (!book) return failure(res, 404, '?????', 404)
+    return success(res, book, '?????????')
+  })
+
+  router.patch('/api/admin/books/:id/stock', requireAdmin, async (req, res) => {
+    const book = await adjustBookStock(req.params.id, req.body, req.user.id)
+    if (!book) return failure(res, 404, '?????', 404)
+    return success(res, book, '???????')
+  })
+
+  router.patch('/api/admin/books/batch', requireAdmin, async (req, res) => success(res, await batchUpdateBooks(req.body.ids, req.body, req.user.id)))
+
   router.delete('/api/admin/books/:id', requireAdmin, async (req, res) => {
     if (!await deleteBook(req.params.id)) return failure(res, 404, '图书不存在', 404)
     await writeAudit(req.user.id, 'book.delete', 'books', { id: req.params.id })
     return success(res)
   })
 
+  router.get('/api/admin/products/stats', requireAdmin, async (_req, res) => success(res, await getProductAdminStats()))
+
   router.get('/api/admin/products', requireAdmin, async (req, res) => {
     const result = await listAdminProducts(req.query)
     return paginated(res, result.items, result.meta)
+  })
+
+  router.get('/api/admin/products/:id/detail', requireAdmin, async (req, res) => {
+    const product = await getProductAdminDetail(req.params.id)
+    if (!product) return failure(res, 404, '?????', 404)
+    return success(res, product)
   })
 
   router.post('/api/admin/products', requireAdmin, async (req, res) => {
@@ -160,12 +225,28 @@ export function registerAdminRoutes(router) {
     return success(res, product)
   })
 
+  router.patch('/api/admin/products/:id/flags', requireAdmin, async (req, res) => {
+    const product = await updateProductFlags(req.params.id, req.body, req.user.id)
+    if (!product) return failure(res, 404, '?????', 404)
+    return success(res, product, '?????????')
+  })
+
+  router.patch('/api/admin/products/:id/stock', requireAdmin, async (req, res) => {
+    const product = await adjustProductStock(req.params.id, req.body, req.user.id)
+    if (!product) return failure(res, 404, '?????', 404)
+    return success(res, product, '???????')
+  })
+
+  router.patch('/api/admin/products/batch', requireAdmin, async (req, res) => success(res, await batchUpdateProducts(req.body.ids, req.body, req.user.id)))
+
   router.delete('/api/admin/products/:id', requireAdmin, async (req, res) => {
     if (!await deleteProduct(req.params.id)) return failure(res, 404, '商品不存在', 404)
     await writeAudit(req.user.id, 'product.delete', 'products', { id: req.params.id })
     await logAdminAction({ admin: req.user, action: 'delete', module: 'product', targetType: 'product', targetId: req.params.id, description: '删除商品', req })
     return success(res)
   })
+
+  router.get('/api/admin/orders/stats', requireAdmin, async (_req, res) => success(res, await getOrderAdminStats()))
 
   router.get('/api/admin/orders', requireAdmin, async (req, res) => {
     const result = await listOrders(null, req.query, true)
@@ -179,7 +260,7 @@ export function registerAdminRoutes(router) {
   })
 
   router.patch('/api/admin/orders/:id/status', requireAdmin, async (req, res) => {
-    const order = await changeOrderStatus(req.params.id, req.body.status, null, true, req.user.id)
+    const order = await changeOrderStatus(req.params.id, req.body.status, null, true, req.user.id, req.body)
     await logAdminAction({ admin: req.user, action: 'change_status', module: 'order', targetType: 'order', targetId: req.params.id, description: `修改订单状态为 ${req.body.status}`, req })
     return success(res, order)
   })
@@ -191,10 +272,12 @@ export function registerAdminRoutes(router) {
   })
 
   router.patch('/api/admin/orders/:id/reject-payment', requireAdmin, async (req, res) => {
-    const order = await rejectOrderPayment(req.params.id, req.user.id)
+    const order = await rejectOrderPayment(req.params.id, req.user.id, req.body.reason)
     await logAdminAction({ admin: req.user, action: 'reject', module: 'order', targetType: 'order', targetId: req.params.id, description: '驳回订单支付', req })
     return success(res, order, '支付已驳回')
   })
+
+  router.patch('/api/admin/orders/batch', requireAdmin, async (req, res) => success(res, await batchUpdateOrders(req.body.ids, req.body, req.user.id)))
 
   router.patch('/api/admin/orders/:id/expire', requireAdmin, async (req, res) => {
     const order = await expireOrderPayment(req.params.id, req.user.id)
@@ -228,6 +311,26 @@ export function registerAdminRoutes(router) {
     const event = await updateEvent(req.params.id, { ...current, status: req.body.status })
     await writeAudit(req.user.id, 'event.status.update', 'events', { id: event.id, status: req.body.status })
     return success(res, event)
+  })
+
+  router.get('/api/admin/events/:id/registrations', requireAdmin, async (req, res) => {
+    const result = await listAdminEventRegistrations(req.params.id, req.query)
+    if (!result) return failure(res, 404, '活动不存在', 404)
+    return paginated(res, result.items, result.meta)
+  })
+
+  router.patch('/api/admin/events/:eventId/registrations/:registrationId/status', requireAdmin, async (req, res) => {
+    const result = await updateAdminEventRegistrationStatus(req.params.eventId, req.params.registrationId, req.body, req.user.id)
+    if (!result) return failure(res, 404, '活动不存在', 404)
+    return success(res, result, '报名状态已更新')
+  })
+
+  router.get('/api/admin/events/:id/registrations/export', requireAdmin, async (req, res) => {
+    const csv = await exportAdminEventRegistrations(req.params.id, req.query, req.user.id)
+    if (csv == null) return failure(res, 404, '活动不存在', 404)
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="event-${req.params.id}-registrations.csv"`)
+    return res.status(200).send(csv)
   })
 
   router.delete('/api/admin/events/:id', requireAdmin, async (req, res) => {
@@ -269,6 +372,14 @@ export function registerAdminRoutes(router) {
     return success(res, post)
   })
 
+  router.patch('/api/admin/users/:id/penalty', requireAdmin, async (req, res) => {
+    return success(res, await applyUserPenalty(req.params.id, req.body, req.user.id), '???????')
+  })
+
+  router.post('/api/admin/community/users/:userId/penalty', requireAdmin, async (req, res) => {
+    return success(res, await applyUserPenalty(req.params.userId, req.body, req.user.id), '用户处罚已生效')
+  })
+
   router.patch('/api/admin/reports/:id', requireAdmin, async (req, res) => {
     if (!['dismiss', 'hide', 'delete'].includes(req.body.action)) return failure(res, 400, '举报处理动作无效')
     const post = await processContentReport(req.params.id, req.body.action, req.user.id, req.body.note)
@@ -280,11 +391,27 @@ export function registerAdminRoutes(router) {
     return paginated(res, result.items, result.meta)
   })
 
-  router.patch('/api/admin/bookings/:id/status', requireAdmin, async (req, res) => {
-    if (!['pending', 'confirmed', 'cancelled', 'completed'].includes(req.body.status)) return failure(res, 400, '预约状态无效')
-    const booking = await updateBookingStatus(req.params.id, req.body.status, req.user.id)
+  router.get('/api/admin/bookings/stats', requireAdmin, async (req, res) => {
+    return success(res, await getBookingAdminStats(req.query))
+  })
+
+  router.get('/api/admin/bookings/:id', requireAdmin, async (req, res) => {
+    const booking = await getBookingDetail(req.params.id)
     if (!booking) return failure(res, 404, '预约不存在', 404)
-    await logAdminAction({ admin: req.user, action: 'change_status', module: 'booking', targetType: 'booking', targetId: req.params.id, description: `修改预约状态为 ${req.body.status}`, req })
     return success(res, booking)
+  })
+
+  router.patch('/api/admin/bookings/:id/status', requireAdmin, async (req, res) => {
+    if (!['pending', 'confirmed', 'cancelled', 'completed', 'no_show'].includes(req.body.status)) return failure(res, 400, '预约状态无效')
+    const booking = await updateBookingStatusAdmin(req.params.id, req.body, req.user, req)
+    if (!booking) return failure(res, 404, '预约不存在', 404)
+    return success(res, booking)
+  })
+
+  router.patch('/api/admin/bookings/batch-status', requireAdmin, async (req, res) => {
+    if (!Array.isArray(req.body.ids)) return failure(res, 400, '请选择预约')
+    if (!['confirmed', 'cancelled', 'completed', 'no_show'].includes(req.body.status)) return failure(res, 400, '预约状态无效')
+    const result = await batchUpdateBookingStatus(req.body.ids, req.body, req.user, req)
+    return success(res, result, result.errors.length ? '部分预约处理失败' : '批量操作已完成')
   })
 }

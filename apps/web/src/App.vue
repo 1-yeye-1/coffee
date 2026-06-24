@@ -1,10 +1,10 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { useMagnetic } from '@/composables/useMagnetic'
-import CustomCursor from '@/components/common/CustomCursor.vue'
+import { defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import BackToTop from '../../shared/components/BackToTop.vue'
 
 const globalError = ref('')
+const motionRuntimeReady = ref(false)
+const GlobalMotionRuntime = defineAsyncComponent(() => import('@/components/common/GlobalMotionRuntime.vue'))
 
 function handleGlobalError(event) {
   globalError.value = event.detail?.message || '页面遇到异常，已进入安全模式。'
@@ -14,9 +14,22 @@ function clearGlobalError() {
   globalError.value = ''
 }
 
-useMagnetic()
+function runIdle(callback) {
+  if (typeof window === 'undefined') return callback()
+  if ('requestIdleCallback' in window) return window.requestIdleCallback(callback, { timeout: 520 })
+  return window.setTimeout(callback, 64)
+}
 
-onMounted(() => window.addEventListener('coffee-book:global-error', handleGlobalError))
+function shouldEnableGlobalMotion() {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+onMounted(() => {
+  window.addEventListener('coffee-book:global-error', handleGlobalError)
+  if (shouldEnableGlobalMotion()) runIdle(() => { motionRuntimeReady.value = true })
+})
 onBeforeUnmount(() => window.removeEventListener('coffee-book:global-error', handleGlobalError))
 </script>
 
@@ -28,7 +41,7 @@ onBeforeUnmount(() => window.removeEventListener('coffee-book:global-error', han
   </section>
   <RouterView />
   <BackToTop />
-  <CustomCursor />
+  <GlobalMotionRuntime v-if="motionRuntimeReady" />
 </template>
 
 <style scoped>

@@ -203,6 +203,9 @@ onMounted(loadBook)
           <div class="cb-cluster">
             <BaseBadge variant="neutral">{{ book.category }}</BaseBadge>
             <BaseBadge :variant="book.stock > 0 ? 'success' : 'danger'">{{ book.status }}</BaseBadge>
+            <BaseBadge v-if="book.isRecommended || book.isFeatured" variant="premium">推荐</BaseBadge>
+            <BaseBadge v-if="book.isNew" variant="success">新书</BaseBadge>
+            <BaseBadge v-if="book.stock > 0 && book.stock <= book.lowStockThreshold" variant="warning">低库存</BaseBadge>
           </div>
           <h1>{{ book.title }}</h1>
           <span class="detail-author">{{ book.author }}</span>
@@ -235,6 +238,8 @@ onMounted(loadBook)
             <div class="detail-info-item"><span>页数</span><strong>{{ book.pages }} 页</strong></div>
             <div class="detail-info-item"><span>语言</span><strong>{{ book.language }}</strong></div>
             <div class="detail-info-item"><span>馆藏</span><strong>{{ book.stock }} 本可用</strong></div>
+            <div v-if="book.shelfArea" class="detail-info-item"><span>书架区域</span><strong>{{ book.shelfArea }}</strong></div>
+            <div v-if="book.shelfCode" class="detail-info-item"><span>书架编号</span><strong>{{ book.shelfCode }}</strong></div>
           </div>
         </section>
 

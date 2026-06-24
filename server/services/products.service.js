@@ -1,10 +1,13 @@
 ﻿import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
+import { writeAudit } from './admin.service.js'
 
 const columns = `
   id, slug, name, category, product_type AS productType,
   supports_brew_method AS supportsBrewMethod, image_url AS imageUrl, price, original_price AS originalPrice, stock, status,
   sales, flavor, origin, roast, description, scene, storage, tone,
+  is_featured AS isFeatured, is_new AS isNew, is_hot AS isHot,
+  low_stock_threshold AS lowStockThreshold, view_count AS viewCount, favorite_count AS favoriteCount,
   (SELECT COALESCE(ROUND(AVG(pr.rating), 1), 0) FROM product_reviews pr WHERE pr.product_id = products.id AND pr.status = 'published' AND pr.parent_id IS NULL) AS reviewAverage,
   (SELECT COUNT(*) FROM product_reviews pr WHERE pr.product_id = products.id AND pr.status = 'published' AND pr.parent_id IS NULL) AS reviewCount,
   created_at AS createdAt, updated_at AS updatedAt
@@ -72,6 +75,28 @@ function buildFilters(query) {
     clauses.push('status = ?')
     params.push(query.status)
   }
+  if (query.stockMin !== undefined && query.stockMin !== '') {
+    clauses.push('stock >= ?')
+    params.push(Number(query.stockMin) || 0)
+  }
+  if (query.stockMax !== undefined && query.stockMax !== '') {
+    clauses.push('stock <= ?')
+    params.push(Number(query.stockMax) || 0)
+  }
+  for (const [queryKey, column] of [['isFeatured', 'is_featured'], ['isNew', 'is_new'], ['isHot', 'is_hot']]) {
+    if (query[queryKey] !== undefined && query[queryKey] !== '' && query[queryKey] !== 'all') {
+      clauses.push(`${column} = ?`)
+      params.push(['1', 'true', 'yes', true, 1].includes(query[queryKey]) ? 1 : 0)
+    }
+  }
+  if (query.startDate) {
+    clauses.push('created_at >= ?')
+    params.push(query.startDate)
+  }
+  if (query.endDate) {
+    clauses.push('created_at < DATE_ADD(?, INTERVAL 1 DAY)')
+    params.push(query.endDate)
+  }
 
   return {
     where: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '',
@@ -87,6 +112,12 @@ function normalizeProduct(product) {
     originalPrice: product.originalPrice === null ? null : Number(product.originalPrice),
     productType: product.productType || 'cultural',
     supportsBrewMethod: Boolean(product.supportsBrewMethod),
+    isFeatured: Boolean(product.isFeatured),
+    isNew: Boolean(product.isNew),
+    isHot: Boolean(product.isHot),
+    lowStockThreshold: Number(product.lowStockThreshold || 5),
+    viewCount: Number(product.viewCount || 0),
+    favoriteCount: Number(product.favoriteCount || 0),
     flavor: typeof product.flavor === 'string' ? JSON.parse(product.flavor) : product.flavor,
   }
 }
@@ -143,6 +174,10 @@ function normalizeProductType(payload) {
   return payload.productType === 'coffee' ? 'coffee' : 'cultural'
 }
 
+function flagValue(value) {
+  return value === true || value === 1 || value === '1' || value === 'true'
+}
+
 function productParams(payload) {
   const productType = normalizeProductType(payload)
   const supportsBrewMethod = productType === 'coffee' ? Number(payload.supportsBrewMethod !== false) : 0
@@ -159,8 +194,9 @@ export async function createProduct(payload) {
   const next = { ...payload, slug: payload.slug || await uniqueProductSlug(payload.name) }
   const [result] = await pool.execute(
     `INSERT INTO products (slug, name, category, product_type, supports_brew_method, image_url, price, original_price, stock, status, sales,
-      flavor, origin, roast, description, scene, storage, tone)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, productParams(next),
+      flavor, origin, roast, description, scene, storage, tone, is_featured, is_new, is_hot, low_stock_threshold)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [...productParams(next), flagValue(next.isFeatured || next.is_featured) ? 1 : 0, flagValue(next.isNew || next.is_new) ? 1 : 0, flagValue(next.isHot || next.is_hot) ? 1 : 0, Math.max(0, Number(next.lowStockThreshold ?? next.low_stock_threshold ?? 5) || 5)],
   )
   return findProductById(result.insertId)
 }
@@ -173,8 +209,8 @@ export async function updateProduct(id, payload) {
   assertProductStatus(next.status || 'active')
   await pool.execute(
     `UPDATE products SET slug=?, name=?, category=?, product_type=?, supports_brew_method=?, image_url=?, price=?, original_price=?, stock=?, status=?,
-      sales=?, flavor=?, origin=?, roast=?, description=?, scene=?, storage=?, tone=? WHERE id=?`,
-    [...productParams(next), id],
+      sales=?, flavor=?, origin=?, roast=?, description=?, scene=?, storage=?, tone=?, is_featured=?, is_new=?, is_hot=?, low_stock_threshold=? WHERE id=?`,
+    [...productParams(next), flagValue(next.isFeatured ?? next.is_featured) ? 1 : 0, flagValue(next.isNew ?? next.is_new) ? 1 : 0, flagValue(next.isHot ?? next.is_hot) ? 1 : 0, Math.max(0, Number(next.lowStockThreshold ?? next.low_stock_threshold ?? 5) || 5), id],
   )
   return findProductById(id)
 }
@@ -323,4 +359,102 @@ export async function updateProductStatus(id, status) {
 export async function deleteProduct(id) {
   const [result] = await pool.execute('DELETE FROM products WHERE id = ?', [id])
   return result.affectedRows > 0
+}
+
+
+export async function getProductAdminStats() {
+  const [[row]] = await pool.execute(`SELECT
+    COUNT(*) AS total,
+    SUM(status = 'active') AS active,
+    SUM(status <> 'active') AS inactive,
+    SUM(stock <= low_stock_threshold) AS lowStock,
+    SUM(is_featured = 1) AS featured,
+    (SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi INNER JOIN orders o ON o.id = oi.order_id WHERE DATE(o.created_at) = CURRENT_DATE) AS todaySales
+    FROM products`)
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Number(value || 0)]))
+}
+
+export async function getProductStockLogs(productId, limit = 20) {
+  const [rows] = await pool.execute(
+    `SELECT l.id, l.product_id AS productId, l.change_type AS changeType, l.change_amount AS changeAmount,
+      l.before_stock AS beforeStock, l.after_stock AS afterStock, l.reason, l.operator_id AS operatorId,
+      a.username AS operatorName, l.created_at AS createdAt
+     FROM product_stock_logs l LEFT JOIN admin_users a ON a.id = l.operator_id
+     WHERE l.product_id = ? ORDER BY l.created_at DESC, l.id DESC LIMIT ${Math.min(100, Math.max(1, Number(limit) || 20))}`,
+    [productId],
+  )
+  return rows
+}
+
+export async function getProductAdminDetail(id) {
+  const product = await findProductById(id)
+  if (!product) return null
+  const [[orders]] = await pool.execute('SELECT COUNT(DISTINCT order_id) AS total FROM order_items WHERE product_id = ?', [id])
+  return { ...product, stockLogs: await getProductStockLogs(id), relatedOrderCount: Number(orders.total || 0) }
+}
+
+export async function updateProductFlags(id, flags = {}, operatorId = null, connection = pool) {
+  const allowed = { isFeatured: 'is_featured', isNew: 'is_new', isHot: 'is_hot' }
+  const fields = []
+  const params = []
+  for (const [key, column] of Object.entries(allowed)) {
+    if (flags[key] !== undefined) {
+      fields.push(`${column} = ?`)
+      params.push(flagValue(flags[key]) ? 1 : 0)
+    }
+  }
+  if (!fields.length) throw Object.assign(new Error('??????????'), { statusCode: 400 })
+  params.push(id)
+  const [result] = await connection.execute(`UPDATE products SET ${fields.join(', ')} WHERE id = ?`, params)
+  if (!result.affectedRows) return null
+  await writeAudit(operatorId, 'product.flags.update', 'products', { id, flags, operatorType: 'admin' }, connection)
+  return findProductById(id)
+}
+
+export async function adjustProductStock(id, payload = {}, operatorId = null) {
+  const amount = Number(payload.amount ?? payload.changeAmount)
+  const mode = String(payload.changeType || payload.type || 'adjust')
+  const reason = String(payload.reason || '').trim()
+  if (!Number.isInteger(amount)) throw Object.assign(new Error('???????????'), { statusCode: 400 })
+  if (!reason) throw Object.assign(new Error('??????????'), { statusCode: 400 })
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [[product]] = await connection.execute('SELECT id, stock FROM products WHERE id = ? FOR UPDATE', [id])
+    if (!product) { await connection.rollback(); return null }
+    const beforeStock = Number(product.stock || 0)
+    const afterStock = mode === 'in' ? beforeStock + Math.abs(amount) : mode === 'out' ? beforeStock - Math.abs(amount) : amount
+    if (!Number.isInteger(afterStock) || afterStock < 0) throw Object.assign(new Error('?????????'), { statusCode: 400 })
+    await connection.execute('UPDATE products SET stock = ? WHERE id = ?', [afterStock, id])
+    await connection.execute(
+      `INSERT INTO product_stock_logs (product_id, change_type, change_amount, before_stock, after_stock, reason, operator_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, mode, afterStock - beforeStock, beforeStock, afterStock, reason, operatorId],
+    )
+    await writeAudit(operatorId, 'product.stock.adjust', 'products', { id, changeType: mode, beforeStock, afterStock, reason, operatorType: 'admin' }, connection)
+    await connection.commit()
+    return getProductAdminDetail(id)
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export async function batchUpdateProducts(ids = [], payload = {}, operatorId = null) {
+  const uniqueIds = [...new Set(ids.map((id) => Number(id)).filter(Boolean))]
+  if (!uniqueIds.length) throw Object.assign(new Error('?????'), { statusCode: 400 })
+  const updated = []
+  const errors = []
+  for (const id of uniqueIds) {
+    try {
+      if (payload.status) updated.push(await updateProductStatus(id, payload.status))
+      else updated.push(await updateProductFlags(id, payload, operatorId))
+      await writeAudit(operatorId, 'product.batch.update', 'products', { id, payload, operatorType: 'admin' })
+    } catch (error) {
+      errors.push({ id, message: error.message })
+    }
+  }
+  return { updated: updated.filter(Boolean), errors }
 }

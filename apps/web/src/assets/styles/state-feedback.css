@@ -1,4 +1,4 @@
-/* Phase 15: shared interaction states and PC consistency pass. */
+/* Shared interaction states and desktop consistency pass. */
 :where(a,button,input,select,textarea,[role="button"]):focus-visible{outline:3px solid color-mix(in srgb,var(--cb-color-gold) 58%,transparent);outline-offset:3px}
 :where(button,.base-button,.cb-button):disabled,[aria-disabled="true"]{cursor:not-allowed!important;filter:saturate(.55);opacity:.5!important;box-shadow:none!important;transform:none!important}
 :where(button,.base-button,.cb-button):disabled::after{display:none!important}

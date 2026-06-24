@@ -13,6 +13,7 @@ import {
 } from '../services/auth.service.js'
 import { recordAudit } from '../services/audit.service.js'
 import { generateCaptcha } from '../services/captcha.service.js'
+import { rateLimit } from '../middlewares/security.js'
 import { issueBirthdayCoupon } from '../services/points.service.js'
 import { signUserToken } from '../utils/jwt.js'
 import { failure, success } from '../utils/response.js'
@@ -40,7 +41,7 @@ async function completeLogin(req, res, user) {
     module: 'auth',
     targetType: 'user',
     targetId: user.id,
-    description: `User ${user.nickname || user.username} login`,
+    description: `用户 ${user.nickname || user.username} 登录`,
     req,
   })
   await issueBirthdayCoupon(user.id).catch((error) => console.warn(`Birthday coupon check failed: ${error.message}`))
@@ -53,10 +54,13 @@ export function registerAuthRoutes(router) {
     return success(res, await generateCaptcha())
   })
 
-  router.post('/api/auth/send-code', sendCode)
-  router.post('/api/auth/sms-code', sendCode)
+  const authRateLimit = rateLimit({ key: 'auth', limit: 40 })
+  const codeRateLimit = rateLimit({ key: 'sms-code', limit: 12 })
 
-  router.post('/api/auth/register', async (req, res) => {
+  router.post('/api/auth/send-code', codeRateLimit, sendCode)
+  router.post('/api/auth/sms-code', codeRateLimit, sendCode)
+
+  router.post('/api/auth/register', authRateLimit, async (req, res) => {
     const phone = String(req.body.phone || '').trim()
     const password = String(req.body.password || '')
     const confirmPassword = String(req.body.confirmPassword || password)
@@ -80,7 +84,7 @@ export function registerAuthRoutes(router) {
         module: 'auth',
         targetType: 'user',
         targetId: user.id,
-        description: `User ${user.nickname || user.username} registered`,
+        description: `用户 ${user.nickname || user.username} 注册`,
         req,
         connection,
       })
@@ -91,7 +95,7 @@ export function registerAuthRoutes(router) {
         module: 'points',
         targetType: 'user',
         targetId: user.id,
-        description: 'Registration reward +100',
+        description: '注册奖励 +100 积分',
         payload: { type: 'earn', source: 'register', points: 100 },
         req,
         connection,
@@ -106,17 +110,17 @@ export function registerAuthRoutes(router) {
     }
   })
 
-  router.post('/api/auth/login/sms', async (req, res) => {
+  router.post('/api/auth/login/sms', authRateLimit, async (req, res) => {
     const user = await loginBySms(req.body)
     return completeLogin(req, res, user)
   })
 
-  router.post('/api/auth/login/password', async (req, res) => {
+  router.post('/api/auth/login/password', authRateLimit, async (req, res) => {
     const user = await loginByPassword(req.body, { requireCaptcha: true })
     return completeLogin(req, res, user)
   })
 
-  router.post('/api/auth/login', async (req, res) => {
+  router.post('/api/auth/login', authRateLimit, async (req, res) => {
     const user = await authenticate(req.body)
     return completeLogin(req, res, user)
   })
@@ -135,7 +139,7 @@ export function registerAuthRoutes(router) {
       module: 'auth',
       targetType: 'user',
       targetId: req.user.id,
-      description: `User ${req.user.nickname || req.user.username} logout`,
+      description: `用户 ${req.user.nickname || req.user.username} 退出登录`,
       req,
     })
     return success(res, {}, 'Logged out')

@@ -180,6 +180,10 @@ watch(() => visibleProducts.value.map((product) => product.id).join(','), async 
             <div class="catalog-card__topline">
               <BaseBadge variant="neutral">{{ product.category }}</BaseBadge>
               <BaseBadge :variant="product.stock > 0 ? 'success' : 'danger'">{{ product.stock > 0 ? '有库存' : '已售罄' }}</BaseBadge>
+              <BaseBadge v-if="product.isFeatured" variant="premium">推荐</BaseBadge>
+              <BaseBadge v-if="product.isNew" variant="success">新品</BaseBadge>
+              <BaseBadge v-if="product.isHot" variant="warning">热销</BaseBadge>
+              <BaseBadge v-if="product.stock > 0 && product.stock <= product.lowStockThreshold" variant="warning">低库存</BaseBadge>
             </div>
             <h2>{{ product.name }}</h2>
             <p>{{ product.flavor.join(' / ') }}</p>

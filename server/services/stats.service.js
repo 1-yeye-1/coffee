@@ -98,6 +98,7 @@ export async function getDashboardTrends() {
     pool.execute('SELECT category AS label, COUNT(*) AS value FROM products GROUP BY category ORDER BY value DESC'),
   ])
   return {
+    range: { start: range.days[0], end: range.days[range.days.length - 1] },
     users: fillDaily(range.days, users[0]),
     orders: fillDaily(range.days, orders[0]),
     bookings: fillDaily(range.days, bookings[0]),

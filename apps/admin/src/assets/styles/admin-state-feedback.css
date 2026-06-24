@@ -1,4 +1,4 @@
-/* Phase 15: admin state normalization and low-noise data surfaces. */
+/* Admin state normalization and low-noise data surfaces. */
 :where(a,button,input,select,textarea,[role="button"]):focus-visible{outline:3px solid color-mix(in srgb,var(--cb-color-gold) 55%,transparent);outline-offset:3px}
 :where(button,.base-button,.cb-button):disabled,[aria-disabled="true"]{cursor:not-allowed!important;filter:saturate(.5);opacity:.48!important;box-shadow:none!important;transform:none!important}
 .base-button[aria-busy="true"]{cursor:progress!important;filter:none;opacity:.76!important}.base-button[aria-busy="true"] .base-button__label{opacity:.7}

@@ -209,10 +209,10 @@ watch(
   background: rgb(0 0 0 / 0.28);
 }
 .notification-drawer__panel {
-  display: grid;
+  display: flex;
   width: min(100%, 26rem);
   height: 100%;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  flex-direction: column;
   gap: var(--cb-space-4);
   padding: var(--cb-space-5);
   overflow: hidden;
@@ -275,6 +275,7 @@ watch(
 .notification-drawer__list,
 .notification-drawer__loading {
   display: grid;
+  flex: 1 1 auto;
   min-height: 0;
   gap: var(--cb-space-4);
   align-content: start;
@@ -296,6 +297,7 @@ watch(
   align-items: center;
 }
 .notification-drawer__batch {
+  flex: 0 0 auto;
   padding: var(--cb-space-3);
   background: var(--cb-bg-soft);
   border: 0.0625rem solid var(--cb-border-soft);

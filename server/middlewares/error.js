@@ -1,4 +1,3 @@
-import { env } from '../config/env.js'
 import { failure } from '../utils/response.js'
 
 export function handleError(error, res) {
@@ -12,6 +11,5 @@ export function handleError(error, res) {
   }
   if (error.code === 'ER_DUP_ENTRY') return failure(res, 400, '记录已存在', 400)
   console.error(error)
-  const message = env.nodeEnv === 'production' ? '服务器内部错误' : error.message
-  return failure(res, 500, message, 500)
+  return failure(res, 500, '服务器内部错误', 500)
 }

@@ -4,6 +4,19 @@ import { writeAudit } from './admin.service.js'
 import { createNotification } from './notifications.service.js'
 
 const validEventStatuses = new Set(['draft', 'published', 'ongoing', 'ended', 'cancelled'])
+const validRegistrationStatuses = new Set(['registered', 'cancelled', 'attended', 'absent'])
+
+function csvEscape(value) {
+  const text = value == null ? '' : String(value)
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+function registrationCheckinStatus(status) {
+  if (status === 'attended') return 'attended'
+  if (status === 'absent') return 'absent'
+  if (status === 'cancelled') return 'cancelled'
+  return 'pending'
+}
 
 function slugify(value, fallback = 'event') {
   const slug = String(value || '')
@@ -48,6 +61,24 @@ function normalize(row) {
     ...row,
     speaker: typeof row.speaker === 'string' ? JSON.parse(row.speaker || 'null') : row.speaker,
     agenda: typeof row.agenda === 'string' ? JSON.parse(row.agenda || '[]') : row.agenda,
+  }
+}
+
+function normalizeRegistration(row) {
+  if (!row) return null
+  return {
+    registrationId: row.registrationId,
+    eventId: row.eventId,
+    userId: row.userId,
+    nickname: row.nickname,
+    phone: row.phone,
+    email: row.email,
+    status: row.status,
+    checkinStatus: row.checkinStatus || registrationCheckinStatus(row.status),
+    registeredAt: row.registeredAt,
+    cancelledAt: row.cancelledAt,
+    attendedAt: row.attendedAt,
+    absentAt: row.absentAt,
   }
 }
 
@@ -183,7 +214,8 @@ export async function registerEvent(eventId, userId) {
     await connection.execute(
       `INSERT INTO event_registrations (event_id, user_id, status)
        VALUES (?, ?, 'registered')
-       ON DUPLICATE KEY UPDATE status = 'registered', updated_at = CURRENT_TIMESTAMP`,
+       ON DUPLICATE KEY UPDATE status = 'registered', registered_at = CURRENT_TIMESTAMP,
+         cancelled_at = NULL, attended_at = NULL, absent_at = NULL, updated_at = CURRENT_TIMESTAMP`,
       [eventId, userId],
     )
     await connection.execute(
@@ -209,7 +241,7 @@ export async function cancelEventRegistration(eventId, userId) {
   try {
     await connection.beginTransaction()
     const [result] = await connection.execute(
-      `UPDATE event_registrations SET status = 'cancelled'
+      `UPDATE event_registrations SET status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP
        WHERE event_id = ? AND user_id = ? AND status = 'registered'`,
       [eventId, userId],
     )
@@ -229,6 +261,171 @@ export async function cancelEventRegistration(eventId, userId) {
   } finally {
     connection.release()
   }
+}
+
+function buildRegistrationFilters(eventId, query = {}) {
+  const clauses = ['er.event_id = ?']
+  const params = [eventId]
+  const keyword = String(query.keyword || '').trim()
+  const status = String(query.status || '').trim()
+  const checkinStatus = String(query.checkinStatus || query.checkin || '').trim()
+
+  if (keyword) {
+    clauses.push('(u.nickname LIKE ? OR u.username LIKE ? OR u.phone LIKE ? OR u.email LIKE ?)')
+    const like = `%${keyword}%`
+    params.push(like, like, like, like)
+  }
+  if (status && status !== 'all') {
+    clauses.push('er.status = ?')
+    params.push(status)
+  }
+  if (checkinStatus && checkinStatus !== 'all') {
+    if (checkinStatus === 'pending') clauses.push("er.status = 'registered'")
+    else if (['attended', 'absent', 'cancelled'].includes(checkinStatus)) {
+      clauses.push('er.status = ?')
+      params.push(checkinStatus)
+    }
+  }
+  return { where: `WHERE ${clauses.join(' AND ')}`, params }
+}
+
+const registrationColumns = `
+  er.id AS registrationId, er.event_id AS eventId, er.user_id AS userId,
+  COALESCE(u.nickname, u.username, CONCAT('用户', er.user_id)) AS nickname,
+  u.phone, u.email, er.status,
+  CASE
+    WHEN er.status = 'attended' THEN 'attended'
+    WHEN er.status = 'absent' THEN 'absent'
+    WHEN er.status = 'cancelled' THEN 'cancelled'
+    ELSE 'pending'
+  END AS checkinStatus,
+  COALESCE(er.registered_at, er.created_at) AS registeredAt,
+  er.cancelled_at AS cancelledAt, er.attended_at AS attendedAt, er.absent_at AS absentAt
+`
+
+export async function listAdminEventRegistrations(eventId, query = {}) {
+  const event = await findEventById(eventId)
+  if (!event) return null
+  const { page, pageSize, offset } = parsePagination(query, 10)
+  const { where, params } = buildRegistrationFilters(eventId, query)
+  const [[{ total }]] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM event_registrations er INNER JOIN users u ON u.id = er.user_id ${where}`,
+    params,
+  )
+  const [rows] = await pool.query(
+    `SELECT ${registrationColumns}
+     FROM event_registrations er INNER JOIN users u ON u.id = er.user_id
+     ${where}
+     ORDER BY er.updated_at DESC, er.id DESC LIMIT ? OFFSET ?`,
+    [...params, pageSize, offset],
+  )
+  return { event, items: rows.map(normalizeRegistration), meta: { page, pageSize, total: Number(total) } }
+}
+
+export async function updateAdminEventRegistrationStatus(eventId, registrationId, payload = {}, operatorId = null) {
+  const status = String(payload.status || '').trim()
+  const reason = String(payload.reason || '').trim()
+  if (!validRegistrationStatuses.has(status)) throw Object.assign(new Error('报名状态无效'), { statusCode: 400 })
+  if (status === 'cancelled' && !reason) throw Object.assign(new Error('取消报名必须填写原因'), { statusCode: 400 })
+
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [[event]] = await connection.execute(
+      'SELECT id, title, status, event_date AS eventDate FROM events WHERE id = ? FOR UPDATE',
+      [eventId],
+    )
+    if (!event) {
+      await connection.rollback()
+      return null
+    }
+    const [[registration]] = await connection.execute(
+      `SELECT er.id, er.event_id AS eventId, er.user_id AS userId, er.status,
+        COALESCE(u.nickname, u.username) AS nickname
+       FROM event_registrations er INNER JOIN users u ON u.id = er.user_id
+       WHERE er.id = ? AND er.event_id = ? FOR UPDATE`,
+      [registrationId, eventId],
+    )
+    if (!registration) throw Object.assign(new Error('报名记录不存在或不属于该活动'), { statusCode: 404 })
+    if (event.status === 'cancelled' && status !== 'cancelled') throw Object.assign(new Error('活动已取消，只能取消报名记录'), { statusCode: 409 })
+    if (event.status === 'ended' && status === 'registered') throw Object.assign(new Error('活动已结束，不能恢复为已报名'), { statusCode: 409 })
+
+    const updates = ['status = ?', 'updated_at = CURRENT_TIMESTAMP']
+    const params = [status]
+    if (status === 'registered') updates.push('registered_at = CURRENT_TIMESTAMP', 'cancelled_at = NULL', 'attended_at = NULL', 'absent_at = NULL')
+    if (status === 'cancelled') updates.push('cancelled_at = CURRENT_TIMESTAMP')
+    if (status === 'attended') updates.push('attended_at = CURRENT_TIMESTAMP', 'absent_at = NULL')
+    if (status === 'absent') updates.push('absent_at = CURRENT_TIMESTAMP', 'attended_at = NULL')
+    params.push(registrationId, eventId)
+    await connection.execute(`UPDATE event_registrations SET ${updates.join(', ')} WHERE id = ? AND event_id = ?`, params)
+    await connection.execute(
+      `UPDATE events SET attendees = (
+        SELECT COUNT(*) FROM event_registrations WHERE event_id = ? AND status = 'registered'
+      ) WHERE id = ?`,
+      [eventId, eventId],
+    )
+    await writeAudit(operatorId, 'event.registration.status.update', 'events', {
+      id: eventId,
+      eventId,
+      registrationId,
+      userId: registration.userId,
+      from: registration.status,
+      status,
+      reason: reason || null,
+      operatorType: 'admin',
+    }, connection)
+    if (['cancelled', 'attended', 'absent'].includes(status)) {
+      const title = status === 'cancelled' ? '活动报名已取消' : status === 'attended' ? '活动签到已确认' : '活动缺席已记录'
+      const content = status === 'cancelled'
+        ? `你报名的活动《${event.title}》已由管理员取消。原因：${reason}`
+        : `你报名的活动《${event.title}》状态已更新为 ${status === 'attended' ? '已参加' : '缺席'}${reason ? `。备注：${reason}` : ''}`
+      await createNotification({ userId: registration.userId, title, content, type: 'event', relatedId: eventId, relatedType: 'event' }, connection)
+    }
+    await connection.commit()
+    return listAdminEventRegistrations(eventId, { page: 1, pageSize: 1, keyword: registration.nickname })
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export async function exportAdminEventRegistrations(eventId, query = {}, operatorId = null) {
+  const event = await findEventById(eventId)
+  if (!event) return null
+  const { where, params } = buildRegistrationFilters(eventId, query)
+  const [rows] = await pool.execute(
+    `SELECT ${registrationColumns}, e.title AS eventTitle
+     FROM event_registrations er
+     INNER JOIN events e ON e.id = er.event_id
+     INNER JOIN users u ON u.id = er.user_id
+     ${where}
+     ORDER BY er.updated_at DESC, er.id DESC`,
+    params,
+  )
+  await writeAudit(operatorId, 'event.registration.export', 'events', {
+    id: eventId,
+    eventId,
+    filters: query,
+    count: rows.length,
+    operatorType: 'admin',
+  })
+  const headers = ['活动名称', '用户昵称', '手机号', '邮箱', '报名状态', '签到状态', '报名时间']
+  const lines = [headers.map(csvEscape).join(',')]
+  rows.forEach((row) => {
+    lines.push([
+      row.eventTitle,
+      row.nickname,
+      row.phone,
+      row.email,
+      row.status,
+      row.checkinStatus,
+      row.registeredAt,
+    ].map(csvEscape).join(','))
+  })
+  return `\uFEFF${lines.join('\n')}`
 }
 
 export async function listMyEventRegistrations(userId) {

@@ -57,7 +57,10 @@ function createUploadError(message, statusCode = 400) {
 }
 
 export function safeExtension(filename) {
-  const ext = path.extname(String(filename || '')).slice(1).toLowerCase()
+  const normalized = String(filename || '').replace(/\\/g, '/').split('/').pop().toLowerCase()
+  const segments = normalized.split('.').filter(Boolean)
+  if (segments.some((segment, index) => index < segments.length - 1 && dangerousExtensions.has(segment))) return ''
+  const ext = path.extname(normalized).slice(1).toLowerCase()
   if (!ext || dangerousExtensions.has(ext)) return ''
   return ext
 }
