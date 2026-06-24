@@ -1,0 +1,230 @@
+# 系统架构说明
+
+## 1. 总体架构
+
+Coffee Book 采用前后台分离 + 后端 API + MySQL 数据库的全栈架构。
+
+```text
+用户浏览器
+   │
+   ├── apps/web 用户端 Vue 应用
+   │
+   ├── apps/admin 后台 Vue 应用
+   │
+   ▼
+Express API server
+   │
+   ├── routes 路由层
+   ├── middlewares 鉴权/权限/错误处理
+   ├── services 业务服务层
+   ├── utils 通用工具
+   ▼
+MySQL 数据库
+```
+
+## 2. 前端设计
+
+### 2.1 前台与后台分离
+
+- `apps/web` 面向普通用户。
+- `apps/admin` 面向管理员。
+- 两端共享 `apps/shared` 中的组件、样式、动画和错误处理。
+
+### 2.2 组件分层
+
+- 基础组件：按钮、输入框、Tabs、Table、Modal、Badge。
+- 业务组件：SeatMap、NotificationDrawer、CommunityPostCard、BookingProgress。
+- 页面组件：views 下按业务模块划分。
+
+### 2.3 API 封装
+
+前端通过 `api/` 目录封装请求，避免页面直接拼接 fetch。认证 token 由 store 管理，并在请求中统一附加。
+
+### 2.4 Pinia 状态管理
+
+Pinia 用于保存：
+
+- 用户登录状态
+- 商品 / 图书 / 社区列表状态
+- 购物车
+- 会员中心数据
+- 消息中心
+- 预约选择状态
+
+数据层收敛后，统计最终值尽量由后端聚合返回，前端只缓存 UI 状态和必要列表状态。
+
+### 2.5 路由设计
+
+- Vue Router 管理前台和后台路由。
+- 前台公开页面与会员页面分组。
+- 后台路由通过管理员登录状态保护。
+- 详情页支持 slug 或 id 兜底。
+
+### 2.6 Motion 动画系统
+
+- GSAP：Hero、页面进入、列表 reveal、Dashboard 数字动画。
+- Anime.js：点赞、状态反馈等微交互。
+- shared motion 封装统一处理：reduced-motion、RAF 清理、DOM 类型校验、长列表数量限制。
+
+### 2.7 Cursor 系统
+
+多主题自定义 Cursor 支持：
+
+- 系统默认
+- Coffee Halo
+- Cream Capsule
+- Book Reader
+- Amber Trail
+- Minimal Dot
+
+仅桌面 fine pointer 启用，移动端和 reduced-motion 自动禁用。输入框、文本选择、Modal、Drawer 内恢复系统鼠标。
+
+### 2.8 Loading / Empty / Error
+
+列表、详情、后台表格均设置 loading、empty、error 状态。图片区域使用固定尺寸容器、占位渐变和 fallback，避免 layout shift。
+
+### 2.9 全局错误兜底
+
+前后台接入共享 error handler：
+
+- `app.config.errorHandler`
+- `router.onError`
+- `window.onerror`
+- `unhandledrejection`
+
+目标是避免单个页面数据异常导致全站白屏。
+
+## 3. 后端设计
+
+### 3.1 Express 路由层
+
+`server/routes` 负责定义 API 路径、HTTP 方法、鉴权中间件和请求参数入口。路由层不做复杂业务计算，只调用 service。
+
+### 3.2 Service 业务层
+
+`server/services` 负责核心业务：
+
+- auth.service：登录、注册、验证码。
+- account.service：个人资料、会员中心。
+- points.service：积分、优惠券、签到、成长值。
+- products.service：商品、评论、订单关联判断。
+- books.service：图书、收藏、预约、评论。
+- community.service：帖子、评论、点赞、统计。
+- booking.service：座位预约。
+- admin.service：后台管理。
+- stats.service：统一统计。
+- upload.service：上传记录。
+- audit.service：审计日志。
+
+### 3.3 Middleware 鉴权层
+
+- 普通用户接口使用用户 JWT。
+- 后台接口使用管理员 JWT。
+- 管理员来自 `admin_users`，普通用户来自 `users`。
+- 后台上传场景不会把 `admin_users.id` 写入 `upload_files.user_id`。
+
+### 3.4 上传服务
+
+上传使用 Multer，本地存储到 `server/public/uploads`。上传记录写入 `upload_files`，不同 scene 有不同 userId 规则。
+
+### 3.5 审计日志
+
+关键操作写入 `audit_logs`。日志字段包含操作者、角色、动作、目标、描述、IP、User-Agent、时间等。敏感字段会被过滤。
+
+### 3.6 统计服务
+
+stats.service 统一处理 Dashboard、社区统计、收藏、点赞、评论、积分、优惠券等统计，避免前端写死或多处 SQL 口径不一致。
+
+### 3.7 时间设计
+
+`server/utils/date.js` 是业务日期统一入口。生日券、签到、统计趋势使用 Asia/Shanghai，避免 UTC 跨日问题。
+
+## 4. 数据库设计
+
+MySQL 按业务模块划分表结构，详见 `docs/DATABASE.md`。
+
+设计重点：
+
+- 外键保证核心关联一致性。
+- 唯一索引避免重复点赞、重复兑换、重复签到、重复预约。
+- nullable upload user 解决管理员上传与普通用户外键不同源问题。
+- `seats` 坐标字段支持前后台地图统一。
+- 审计日志独立存储，方便后台查询。
+
+## 5. 核心业务流程
+
+### 5.1 登录流程
+
+1. 页面加载图形验证码。
+2. 用户选择密码登录或短信登录。
+3. 切换登录方式时刷新图形验证码。
+4. 密码登录：手机号 + 密码 + 图形验证码。
+5. 短信登录：手机号 + 图形验证码，通过后发送短信验证码，再登录。
+6. 后端返回 JWT 和用户信息。
+7. 前端保存 token 并进入用户状态。
+
+### 5.2 注册流程
+
+1. 用户输入手机号、密码、确认密码。
+2. 获取图形验证码并发送短信验证码。
+3. 提交注册。
+4. 后端创建用户、初始化会员状态、发送欢迎通知、写审计日志。
+
+### 5.3 商品下单流程
+
+1. 浏览商品。
+2. 商品详情选择规格或制作方式。
+3. 加入购物车。
+4. 结算生成订单。
+5. 模拟支付更新订单和支付状态。
+6. 订单通知与积分流水联动。
+
+### 5.4 图书预约流程
+
+1. 浏览图书详情。
+2. 查看图书绑定位置。
+3. 用户预约图书。
+4. 防止重复预约。
+5. 可取消预约。
+6. 评论权限可基于预约或借阅记录判断。
+
+### 5.5 座位预约流程
+
+1. 选择座位或预约对象。
+2. 选择日期和固定时间段。
+3. 填写联系人、手机号、备注、人数。
+4. 确认信息。
+5. 提交预约。
+6. 后台可确认、取消或管理。
+
+### 5.6 评论点赞回复流程
+
+1. 用户在详情页提交评论。
+2. 后端校验购买、预约或登录条件。
+3. 评论可点赞、取消点赞。
+4. 评论可回复，前端最多显示两层。
+5. 统计值由数据库聚合返回。
+
+### 5.7 每日签到流程
+
+1. 用户进入积分中心或会员中心。
+2. 点击签到。
+3. 后端按 Asia/Shanghai 判断当天是否已签到。
+4. 未签到则写入积分流水，增加成长值，写入 audit_logs。
+5. 前端刷新积分、成长值、等级进度。
+
+### 5.8 后台上传图片流程
+
+1. 管理员点击上传按钮。
+2. 文件 input 只触发上传，不触发表单保存。
+3. 上传接口保存文件和 upload_files 记录。
+4. 后台场景 `user_id = NULL`。
+5. 上传成功后只更新当前表单图片字段。
+
+### 5.9 后台座位拖拽同步流程
+
+1. 后台座位页加载 SeatMap edit 模式。
+2. 拖拽座位更新 x/y。
+3. 保存到 seats 表。
+4. 前台预约页加载 SeatMap select 模式。
+5. 前台刷新后展示最新坐标和布局。

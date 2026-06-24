@@ -1,170 +1,147 @@
 # Coffee Book 最终交付说明
 
-## 1. 项目简介
+## 1. 交付概述
 
-Coffee Book 是一个咖啡与阅读空间全栈演示项目，包含前台主站、后台管理和后端 API。项目支持图书浏览、咖啡商品、购物车、订单、活动、社区、空间预约以及后台运营管理。
+Coffee Book 是一个集咖啡商城、图书阅读、活动报名、社区互动、空间预约、会员积分和后台运营管理于一体的全栈 Web 项目。系统包含用户端 Web、后台管理端 Admin 和 Express 后端 API，使用 MySQL 保存真实业务数据。
 
-## 2. 架构说明
+本交付版本已经完成前后台核心功能、数据库迁移、演示数据脚本、Smoke 测试、UI 收敛、数据层统一和最终文档整理，适合作为课程项目、答辩展示或二次开发基础。
 
-```text
-apps/web      前台主站，面向普通用户
-apps/admin    后台管理，面向管理员
-server        后端 API，负责鉴权、业务接口和 MySQL 数据访问
+## 2. 已完成功能清单
+
+### 2.1 用户端
+
+- 首页展示：精选咖啡、精选图书、社区统计、图片优先加载、Skeleton 与 ErrorPanel。
+- 商品商城：商品列表、分类、详情、购物车、下单、模拟支付、商品评论、点赞和回复。
+- 图书中心：图书列表、详情、收藏、图书预约、图书位置绑定、图书评论、点赞和回复。
+- 活动中心：活动列表、分类、详情、报名、取消报名、日历模式点击详情。
+- 社区交流：帖子列表、详情、发帖、评论、二级回复、点赞、举报。
+- 空间预约：统一咖啡书屋 SeatMap、固定时间段、分阶段流程、确认信息提交。
+- 登录注册：密码登录、手机号验证码登录、图形数字验证码、密码可见切换。
+- 消息中心：已读、删除、置顶、批量操作、点击跳转业务区域。
+- 会员中心：资料、头像、订单、预约、活动、收藏、积分、优惠券。
+- 会员成长：成长值、等级、权益、每日签到、积分奖励。
+- 全局体验：多主题 Cursor、BackToTop、loading/empty/error、全局错误兜底。
+
+### 2.2 后台管理端
+
+- Dashboard：真实数据库统计、订单趋势、用户趋势、运营概览。
+- 商品管理：商品 CRUD、图片上传、上架/下架、批量操作。
+- 图书管理：图书 CRUD、封面上传、位置绑定、显示/隐藏、批量操作。
+- 活动管理：活动 CRUD、发布/下线、日历联动、批量操作。
+- 社区审核：帖子、评论、举报审核；通过、驳回、隐藏；批量操作。
+- 订单管理：订单列表、状态更新、批量标记处理/完成。
+- 预约管理：预约确认、取消、批量处理。
+- 座位管理：后台拖拽座位坐标，前台预约地图同步。
+- 用户管理：用户状态、会员等级、成长值、签到信息、批量启用/禁用。
+- 操作日志：关键行为记录、筛选、详情、多选查看数量。
+- 上传管理：后台上传图片，上传记录入库，用户/管理员上传场景区分。
+
+### 2.3 后端与数据库
+
+- Express API 服务。
+- JWT 鉴权，用户与管理员权限隔离。
+- MySQL 数据持久化。
+- 幂等迁移与结构检查。
+- 真实演示数据脚本。
+- 审计日志。
+- 统一统计服务。
+- 统一错误处理。
+- 上传文件记录与本地静态访问。
+
+## 3. 数据库说明
+
+核心表包括：
+
+- 用户与权限：`users`、`admin_users`
+- 商品与订单：`products`、`cart_items`、`orders`、`order_items`、`payments`
+- 图书与预约：`books`、`book_reviews`、`book_reservations`
+- 活动：`events`、`event_registrations`
+- 社区：`posts`、`comments`、`comment_likes`、`content_reports`
+- 空间预约：`seats`、`bookings`
+- 积分优惠券：`user_points`、`coupons`、`user_coupons`
+- 通知：`user_notifications`
+- 上传：`upload_files`
+- 审计：`audit_logs`
+
+重要同步点：
+
+- `users.growth_value`、`users.last_checkin_date` 用于会员成长和签到。
+- `upload_files.user_id` 允许为空，外键为 `ON DELETE SET NULL`。
+- `comments.parent_id` 支持二级回复。
+- `comment_likes` 控制评论点赞唯一性。
+- `seats.x/y/width/height/sort_order` 支持前后台统一座位地图。
+- `verification_codes.expires_at` 和 `payments.expires_at` 使用明确日期时间类型。
+
+详细说明见 [`docs/DATABASE.md`](docs/DATABASE.md)。
+
+## 4. 接口说明概览
+
+接口按模块划分：认证、用户、商品、图书、活动、社区、评论、预约、消息、积分优惠券、后台管理、上传。详细接口见 [`docs/API.md`](docs/API.md)。
+
+重点流程：
+
+- 密码登录：手机号 + 密码 + 图形验证码。
+- 手机验证码登录：手机号 + 图形验证码 + 短信验证码。
+- 商品评论：购买后评论，支持点赞和二级回复。
+- 图书评论：预约或借阅后评论，支持点赞和二级回复。
+- 座位预约：选择对象、选择日期与固定时间段、填写信息、确认提交。
+- 后台上传：商品/图书/活动图片上传不触发表单保存，上传者可为管理员场景的 `NULL user_id`。
+
+## 5. 运行方式
+
+```bash
+npm install
+cp .env.example .env
+npm run db:init
+npm run db:demo
+npm run dev:server
+npm run dev:web
+npm run dev:admin
 ```
 
-三端通过 `VITE_API_BASE_URL` 和 `/api` 接口连接，后端通过 `CORS_ORIGIN` 控制允许访问的前端来源。
+访问地址：
 
-## 3. 技术栈
+```text
+前台：http://127.0.0.1:5173
+后台：http://127.0.0.1:5174
+API：http://127.0.0.1:4173/api
+```
 
-- Vue 3、Vue Router、Pinia、Vite
-- Node.js、MySQL、mysql2
-- JWT 登录鉴权
-- 本地 Design System CSS 与基础组件
-- GSAP 结构动画、Anime.js 微交互与共享 Motion Runtime
-
-## 4. 已完成功能
-
-- 前台：首页、图书、咖啡商品、购物车、结算下单、模拟支付、会员订单、活动、社区、空间预约、登录注册、完整个人资料和积分中心
-- 后台：仪表盘、图书 / 商品 / 订单 / 活动管理、社区审核、预约管理、座位拖拽、用户积分与优惠券概览、上传文件、详细操作日志
-- 后端：JWT 登录、admin 权限、MySQL 幂等迁移与种子、积分流水、优惠券兑换、年度生日券、详细审计日志、CORS 和 smoke test
-
-Phase 16 已完成座位坐标拖拽保存与前台同步、用户和管理员关键操作日志、卡片点击与键盘访问修复。Phase 17 已完成积分中心、优惠券兑换及幂等保护、生日当天自动发券、个人资料字段和公开资料隐私边界。
-
-数据库同步包含 `coupons`、`user_coupons`，以及 `users.gender`、`users.birthday`、`users.bio`；`user_coupons.request_key` 用于阻止同一兑换请求重复扣分。`audit_logs` 已补齐用户、角色、目标、说明、IP 和 User-Agent 字段。
-
-## 5. 默认管理员账号
+默认管理员：
 
 ```text
 username: admin
 password: admin123456
 ```
 
-生产环境请及时替换默认账号或修改密码。
+## 6. 演示数据说明
 
-## 6. 本地启动步骤
-
-以下命令执行前必须先启动 MySQL，并确认其监听 `.env` 配置的 `DB_HOST:DB_PORT`。首次环境运行 `npm run db:init`；已有数据库可运行 `node server/db/migrate.js` 执行幂等迁移。
+执行：
 
 ```bash
-npm install
-cp .env.example .env
-npm run db:init
-npm run dev:server
-npm run dev:web
-npm run dev:admin
+npm run db:demo
 ```
 
-也可以使用：
+会生成：
 
-```bash
-npm run dev:all
-```
+- 不同会员等级演示用户。
+- 商品订单、支付、订单明细。
+- 座位预约、图书预约、活动报名。
+- 商品评论、图书评论。
+- 社区帖子、评论、回复、点赞。
+- 积分流水、签到、优惠券。
+- 通知消息与审计日志。
 
-本地访问：
+脚本使用固定手机号、邮箱、订单号、预约号、slug、request_key 等方式保证幂等，重复执行不会无限插入重复数据。
 
-```text
-前台：http://127.0.0.1:5173
-后台：http://127.0.0.1:5174
-后端：http://127.0.0.1:4173/api
-```
+## 7. 测试与验证结果
 
-## 7. 生产部署步骤
-
-1. 在服务器安装 Node.js 和 MySQL。
-2. 创建后端 `.env`，配置 `DB_HOST`、`DB_USER`、`DB_PASSWORD`、`JWT_SECRET`、`CORS_ORIGIN`。
-3. 执行 `npm install`。
-4. 配置 `DB_NAME` 后执行 `npm run db:init`，完成建表、幂等 seed 和数据库一致性检查。
-5. `db:init` 已包含幂等 seed；仅需单独补数据时执行 `npm run db:seed`，演示环境可继续执行 `npm run db:demo` 写入幂等演示账号和行为数据。
-6. 配置 `apps/web/.env` 和 `apps/admin/.env` 的 `VITE_API_BASE_URL`。
-7. 执行 `npm run build` 生成 `dist/web` 和 `dist/admin`。
-8. 使用 Nginx 或静态服务器托管前台、后台静态资源。
-9. 使用 `npm run start` 或 PM2 启动后端。
-10. 配置 Nginx 将 API 域名反向代理到 Node 后端。
-
-## 8. Smoke Test
-
-提交或部署前执行：
+推荐最终验证命令：
 
 ```bash
 node server/db/migrate.js
 npm run db:check
-npm run build
-npm run smoke:web
-npm run smoke:api
-node scripts/check-project.js
-```
-
-预期结果：幂等迁移、数据库结构检查、前后台构建、路由 smoke、真实数据库 API 回归和项目静态检查全部通过。
-
-2026-06-22 最终交付验证：`node server/db/migrate.js`、`npm run db:check`、`npm run build`、`npm run smoke:web`、`npm run smoke:api`、`node scripts/check-project.js` 均通过。Web / Admin 分别完成 270 / 179 个模块转换；API smoke 覆盖注册登录、资料隐私、积分兑换幂等、生日券年度唯一、后台用户与日志筛选、座位坐标同步及原有订单、社区、活动、预约流程。
-
-## 9. 安全注意事项
-
-- 不提交 `.env`
-- 不提交真实数据库密码
-- 不提交真实 `JWT_SECRET`
-- 生产环境使用强数据库密码和长随机 JWT 密钥
-- `CORS_ORIGIN` 只配置可信前台和后台域名
-- 后台 API 保持 `requireAdmin`
-- 公开用户接口不返回手机号、邮箱和生日
-- 审计日志入库前过滤密码、验证码、Token 等敏感字段
-- 积分扣减使用事务、用户行锁、余额校验和兑换幂等键，后台调整不得产生负积分
-- 生产数据库定期备份
-
-## 10. 未接入能力说明
-
-当前项目未接入真实支付、真实短信 / 邮件发送、WebSocket 实时通知、第三方推荐系统和第三方对象存储。支付为演示用模拟支付状态流转；文件上传已通过 Multer 接入本地静态资源目录，并提供后台上传记录管理。
-
-## 11. 最终演示路径
-
-### 前台演示
-
-1. 访问 `http://127.0.0.1:5173/`，操作：打开首页，预期：首页正常展示。
-2. 访问 `http://127.0.0.1:5173/books`，操作：浏览图书列表，预期：图书数据正常展示。
-3. 访问 `http://127.0.0.1:5173/coffee`，操作：浏览咖啡商品，预期：商品列表正常展示。
-4. 访问 `http://127.0.0.1:5173/register`，操作：注册普通用户，预期：注册成功或提示用户名规则。
-5. 访问 `http://127.0.0.1:5173/login`，操作：登录普通用户，预期：登录后回到前台。
-6. 访问 `http://127.0.0.1:5173/coffee`，操作：加入购物车，预期：购物车数量更新。
-7. 访问 `http://127.0.0.1:5173/cart`，操作：确认商品并进入结算，预期：结算页可打开。
-8. 访问 `http://127.0.0.1:5173/checkout`，操作：提交订单并模拟支付，预期：订单状态更新。
-9. 访问 `http://127.0.0.1:5173/account/orders`，操作：查看我的订单，预期：只显示当前用户订单。
-10. 访问 `http://127.0.0.1:5173/account/profile`，操作：编辑个人资料，预期：字段保存且公开主页不显示手机号、邮箱、生日。
-11. 访问 `http://127.0.0.1:5173/account/points`，操作：兑换优惠券，预期：积分扣减一次并生成兑换记录；生日当天生日券仅发放一次。
-12. 访问 `http://127.0.0.1:5173/events`，操作：报名活动，预期：报名成功或容量提示。
-13. 访问 `http://127.0.0.1:5173/community`，操作：发帖、评论、点赞，预期：社区交互正常。
-14. 访问 `http://127.0.0.1:5173/booking`，操作：提交空间预约，预期：预约记录创建成功并使用数据库最新座位坐标。
-
-### 后台演示
-
-1. 访问 `http://127.0.0.1:5174/login`，操作：打开后台登录页，预期：不显示前台 Header/Footer。
-2. 使用 `admin / admin123456` 登录，预期：进入 `/dashboard`。
-3. 访问 `http://127.0.0.1:5174/dashboard`，操作：查看 Dashboard，预期：统计卡片正常展示。
-4. 访问 `http://127.0.0.1:5174/books`，操作：管理图书，预期：列表、编辑、上下架可用。
-5. 访问 `http://127.0.0.1:5174/products`，操作：管理商品，预期：列表、编辑、库存状态可用。
-6. 访问 `http://127.0.0.1:5174/orders`，操作：管理订单，预期：订单状态可查看和更新。
-7. 访问 `http://127.0.0.1:5174/events`，操作：管理活动，预期：活动 CRUD 可用。
-8. 访问 `http://127.0.0.1:5174/community`，操作：审核社区内容，预期：通过、拒绝、精选等操作可用。
-9. 访问 `http://127.0.0.1:5174/bookings`，操作：管理预约，预期：确认、到店、取消状态可用。
-10. 访问 `http://127.0.0.1:5174/seats`，操作：拖拽座位并刷新前台预约页，预期：坐标保存并同步；新增、编辑、维护状态和删除可用。
-11. 访问 `http://127.0.0.1:5174/users`，操作：管理用户，预期：积分、生日、优惠券数量、会员等级和账号状态清晰可见。
-12. 访问 `http://127.0.0.1:5174/uploads`，操作：查看上传记录，预期：筛选、预览和删除可用。
-13. 访问 `http://127.0.0.1:5174/logs`，操作：按用户、角色、动作和时间查看日志，预期：普通用户与管理员关键操作均可筛选并查看详情。
-
-## 12. Phase 18：性能优化与交付展示
-
-- 路由拆包审计完成：除前台首页和后台仪表盘外，主要业务页面均为动态 import。
-- 图书、商品、活动、社区及后台缩略图统一延迟加载、异步解码；卡片图片容器保留稳定尺寸，降低 layout shift。
-- 图书、商品、活动、社区补齐可重试错误状态；活动和社区增加列表 Skeleton 与统一 EmptyState。
-- 预约、积分中心及后台表格继续复用既有 Skeleton、EmptyState、ErrorPanel 和 `aria-busy` 反馈。
-- GSAP / Anime.js 列表动画保留数量上限与卸载清理；Cursor 保持 RAF、失焦停止和设备降级策略。
-- 前台 title 随路由变化，description / keywords 动态同步；后台增加 `noindex,nofollow`。
-- README 已补充项目亮点、截图槽位、完整功能清单、运行方式与验证命令。
-
-## 13. Phase 18 最终验证
-
-交付前执行以下命令：
-
-```bash
+npm run db:demo
 npm run build
 npm run smoke:web
 npm run smoke:api
@@ -173,4 +150,19 @@ node scripts/check-project.js
 git diff --check
 ```
 
-2026-06-23 最终验证：以上六条命令全部通过。Web / Admin 构建分别转换 275 / 182 个模块；Web smoke 验证前后台路由与异步 chunk；API smoke 完整通过商城、图书、活动、社区、预约、积分、年度生日券及后台管理回归；Motion、项目结构与补丁格式检查均通过。
+预期：全部通过，仅可能出现 Windows LF/CRLF 换行提示，不应出现 whitespace error。
+
+测试说明见 [`docs/TESTING.md`](docs/TESTING.md)。
+
+## 8. 已知限制
+
+- 支付为模拟支付，不接入真实支付网关。
+- 短信验证码为演示流程，生产环境需接入真实短信服务。
+- 上传使用本地目录，生产建议迁移对象存储。
+- 不包含 WebSocket 实时通知，消息刷新以接口查询为主。
+- 日志不提供强制删除能力，避免审计数据被误删。
+- 部分演示数据为固定样例，适合展示，不代表真实运营数据。
+
+## 9. 最终交付结论
+
+Coffee Book 已完成前后台完整闭环、核心业务流程、数据库持久化、后台批量管理、评论互动、会员成长、预约座位、演示数据、测试脚本与文档整理。项目可以用于课程作业交付、答辩演示和继续二次开发。

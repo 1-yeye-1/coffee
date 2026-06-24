@@ -1,0 +1,369 @@
+# API 接口文档
+
+> 说明：本接口文档按当前项目 routes/service 设计整理。具体字段以实际代码为准；所有后台接口均需要管理员登录，普通用户接口按说明需要 JWT。
+
+## 通用约定
+
+- API 前缀：`/api`
+- 认证方式：`Authorization: Bearer <token>`
+- 响应结构通常包含：`data`、`message`、`meta`。
+- 统计接口 `meta.source` 通常为 `db`。
+- 上传接口使用 `multipart/form-data`。
+
+## 1. 认证接口
+
+### 获取图形验证码
+- 方法：`GET`
+- 路径：`/api/auth/captcha`
+- 登录：否
+- 作用：生成图形数字验证码。
+- 返回：`captchaId`、`image` 或验证码展示数据。
+
+### 发送短信验证码
+- 方法：`POST`
+- 路径：`/api/auth/send-code`
+- 登录：否
+- 参数：`phone`、`captchaId`、`captchaCode`
+- 作用：图形验证码通过后发送短信验证码。
+
+### 注册
+- 方法：`POST`
+- 路径：`/api/auth/register`
+- 登录：否
+- 参数：`phone`、`password`、`smsCode`、`nickname` 等。
+- 作用：注册普通用户，注册后自动成为会员。
+
+### 手机验证码登录
+- 方法：`POST`
+- 路径：`/api/auth/login/sms`
+- 登录：否
+- 参数：`phone`、`smsCode`、`captchaId`、`captchaCode`
+- 作用：手机号验证码登录。
+
+### 手机号密码登录
+- 方法：`POST`
+- 路径：`/api/auth/login/password`
+- 登录：否
+- 参数：`phone`、`password`、`captchaId`、`captchaCode`
+- 作用：手机号密码登录。
+
+### 兼容登录
+- 方法：`POST`
+- 路径：`/api/auth/login`
+- 登录：否
+- 作用：兼容旧登录链路。
+
+### 退出登录
+- 方法：`POST`
+- 路径：`/api/auth/logout`
+- 登录：是
+- 作用：退出登录并写入日志。
+
+### 获取当前用户
+- 方法：`GET`
+- 路径：`/api/auth/me`
+- 登录：是
+- 作用：返回当前登录用户信息。
+
+## 2. 用户 / 会员接口
+
+### 获取个人资料
+- 方法：`GET`
+- 路径：`/api/account/profile`
+- 登录：是
+- 作用：获取昵称、头像、手机号、性别、生日、简介、公开资料开关等。
+
+### 更新个人资料
+- 方法：`PATCH`
+- 路径：`/api/account/profile`
+- 登录：是
+- 作用：修改个人资料，写入审计日志。
+
+### 上传 / 选择头像
+- 方法：`POST`
+- 路径：`/api/upload/avatar`
+- 登录：是
+- 作用：上传头像并写入上传记录。
+
+### 积分中心
+- 方法：`GET`
+- 路径：`/api/account/points`
+- 登录：是
+- 作用：获取积分余额、积分流水、成长值、优惠券等。
+
+### 每日签到
+- 方法：`POST`
+- 路径：`/api/account/checkin`
+- 登录：是
+- 作用：按 Asia/Shanghai 业务日每日一次签到，奖励积分和成长值。
+
+### 兑换优惠券
+- 方法：`POST`
+- 路径：`/api/account/coupons/redeem`
+- 登录：是
+- 参数：`couponId`、`requestKey`
+- 作用：使用积分兑换优惠券，支持幂等。
+
+### 我的优惠券
+- 方法：`GET`
+- 路径：`/api/account/coupons`
+- 登录：是
+- 作用：查看可用、已用、过期优惠券。
+
+## 3. 消息通知接口
+
+### 消息列表
+- 方法：`GET`
+- 路径：`/api/account/notifications`
+- 登录：是
+- 作用：获取当前用户消息。
+
+### 标记单条已读
+- 方法：`PATCH`
+- 路径：`/api/account/notifications/:id/read`
+- 登录：是
+
+### 批量已读
+- 方法：`PATCH`
+- 路径：`/api/account/notifications/read`
+- 登录：是
+- 参数：`ids` 或全部标记参数。
+
+### 删除消息 / 批量删除
+- 方法：`DELETE`
+- 路径：`/api/account/notifications`
+- 登录：是
+- 参数：`ids`
+
+### 置顶消息
+- 方法：`PATCH`
+- 路径：`/api/account/notifications/:id/pin`
+- 登录：是
+
+## 4. 商品接口
+
+### 商品列表
+- 方法：`GET`
+- 路径：`/api/products`
+- 登录：否
+- 参数：分类、关键词、分页等。
+
+### 商品详情
+- 方法：`GET`
+- 路径：`/api/products/:slugOrId`
+- 登录：否
+- 返回：商品信息、库存、评分、评论统计。
+
+### 商品评论列表
+- 方法：`GET`
+- 路径：`/api/products/:id/reviews`
+- 登录：可选
+
+### 新增 / 更新商品评论
+- 方法：`POST`
+- 路径：`/api/products/:id/reviews`
+- 登录：是
+- 规则：购买后可评论；同一用户同一商品一条评论，可更新。
+
+### 回复商品评论
+- 方法：`POST`
+- 路径：`/api/products/reviews/:reviewId/replies`
+- 登录：是
+
+### 点赞 / 取消点赞商品评论
+- 方法：`POST` / `DELETE`
+- 路径：`/api/products/reviews/:reviewId/like`
+- 登录：是
+
+### 购物车
+- 方法：`GET` / `POST` / `PATCH` / `DELETE`
+- 路径：`/api/cart`
+- 登录：是
+- 作用：查看、添加、修改数量、删除购物车项。
+
+### 下单
+- 方法：`POST`
+- 路径：`/api/orders`
+- 登录：是
+
+### 支付模拟
+- 方法：`POST`
+- 路径：`/api/orders/:id/pay`
+- 登录：是
+
+### 订单详情
+- 方法：`GET`
+- 路径：`/api/orders/:id`
+- 登录：是
+
+## 5. 图书接口
+
+### 图书列表
+- 方法：`GET`
+- 路径：`/api/books`
+
+### 图书详情
+- 方法：`GET`
+- 路径：`/api/books/:slugOrId`
+
+### 收藏 / 取消收藏
+- 方法：`POST` / `DELETE`
+- 路径：`/api/books/:id/favorite`
+- 登录：是
+
+### 图书预约
+- 方法：`POST`
+- 路径：`/api/books/:id/reservations`
+- 登录：是
+
+### 取消图书预约
+- 方法：`DELETE`
+- 路径：`/api/books/reservations/:id`
+- 登录：是
+
+### 图书评论 / 回复 / 点赞
+- 路径模式：`/api/books/:id/reviews`、`/api/books/reviews/:reviewId/replies`、`/api/books/reviews/:reviewId/like`
+- 登录：评论、回复、点赞需要登录。
+
+## 6. 活动接口
+
+### 活动列表
+- 方法：`GET`
+- 路径：`/api/events`
+
+### 活动详情
+- 方法：`GET`
+- 路径：`/api/events/:slugOrId`
+
+### 活动报名
+- 方法：`POST`
+- 路径：`/api/events/:id/register`
+- 登录：是
+
+### 取消报名
+- 方法：`DELETE`
+- 路径：`/api/events/:id/register`
+- 登录：是
+
+### 活动日历
+- 方法：`GET`
+- 路径：`/api/events/calendar`
+- 作用：供活动日历模式使用。
+
+## 7. 社区接口
+
+### 帖子列表
+- 方法：`GET`
+- 路径：`/api/posts`
+
+### 社区统计
+- 方法：`GET`
+- 路径：`/api/posts/stats`
+
+### 帖子详情
+- 方法：`GET`
+- 路径：`/api/posts/:idOrSlug`
+
+### 发布帖子
+- 方法：`POST`
+- 路径：`/api/posts`
+- 登录：是
+
+### 点赞 / 取消点赞帖子
+- 方法：`POST` / `DELETE`
+- 路径：`/api/posts/:id/like`
+- 登录：是
+
+### 评论帖子
+- 方法：`POST`
+- 路径：`/api/posts/:id/comments`
+- 登录：是
+
+### 回复评论
+- 方法：`POST`
+- 路径：`/api/comments/:id/replies`
+- 登录：是
+
+### 点赞 / 取消点赞评论
+- 方法：`POST` / `DELETE`
+- 路径：`/api/comments/:id/like`
+- 登录：是
+
+### 举报
+- 方法：`POST`
+- 路径：`/api/posts/:id/report`
+- 登录：是
+
+## 8. 预约接口
+
+### 座位可用性
+- 方法：`GET`
+- 路径：`/api/seats/availability`
+- 参数：日期、时间段。
+
+### 创建预约
+- 方法：`POST`
+- 路径：`/api/bookings`
+- 登录：是或游客验证码场景。
+- 参数：座位、日期、开始时间、结束时间、联系人、手机号、备注、人数等。
+
+### 我的预约
+- 方法：`GET`
+- 路径：`/api/account/bookings`
+- 登录：是
+
+### 取消预约
+- 方法：`PATCH` / `DELETE`
+- 路径：`/api/bookings/:id/cancel`
+- 登录：是
+
+## 9. 上传接口
+
+### 通用上传
+- 方法：`POST`
+- 路径：`/api/upload/:scene`
+- 登录：按 scene 决定。
+- scene：`avatar`、`community`、`review`、`product`、`book`、`event`、`banner`、`system`。
+
+规则：
+- 用户场景必须写真实 `users.id`。
+- 后台商品/图书/活动上传允许 `user_id = NULL`。
+- 上传失败只返回友好错误，不暴露 SQL。
+
+## 10. 后台接口概览
+
+后台接口通常以 `/api/admin` 为前缀，需要管理员 JWT。
+
+### 后台登录
+- 方法：`POST`
+- 路径：`/api/admin/login`
+
+### Dashboard
+- 方法：`GET`
+- 路径：`/api/admin/dashboard`
+- 作用：统计卡片和最近 7 天趋势。
+
+### 商品 / 图书 / 活动管理
+- 方法：`GET` / `POST` / `PATCH` / `DELETE`
+- 路径：`/api/admin/products`、`/api/admin/books`、`/api/admin/events`
+- 支持批量操作时前端复用单项接口循环处理或使用已有批量接口。
+
+### 社区审核
+- 路径：`/api/admin/community`
+- 作用：审核帖子、评论、举报，支持批量通过/驳回/隐藏。
+
+### 订单管理
+- 路径：`/api/admin/orders`
+- 作用：查看订单、更新状态、批量标记。
+
+### 用户管理
+- 路径：`/api/admin/users`
+- 作用：查看用户、启用/禁用、积分成长信息。
+
+### 预约与座位
+- 路径：`/api/admin/bookings`、`/api/admin/seats`
+- 作用：预约状态处理、座位拖拽坐标保存、批量状态设置。
+
+### 操作日志
+- 路径：`/api/admin/logs`
+- 作用：审计日志查询、筛选、详情。
