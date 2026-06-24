@@ -3,6 +3,7 @@ import {
   cancelBookReservation,
   createBookReservation,
   createBookReview,
+  deleteOwnBookReview,
   findBookBySlug,
   likeBookReview,
   listBookReviews,
@@ -44,6 +45,11 @@ export function registerBooksRoutes(router) {
 
   router.delete('/api/books/reviews/:id/like', requireUser, async (req, res) => {
     return success(res, await unlikeBookReview(req.params.id, req.user.id), '已取消点赞')
+  })
+
+  router.delete('/api/books/reviews/:id', requireUser, async (req, res) => {
+    if (!await deleteOwnBookReview(req.params.id, req.user.id)) return failure(res, 404, '评价不存在或无权删除', 404)
+    return success(res, {}, '评价已删除')
   })
 
   router.post('/api/books/:id/reservations', requireUser, async (req, res) => {

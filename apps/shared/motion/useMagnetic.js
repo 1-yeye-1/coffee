@@ -21,7 +21,7 @@ export function useMagnetic(root = null, options = {}) {
 
   function reset(element = active) {
     if (!element) return
-    gsap.to(element, { x: 0, y: 0, duration: 0.42, ease: 'elastic.out(1, 0.55)', overwrite: true, clearProps: 'transform' })
+    gsap.to(element, { x: 0, y: 0, duration: 0.2, ease: 'power2.out', overwrite: true, clearProps: 'transform' })
     if (element === active) active = null
   }
 
@@ -38,7 +38,7 @@ export function useMagnetic(root = null, options = {}) {
     const bounds = target.getBoundingClientRect()
     const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * maximum * 2
     const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * maximum * 2
-    gsap.to(target, { x, y, duration: 0.24, ease: 'power2.out', overwrite: true })
+    gsap.to(target, { x, y, duration: 0.16, ease: 'power2.out', overwrite: true })
   }
 
   function onMove(event) {

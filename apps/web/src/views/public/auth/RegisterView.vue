@@ -28,7 +28,7 @@ const form = reactive({
 const canSendCode = computed(() => countdown.value <= 0 && !sending.value && Boolean(form.captchaId && form.captchaCode.trim()))
 
 function isPhone(value) {
-  return /^1\d{10}$/.test(String(value || '').trim())
+  return /^\d{11}$/.test(String(value || '').trim())
 }
 
 function startCountdown(seconds = 60) {

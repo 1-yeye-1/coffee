@@ -9,6 +9,7 @@ const normalize = (book = {}) => ({
   category: book.category || '阅读',
   rating: Number(book.rating) || 0,
   stock: Number(book.stock) || 0,
+  reservableStock: Number(book.reservableStock ?? book.reservable_stock ?? book.stock) || 0,
   status: book.status || 'unknown',
   coverTone: book.coverTone || 'coffee',
   coverUrl: book.coverUrl || '',
@@ -25,6 +26,13 @@ const normalize = (book = {}) => ({
   locationLabel: book.locationLabel || '',
   reviewAverage: Number(book.reviewAverage) || 0,
   reviewCount: Number(book.reviewCount) || 0,
+  isRecommended: Boolean(book.isRecommended),
+  isFeatured: Boolean(book.isFeatured),
+  isNew: Boolean(book.isNew),
+  lowStockThreshold: Number(book.lowStockThreshold || 3),
+  shelfArea: book.shelfArea || '',
+  shelfCode: book.shelfCode || '',
+  activeReservationCount: Number(book.activeReservationCount || 0),
 })
 
 function safeSlug(value) {
@@ -33,7 +41,7 @@ function safeSlug(value) {
 }
 
 export const useBooksStore = defineStore('books', {
-  state: () => ({ items: [], currentBook: null, meta: null, loading: false, error: '', source: 'api' }),
+  state: () => ({ items: [], currentBook: null, meta: null, loading: false, error: '', source: 'api', reservations: [], reservationsLoading: false, reservationsError: '' }),
   actions: {
     async fetchBooks(params = {}) { this.loading = true; this.error = ''; try { const response = await booksApi.fetchBooks(params); this.items = response.data.map(normalize); this.meta = response.meta } catch (error) { this.items = []; this.error = error.message } finally { this.loading = false } return this.items },
     async fetchBookDetail(slug, options = {}) {
@@ -74,10 +82,28 @@ export const useBooksStore = defineStore('books', {
       return booksApi.createBookReservation(bookId)
     },
     async fetchMyBookReservations() {
-      return booksApi.fetchMyBookReservations()
+      this.reservationsLoading = true
+      this.reservationsError = ''
+      try {
+        const response = await booksApi.fetchMyBookReservations()
+        this.reservations = Array.isArray(response.data) ? response.data : []
+        return this.reservations
+      } catch (error) {
+        this.reservations = []
+        this.reservationsError = error.message || '图书预约记录加载失败'
+        throw error
+      } finally {
+        this.reservationsLoading = false
+      }
     },
     async cancelBookReservation(id) {
-      return booksApi.cancelBookReservation(id)
+      await booksApi.cancelBookReservation(id)
+      this.reservations = this.reservations.map((item) =>
+        Number(item.id) === Number(id) ? { ...item, status: 'cancelled', cancelledAt: new Date().toISOString() } : item,
+      )
+    },
+    async deleteBookReview(reviewId) {
+      return booksApi.deleteBookReview(reviewId)
     },
   },
 })

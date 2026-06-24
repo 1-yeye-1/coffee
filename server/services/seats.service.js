@@ -47,12 +47,16 @@ export function assertBookingDateAndTime(date, timeSlot) {
   if (!allowedTimeSlots.includes(normalized)) {
     throw Object.assign(new Error('预约时间段无效'), { statusCode: 400 })
   }
+  const { start } = parseTimeSlotParts(normalized)
+  if (value === today && new Date(`${value}T${start}:00`).getTime() <= now.getTime()) {
+    throw Object.assign(new Error('该时间段已过期，请选择当前时间之后的时段'), { statusCode: 400 })
+  }
   return normalized
 }
 
 export async function listSeats() {
   const [rows] = await pool.execute(`SELECT id, code, name, area, capacity, x, y, width, height, status,
-    sort_order AS sortOrder, created_at AS createdAt, updated_at AS updatedAt
+    sort_order AS sortOrder, maintenance_reason AS maintenanceReason, maintenance_until AS maintenanceUntil, usage_count AS usageCount, created_at AS createdAt, updated_at AS updatedAt
     FROM seats ORDER BY sort_order ASC, code ASC`)
   return rows
 }
@@ -94,6 +98,8 @@ function normalizeSeat(payload) {
     capacity: Number(payload.capacity), x: Number(payload.x), y: Number(payload.y),
     width: Number(payload.width || 64), height: Number(payload.height || 52),
     sortOrder: Number(payload.sortOrder || 0), status: payload.status === 'disabled' ? 'maintenance' : payload.status || 'available',
+    maintenanceReason: String(payload.maintenanceReason || payload.maintenance_reason || '').trim() || null,
+    maintenanceUntil: payload.maintenanceUntil || payload.maintenance_until || null,
   }
   if (!seat.code || !seat.name) throw Object.assign(new Error('座位编号和名称必填'), { statusCode: 400 })
   if (!Number.isInteger(seat.capacity) || seat.capacity < 1) throw Object.assign(new Error('座位容量无效'), { statusCode: 400 })
@@ -105,17 +111,17 @@ function normalizeSeat(payload) {
 export async function createSeat(payload, operatorId) {
   const seat = normalizeSeat(payload)
   const [result] = await pool.execute(`INSERT INTO seats
-    (code, name, area, capacity, x, y, width, height, status, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  [seat.code, seat.name, seat.area, seat.capacity, seat.x, seat.y, seat.width, seat.height, seat.status, seat.sortOrder])
+    (code, name, area, capacity, x, y, width, height, status, sort_order, maintenance_reason, maintenance_until)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  [seat.code, seat.name, seat.area, seat.capacity, seat.x, seat.y, seat.width, seat.height, seat.status, seat.sortOrder, seat.maintenanceReason, seat.maintenanceUntil])
   await writeAudit(operatorId, 'seat.create', 'seats', { id: result.insertId, operatorType: 'admin' })
   return (await listSeats()).find((item) => Number(item.id) === Number(result.insertId))
 }
 
 export async function updateSeat(id, payload, operatorId) {
   const seat = normalizeSeat(payload)
-  const [result] = await pool.execute(`UPDATE seats SET code=?, name=?, area=?, capacity=?, x=?, y=?, width=?, height=?, status=?, sort_order=? WHERE id=?`,
-    [seat.code, seat.name, seat.area, seat.capacity, seat.x, seat.y, seat.width, seat.height, seat.status, seat.sortOrder, id])
+  const [result] = await pool.execute(`UPDATE seats SET code=?, name=?, area=?, capacity=?, x=?, y=?, width=?, height=?, status=?, sort_order=?, maintenance_reason=?, maintenance_until=? WHERE id=?`,
+    [seat.code, seat.name, seat.area, seat.capacity, seat.x, seat.y, seat.width, seat.height, seat.status, seat.sortOrder, seat.maintenanceReason, seat.maintenanceUntil, id])
   if (!result.affectedRows) return null
   await writeAudit(operatorId, 'seat.update', 'seats', { id, operatorType: 'admin' })
   return (await listSeats()).find((item) => Number(item.id) === Number(id))
@@ -131,12 +137,39 @@ export async function deleteSeat(id, operatorId) {
   return true
 }
 
-export async function updateSeatStatus(id, status, operatorId) {
+export async function updateSeatStatus(id, status, operatorId, payload = {}) {
   const normalizedStatus = status === 'disabled' ? 'maintenance' : status
   if (!['available', 'maintenance'].includes(normalizedStatus)) throw Object.assign(new Error('座位状态无效'), { statusCode: 400 })
-  const [result] = await pool.execute('UPDATE seats SET status = ? WHERE id = ?', [normalizedStatus, id])
+  const reason = String(payload.reason || payload.maintenanceReason || '').trim() || null
+  const until = payload.maintenanceUntil || payload.until || null
+  const [result] = await pool.execute('UPDATE seats SET status = ?, maintenance_reason = ?, maintenance_until = ? WHERE id = ?', [normalizedStatus, normalizedStatus === 'maintenance' ? reason : null, normalizedStatus === 'maintenance' ? until : null, id])
   if (!result.affectedRows) return null
-  await writeAudit(operatorId, 'seat.status.update', 'seats', { id, status: normalizedStatus, operatorType: 'admin' })
-  const [[seat]] = await pool.execute('SELECT id, code, name, area, capacity, x, y, width, height, status, sort_order AS sortOrder FROM seats WHERE id = ?', [id])
+  if (normalizedStatus === 'maintenance') {
+    await pool.execute('INSERT INTO seat_maintenance_logs (seat_id, reason, start_at, end_at, operator_id) VALUES (?, ?, NOW(), ?, ?)', [id, reason, until, operatorId])
+  }
+  await writeAudit(operatorId, 'seat.status.update', 'seats', { id, status: normalizedStatus, reason, until, operatorType: 'admin' })
+  const [[seat]] = await pool.execute('SELECT id, code, name, area, capacity, x, y, width, height, status, sort_order AS sortOrder, maintenance_reason AS maintenanceReason, maintenance_until AS maintenanceUntil, usage_count AS usageCount FROM seats WHERE id = ?', [id])
   return seat
+}
+
+
+export async function getSeatAdminStats() {
+  const [[row]] = await pool.execute(`SELECT
+    COUNT(*) AS total,
+    SUM(status = 'available') AS available,
+    SUM(status = 'maintenance') AS maintenance,
+    (SELECT COUNT(DISTINCT seat_id) FROM bookings WHERE booking_date = CURRENT_DATE AND status IN ('pending','confirmed')) AS todayReserved,
+    COALESCE(MAX(usage_count), 0) AS maxUsage
+    FROM seats`)
+  const total = Number(row.total || 0)
+  const todayReserved = Number(row.todayReserved || 0)
+  return { total, available: Number(row.available || 0), maintenance: Number(row.maintenance || 0), todayReserved, usageRate: total ? Math.round((todayReserved / total) * 100) : 0, maxUsage: Number(row.maxUsage || 0) }
+}
+
+export async function getSeatDetail(id) {
+  const [[seat]] = await pool.execute('SELECT id, code, name, area, capacity, x, y, width, height, status, sort_order AS sortOrder, maintenance_reason AS maintenanceReason, maintenance_until AS maintenanceUntil, usage_count AS usageCount, created_at AS createdAt, updated_at AS updatedAt FROM seats WHERE id = ?', [id])
+  if (!seat) return null
+  const [bookings] = await pool.execute('SELECT id, booking_no AS bookingNo, booking_date AS date, time_slot AS timeSlot, status, contact_name AS contactName FROM bookings WHERE seat_id = ? ORDER BY booking_date DESC, id DESC LIMIT 20', [id])
+  const [maintenanceLogs] = await pool.execute('SELECT id, reason, start_at AS startAt, end_at AS endAt, operator_id AS operatorId, created_at AS createdAt FROM seat_maintenance_logs WHERE seat_id = ? ORDER BY id DESC LIMIT 20', [id])
+  return { ...seat, bookings, maintenanceLogs }
 }

@@ -21,7 +21,7 @@ let countdownTimer = null
 
 const canSendSms = computed(() => countdown.value <= 0 && !sending.value && Boolean(form.captchaId && form.captchaCode.trim()))
 
-function isPhone(value) { return /^1\d{10}$/.test(String(value || '').trim()) }
+function isPhone(value) { return /^\d{11}$/.test(String(value || '').trim()) }
 function clearFeedback() { error.value = ''; success.value = '' }
 function startCountdown(seconds = 60) {
   countdown.value = seconds

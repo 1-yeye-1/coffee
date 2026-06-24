@@ -1,5 +1,6 @@
 import { requireUser } from '../middlewares/auth.js'
 import {
+  changePassword,
   changePhone,
   getAccountOverview,
   getPublicProfile,
@@ -65,6 +66,10 @@ export function registerAccountRoutes(router) {
 
   router.patch('/api/account/security/phone', requireUser, async (req, res) => {
     return success(res, await changePhone(req.user.id, req.body), '手机号更换成功，请妥善保管账号安全')
+  })
+
+  router.patch('/api/account/security/password', requireUser, async (req, res) => {
+    return success(res, await changePassword(req.user.id, req.body))
   })
 
   router.get('/api/account/points', requireUser, async (req, res) => {

@@ -78,6 +78,7 @@ import ThemeToggle from '@/components/common/ThemeToggle.vue'
   min-width: 0;
   min-height: 32rem;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .auth-layout__toolbar {
@@ -98,7 +99,7 @@ import ThemeToggle from '@/components/common/ThemeToggle.vue'
   display: grid;
   width: 100%;
   max-width: var(--cb-container-sm);
-  margin: auto;
+  margin: 0 auto auto;
   padding: var(--cb-space-4);
 }
 
@@ -113,11 +114,13 @@ import ThemeToggle from '@/components/common/ThemeToggle.vue'
   }
 
   .auth-layout__toolbar {
+    flex: 0 0 auto;
     padding-inline: var(--cb-space-8);
   }
 
   .auth-layout__view {
-    padding: var(--cb-space-8);
+    align-content: start;
+    padding: var(--cb-space-4) var(--cb-space-8) var(--cb-space-8);
   }
 }
 </style>

@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 import { sendCode } from '@/api/auth'
-import { changePhone, getSecuritySettings, verifyCurrentPhone } from '@/api/account'
+import { changePassword, changePhone, getSecuritySettings, verifyCurrentPhone } from '@/api/account'
 import { BaseBadge, BaseButton, BaseInput, BaseToast, ErrorPanel } from '@/components/base'
 import { useAuthStore } from '@/stores/auth'
 import '@/assets/styles/pages/engagement.css'
@@ -20,6 +20,8 @@ const oldCountdown = ref(0)
 const newCountdown = ref(0)
 const oldVerified = ref(false)
 const toastVisible = ref(false)
+const toastTitle = ref('')
+const toastMessage = ref('')
 let oldTimer = null
 let newTimer = null
 
@@ -29,10 +31,22 @@ const form = reactive({
   newPhoneCode: '',
 })
 
+const pwdForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
+const pwdSubmitting = ref(false)
+
 const currentPhone = computed(() => authStore.user?.phone || '')
 
 function isPhone(value) {
-  return /^1\d{10}$/.test(String(value || '').trim())
+  return /^\d{11}$/.test(String(value || '').trim())
+}
+
+function phoneHint(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+  if (!digits) return ''
+  if (digits.length < 11) return `还需 ${11 - digits.length} 位数字`
+  if (digits.length === 11 && /^\d{11}$/.test(String(value || '').trim())) return '格式正确'
+  if (digits.length > 11) return '手机号超过 11 位'
+  return '手机号只能为数字'
 }
 
 function startCountdown(target, seconds = 60) {
@@ -157,11 +171,37 @@ async function submitPhoneChange() {
     Object.assign(form, { currentCode: '', newPhone: '', newPhoneCode: '' })
     oldVerified.value = false
     success.value = '手机号更换成功，请妥善保管账号安全。'
+    toastTitle.value = '手机号更换成功'
+    toastMessage.value = '请妥善保管账号安全。'
     toastVisible.value = true
   } catch (err) {
     error.value = err.message || '手机号更换失败，请稍后重试。'
   } finally {
     changing.value = false
+  }
+}
+
+async function submitPasswordChange() {
+  error.value = ''
+  success.value = ''
+  if (!pwdForm.oldPassword.trim()) { error.value = '请输入旧密码。'; return }
+  if (!pwdForm.newPassword.trim()) { error.value = '请输入新密码。'; return }
+  if (pwdForm.newPassword.length < 6) { error.value = '新密码不能少于 6 位。'; return }
+  if (pwdForm.newPassword !== pwdForm.confirmPassword) { error.value = '两次输入的新密码不一致。'; return }
+  if (pwdForm.oldPassword === pwdForm.newPassword) { error.value = '新密码不能与旧密码相同。'; return }
+  pwdSubmitting.value = true
+  try {
+    await changePassword({ oldPassword: pwdForm.oldPassword, newPassword: pwdForm.newPassword })
+    await load()
+    Object.assign(pwdForm, { oldPassword: '', newPassword: '', confirmPassword: '' })
+    success.value = '密码修改成功。'
+    toastTitle.value = '密码修改成功'
+    toastMessage.value = '请牢记新密码。'
+    toastVisible.value = true
+  } catch (err) {
+    error.value = err.message || '密码修改失败，请稍后重试。'
+  } finally {
+    pwdSubmitting.value = false
   }
 }
 
@@ -225,6 +265,9 @@ onBeforeUnmount(() => {
           <p class="text-muted">新手机号不能与当前手机号相同，也不能已被其他账号绑定。</p>
           <div class="phone-step__row">
             <BaseInput v-model="form.newPhone" label="新手机号" type="tel" autocomplete="tel" placeholder="请输入新手机号" :disabled="!oldVerified" />
+            <p v-if="form.newPhone && !isPhone(form.newPhone)" class="phone-hint">
+              {{ phoneHint(form.newPhone) }}
+            </p>
             <BaseInput v-model="form.newPhoneCode" label="新手机号验证码" inputmode="numeric" placeholder="请输入验证码" :disabled="!oldVerified" />
             <BaseButton variant="outline" :loading="sendingNew" :disabled="!oldVerified || newCountdown > 0" @click="sendNewCode">
               {{ newCountdown > 0 ? `${newCountdown} 秒后重试` : '发送新验证码' }}
@@ -236,8 +279,25 @@ onBeforeUnmount(() => {
       <BaseButton :loading="changing" :disabled="!oldVerified" @click="submitPhoneChange">确认更换手机号</BaseButton>
     </section>
 
+    <section class="member-panel phone-change">
+      <h3 class="section-title">修改密码</h3>
+      <div class="phone-step">
+        <span class="phone-step__index">&#128274;</span>
+        <div>
+          <h4>修改登录密码</h4>
+          <p class="text-muted">密码至少 6 位，建议使用字母、数字和符号组合以保证安全。</p>
+          <div class="phone-step__row phone-step__col">
+            <BaseInput v-model="pwdForm.oldPassword" type="password" label="旧密码" autocomplete="current-password" placeholder="请输入旧密码" />
+            <BaseInput v-model="pwdForm.newPassword" type="password" label="新密码" autocomplete="new-password" placeholder="至少 6 位" />
+            <BaseInput v-model="pwdForm.confirmPassword" type="password" label="确认新密码" autocomplete="new-password" placeholder="再次输入新密码" />
+          </div>
+          <BaseButton :loading="pwdSubmitting" style="margin-top:var(--cb-space-3)" @click="submitPasswordChange">确认修改密码</BaseButton>
+        </div>
+      </div>
+    </section>
+
     <div class="page-toast">
-      <BaseToast v-model="toastVisible" variant="success" title="手机号更换成功">请妥善保管账号安全。</BaseToast>
+      <BaseToast v-model="toastVisible" variant="success" :title="toastTitle">{{ toastMessage }}</BaseToast>
     </div>
   </div>
 </template>
@@ -282,11 +342,19 @@ onBeforeUnmount(() => {
   align-items: end;
   margin-top: var(--cb-space-3);
 }
+.phone-step__col {
+  grid-template-columns: 1fr;
+}
 .form-success {
   padding: var(--cb-space-3) var(--cb-space-4);
   color: var(--cb-success);
   background: color-mix(in srgb, var(--cb-success) 10%, transparent);
   border-radius: var(--cb-radius-lg);
+}
+.phone-hint {
+  margin-top: -0.25rem;
+  color: var(--cb-warning);
+  font-size: var(--cb-font-size-xs);
 }
 @media (max-width: 52rem) {
   .phone-step__row {

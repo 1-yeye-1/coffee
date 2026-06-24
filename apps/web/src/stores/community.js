@@ -109,10 +109,15 @@ export const useCommunityStore = defineStore('community', {
       await membership.toggleFavorite('post', id)
       this.favoriteIds = membership.favorites.filter((item) => item.targetType === 'post').map((item) => Number(item.targetId))
     },
-    async addComment(postId, content, isAnonymous = false) {
+    async addComment(postId, payload) {
       const post = this.posts.find((item) => item.id === postId)
-      if (!post || !content.trim()) return
-      Object.assign(post, normalizePost((await communityApi.createComment(postId, { content, isAnonymous })).data))
+      if (!post) return
+      const body = typeof payload === 'string' ? { content: payload, isAnonymous: false } : { content: String(payload?.content || '').trim(), isAnonymous: Boolean(payload?.isAnonymous) }
+      if (!body.content) return
+      const apiPayload = { content: body.content, isAnonymous: body.isAnonymous }
+      if (payload?.mediaUrl) apiPayload.mediaUrl = payload.mediaUrl
+      if (payload?.mediaType) apiPayload.mediaType = payload.mediaType
+      Object.assign(post, normalizePost((await communityApi.createComment(postId, apiPayload)).data))
     },
     async replyComment(postId, commentId, content) {
       const post = this.posts.find((item) => item.id === postId)

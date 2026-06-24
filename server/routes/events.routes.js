@@ -6,9 +6,12 @@ import {
   listEvents,
   registerEvent,
 } from '../services/events.service.js'
+import { rateLimit } from '../middlewares/security.js'
 import { failure, paginated, success } from '../utils/response.js'
 
 export function registerEventsRoutes(router) {
+  const eventRegistrationLimit = rateLimit({ key: 'event-registration', limit: 40 })
+
   router.get('/api/events', async (req, res) => {
     const result = await listEvents(req.query)
     return paginated(res, result.items, result.meta)
@@ -24,7 +27,7 @@ export function registerEventsRoutes(router) {
     return success(res, await listMyEventRegistrations(req.user.id))
   })
 
-  router.post('/api/events/:id/register', requireUser, async (req, res) => {
+  router.post('/api/events/:id/register', eventRegistrationLimit, requireUser, async (req, res) => {
     const event = await registerEvent(req.params.id, req.user.id)
     if (!event) return failure(res, 404, '活动不存在', 404)
     return success(res, event, '报名成功', 201)

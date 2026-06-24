@@ -224,9 +224,9 @@ export const useAdminStore = defineStore('admin', {
       try { return (await adminApi.getAdminOrderDetail(id)).data }
       catch (error) { this.apiError = error.message; throw error }
     },
-    async updateAdminOrderStatus(id, status) {
+    async updateAdminOrderStatus(id, status, payload = {}) {
       try {
-        const order = (await adminApi.updateAdminOrderStatus(id, status)).data
+        const order = (await adminApi.updateAdminOrderStatus(id, status, payload)).data
         await this.fetchAdminOrders(); return order
       } catch (error) { this.apiError = error.message; throw error }
     },
@@ -237,9 +237,9 @@ export const useAdminStore = defineStore('admin', {
         return order
       } catch (error) { this.apiError = error.message; throw error }
     },
-    async rejectAdminOrderPayment(id) {
+    async rejectAdminOrderPayment(id, reason = '') {
       try {
-        const order = (await adminApi.rejectAdminOrderPayment(id)).data
+        const order = (await adminApi.rejectAdminOrderPayment(id, reason)).data
         await this.fetchAdminOrders()
         return order
       } catch (error) { this.apiError = error.message; throw error }
@@ -251,13 +251,104 @@ export const useAdminStore = defineStore('admin', {
         return order
       } catch (error) { this.apiError = error.message; throw error }
     },
+
+    async fetchResourceStats(resource) {
+      const request = {
+        products: adminApi.fetchAdminProductStats,
+        books: adminApi.fetchAdminBookStats,
+        orders: adminApi.fetchAdminOrderStats,
+        logs: adminApi.fetchAdminLogStats,
+        uploads: adminApi.fetchUploadFileStats,
+        seats: adminApi.fetchAdminSeatStats,
+      }[resource]
+      if (!request) return null
+      try { return (await request()).data }
+      catch (error) { this.apiError = error.message; throw error }
+    },
+    async fetchAdminDetail(resource, id) {
+      const request = {
+        products: adminApi.getAdminProductDetail,
+        books: adminApi.getAdminBookDetail,
+        users: adminApi.getAdminUserDetail,
+        seats: adminApi.getAdminSeatDetail,
+      }[resource]
+      if (!request) return null
+      try { return (await request(id)).data }
+      catch (error) { this.apiError = error.message; throw error }
+    },
+    async adjustStock(resource, id, payload) {
+      const request = resource === 'books' ? adminApi.adjustBookStock : adminApi.adjustProductStock
+      try {
+        const result = (await request(id, payload)).data
+        await this.fetchAdminCollection(resource)
+        return result
+      } catch (error) { this.apiError = error.message; throw error }
+    },
+    async updateFlags(resource, id, payload) {
+      const request = resource === 'books' ? adminApi.updateBookFlags : adminApi.updateProductFlags
+      try {
+        const result = (await request(id, payload)).data
+        await this.fetchAdminCollection(resource)
+        return result
+      } catch (error) { this.apiError = error.message; throw error }
+    },
+    async batchUpdateResource(resource, payload) {
+      const request = { products: adminApi.batchUpdateProducts, books: adminApi.batchUpdateBooks, orders: adminApi.batchUpdateOrders }[resource]
+      if (!request) return null
+      try {
+        const result = (await request(payload)).data
+        if (resource === 'orders') await this.fetchAdminOrders()
+        else await this.fetchAdminCollection(resource)
+        return result
+      } catch (error) { this.apiError = error.message; throw error }
+    },
+    async updateUserRisk(id, payload) {
+      try {
+        const body = {}
+        if (payload.status) {
+          body.riskType = payload.status === 'active' ? 'enable' : 'disable'
+        }
+        if ('bookingRestricted' in payload) {
+          body.riskType = payload.bookingRestricted ? 'booking_limit' : 'booking_unlimit'
+        }
+        if ('postRestricted' in payload) {
+          body.riskType = payload.postRestricted ? 'post_limit' : 'post_unlimit'
+        }
+        if (payload.reason) body.reason = payload.reason
+        if (payload.endAt) body.endAt = payload.endAt
+        if (!body.riskType) throw new Error('无效的风控操作类型')
+        const result = (await adminApi.updateAdminUserRisk(id, body)).data
+        await this.fetchAdminCollection('users')
+        return result
+      } catch (error) { this.apiError = error.message; throw error }
+    },
     async fetchAdminBookings(params = {}) {
       return this.fetchAdminCollection('bookings', params)
     },
-    async updateAdminBookingStatus(id, status) {
+    async fetchAdminBookingStats(params = {}) {
+      try { return (await adminApi.fetchAdminBookingStats(params)).data }
+      catch (error) { this.apiError = error.message; throw error }
+    },
+    async fetchAdminBookReservations(bookId, params = {}) {
+      try { return await adminApi.fetchAdminBookReservations(bookId, params) }
+      catch (error) { this.apiError = error.message; throw error }
+    },
+    async updateAdminBookReservationStatus(bookId, reservationId, payload = {}) {
+      try { return (await adminApi.updateAdminBookReservationStatus(bookId, reservationId, payload)).data }
+      catch (error) { this.apiError = error.message; throw error }
+    },
+    async fetchUploadFileDetail(id) {
+      try { return (await adminApi.fetchUploadFileDetail(id)).data }
+      catch (error) { this.apiError = error.message; throw error }
+    },
+    async fetchAdminBookingDetail(id) {
+      try { return (await adminApi.getAdminBookingDetail(id)).data }
+      catch (error) { this.apiError = error.message; throw error }
+    },
+    async updateAdminBookingStatus(id, status, reason = '') {
       if (this.dataSource === 'api') {
         try {
-          const booking = (await adminApi.updateAdminBookingStatus(id, status)).data
+          const booking = (await adminApi.updateAdminBookingStatus(id, status, reason)).data
           await this.fetchAdminBookings()
           return booking
         } catch (error) { this.apiError = error.message; throw error }
@@ -266,6 +357,13 @@ export const useAdminStore = defineStore('admin', {
       if (booking) booking.status = status
       persist(this.$state)
       return booking
+    },
+    async batchUpdateAdminBookingStatus(ids, status, reason = '') {
+      try {
+        const result = (await adminApi.batchUpdateAdminBookingStatus(ids, status, reason)).data
+        await this.fetchAdminBookings()
+        return result
+      } catch (error) { this.apiError = error.message; throw error }
     },
   },
 })

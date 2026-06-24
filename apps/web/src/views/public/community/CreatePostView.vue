@@ -28,15 +28,20 @@ async function publish() {
     error.value = '标题至少 4 个字，正文至少 10 个字。'
     return
   }
-  const post = await communityStore.createPost({
-    title: title.value,
-    content: content.value,
-    topic: topic.value,
-    mediaUrl: uploadedMedia.value?.url || '',
-    mediaType: uploadedMedia.value?.file?.fileType || '',
-  })
-  sessionStorage.setItem('coffee-book:new-post', String(post.id))
-  router.push({ path: '/community', query: { new: String(post.id) } })
+  error.value = ''
+  try {
+    const post = await communityStore.createPost({
+      title: title.value,
+      content: content.value,
+      topic: topic.value,
+      mediaUrl: uploadedMedia.value?.url || '',
+      mediaType: uploadedMedia.value?.file?.fileType || '',
+    })
+    sessionStorage.setItem('coffee-book:new-post', String(post.id))
+    router.push({ path: '/community', query: { new: String(post.id) } })
+  } catch (err) {
+    error.value = err.message || '当前账号暂时无法发布帖子，请稍后再试。'
+  }
 }
 
 function validateMedia(file) {

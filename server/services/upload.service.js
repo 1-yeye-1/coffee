@@ -129,6 +129,18 @@ export async function listUploadFiles(query = {}) {
     clauses.push('user_id = ?')
     params.push(query.userId)
   }
+  if (query.id) {
+    clauses.push('id = ?')
+    params.push(query.id)
+  }
+  if (query.keyword) {
+    clauses.push('(original_name LIKE ? OR stored_name LIKE ? OR url LIKE ?)')
+    const pattern = `%${String(query.keyword).trim()}%`
+    params.push(pattern, pattern, pattern)
+  }
+  if (query.mimeType) { clauses.push('mime_type LIKE ?'); params.push(`%${String(query.mimeType).trim()}%`) }
+  if (query.minSize) { clauses.push('size >= ?'); params.push(Number(query.minSize) || 0) }
+  if (query.maxSize) { clauses.push('size <= ?'); params.push(Number(query.maxSize) || 0) }
   if (query.startDate) {
     clauses.push('created_at >= ?')
     params.push(query.startDate)
@@ -150,17 +162,86 @@ export async function listUploadFiles(query = {}) {
   )
 
   return {
-    items: rows.map(mapUploadFile),
+    items: await Promise.all(rows.map(async (row) => ({ ...mapUploadFile(row), references: await getUploadFileReferences(row.url) }))),
     meta: { page, pageSize, total: Number(total) },
   }
 }
 
-export async function deleteUploadFile(id) {
+export async function getUploadFileReferences(url) {
+  if (!url) return []
+  const checks = [
+    ['product', 'products', 'image_url', 'name'],
+    ['book', 'books', 'cover_url', 'title'],
+    ['event', 'events', 'cover_url', 'title'],
+    ['post', 'posts', 'media_url', 'title'],
+    ['user', 'users', 'avatar', 'nickname'],
+  ]
+  const refs = []
+  for (const [type, table, column, labelColumn] of checks) {
+    const [rows] = await pool.execute(`SELECT id, ${labelColumn} AS label FROM ${table} WHERE ${column} = ? LIMIT 20`, [url])
+    refs.push(...rows.map((row) => ({ type, id: row.id, label: row.label || `${type} ${row.id}` })))
+  }
+  return refs
+}
+
+export async function getUploadFileDetail(id) {
+  const [[file]] = await pool.execute(
+    `SELECT f.id, f.user_id AS userId, f.scene, f.file_type AS fileType,
+      f.original_name AS originalName, f.stored_name AS storedName,
+      f.mime_type AS mimeType, f.size, f.url, f.created_at AS createdAt,
+      COALESCE(u.nickname, u.username) AS uploaderName, u.phone AS uploaderPhone,
+      u.avatar AS uploaderAvatar
+     FROM upload_files f LEFT JOIN users u ON u.id = f.user_id
+     WHERE f.id = ? LIMIT 1`,
+    [id],
+  )
+  if (!file) return null
+  const references = await getUploadFileReferences(file.url)
+  const [auditLogs] = await pool.execute(
+    `SELECT al.id, al.action, al.module, al.description, al.created_at AS createdAt,
+      COALESCE(au.username, u2.nickname, u2.username) AS operatorName,
+      al.operator_type AS operatorType
+     FROM audit_logs al
+     LEFT JOIN admin_users au ON au.id = al.operator_id AND al.operator_type = 'admin'
+     LEFT JOIN users u2 ON u2.id = al.operator_id AND al.operator_type = 'user'
+     WHERE JSON_CONTAINS(al.payload, ?, '$.fileId')
+        OR JSON_CONTAINS(al.payload, ?, '$.fileId')
+        OR al.target_type = 'file' AND al.target_id = ?
+     ORDER BY al.created_at DESC, al.id DESC
+     LIMIT 30`,
+    [String(id), id, String(id)],
+  )
+  return {
+    ...mapUploadFile(file),
+    uploaderName: file.uploaderName || null,
+    uploaderPhone: file.uploaderPhone || null,
+    uploaderAvatar: file.uploaderAvatar || null,
+    references,
+    auditLogs,
+  }
+}
+
+export async function getUploadFileStats() {
+  const [[row]] = await pool.execute(`SELECT
+    COUNT(*) AS total,
+    SUM(file_type = 'image') AS images,
+    SUM(file_type = 'video') AS videos,
+    SUM(file_type NOT IN ('image','video')) AS others,
+    COALESCE(SUM(size), 0) AS totalSize,
+    SUM(mime_type IS NULL OR mime_type = '') AS suspicious
+    FROM upload_files`)
+  const [files] = await pool.execute('SELECT url FROM upload_files ORDER BY id DESC LIMIT 500')
+  let unreferenced = 0
+  for (const file of files) if (!(await getUploadFileReferences(file.url)).length) unreferenced += 1
+  return { total: Number(row.total || 0), images: Number(row.images || 0), videos: Number(row.videos || 0), others: Number(row.others || 0), totalSize: Number(row.totalSize || 0), suspicious: Number(row.suspicious || 0), unreferenced }
+}
+
+export async function deleteUploadFile(id, { force = false } = {}) {
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
     const [[file]] = await connection.execute(
-      'SELECT id, storage_path AS storagePath FROM upload_files WHERE id = ? LIMIT 1',
+      'SELECT id, url, storage_path AS storagePath FROM upload_files WHERE id = ? LIMIT 1',
       [id],
     )
     if (!file) {
@@ -168,6 +249,8 @@ export async function deleteUploadFile(id) {
       return false
     }
 
+    const references = await getUploadFileReferences(file.url)
+    if (references.length && !force) throw Object.assign(new Error('????????????????'), { statusCode: 409, references })
     await connection.execute('DELETE FROM upload_files WHERE id = ?', [id])
     await connection.commit()
 
@@ -184,4 +267,20 @@ export async function deleteUploadFile(id) {
   } finally {
     connection.release()
   }
+}
+
+
+export async function batchDeleteUploadFiles(ids = [], options = {}) {
+  const uniqueIds = [...new Set(ids.map((id) => Number(id)).filter(Boolean))]
+  if (!uniqueIds.length) throw Object.assign(new Error('?????'), { statusCode: 400 })
+  const deleted = []
+  const errors = []
+  for (const id of uniqueIds) {
+    try {
+      if (await deleteUploadFile(id, options)) deleted.push(id)
+    } catch (error) {
+      errors.push({ id, message: error.message, references: error.references || [] })
+    }
+  }
+  return { deleted, errors }
 }

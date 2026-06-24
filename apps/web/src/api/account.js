@@ -16,6 +16,7 @@ export const updatePrivacy = (payload) => request('/account/privacy', { method: 
 export const getSecuritySettings = () => request('/account/security')
 export const verifyCurrentPhone = (payload) => request('/account/security/verify-current-phone', { method: 'POST', body: payload })
 export const changePhone = (payload) => request('/account/security/phone', { method: 'PATCH', body: payload })
+export const changePassword = (payload) => request('/account/security/password', { method: 'PATCH', body: payload })
 export const getPointRecords = () => request('/account/points')
 export const getPointsCenter = () => request('/account/points-center')
 export const dailyCheckin = () => request('/account/points-center/checkin', { method: 'POST' })

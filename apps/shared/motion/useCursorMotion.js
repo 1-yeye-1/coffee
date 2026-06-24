@@ -6,14 +6,14 @@ export const CURSOR_EVENT = 'coffeebook:cursor-change'
 
 export const CURSOR_THEMES = [
   { value: 'system', label: '默认系统鼠标' },
-  { value: 'halo', label: 'Coffee Halo Cursor' },
-  { value: 'capsule', label: 'Cream Capsule Cursor' },
-  { value: 'reader', label: 'Book Reader Cursor' },
-  { value: 'trail', label: 'Amber Trail Cursor' },
-  { value: 'minimal', label: 'Minimal Dot Cursor' },
+  { value: 'halo', label: '咖啡光环鼠标' },
+  { value: 'capsule', label: '奶油胶囊鼠标' },
+  { value: 'reader', label: '阅读书页鼠标' },
+  { value: 'trail', label: '琥珀拖尾鼠标' },
+  { value: 'minimal', label: '极简圆点鼠标' },
 ]
 
-const LABELS = { read: 'READ', view: 'VIEW', buy: 'BUY', join: 'JOIN', book: 'BOOK', drag: 'DRAG', close: 'CLOSE', disabled: 'DISABLED' }
+const LABELS = { read: '阅读', view: '查看', buy: '购买', join: '参加', book: '预约', drag: '拖动', close: '关闭', disabled: '不可用', action: '操作' }
 const DESKTOP_QUERY = '(hover: hover) and (pointer: fine)'
 const REDUCED_QUERY = '(prefers-reduced-motion: reduce)'
 const INTERACTIVE_SELECTOR = '[data-cursor], a[href], button, [role="button"], [role="link"], [draggable="true"], [data-draggable="true"]'

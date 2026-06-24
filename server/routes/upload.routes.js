@@ -3,7 +3,11 @@ import fs from 'node:fs/promises'
 import { logAdminAction } from '../services/admin-log.service.js'
 import { recordAudit } from '../services/audit.service.js'
 import {
+  batchDeleteUploadFiles,
   deleteUploadFile,
+  getUploadFileDetail,
+  getUploadFileReferences,
+  getUploadFileStats,
   listUploadFiles,
   saveAvatarUpload,
   saveCommunityUpload,
@@ -13,6 +17,7 @@ import {
   saveEventUpload,
 } from '../services/upload.service.js'
 import { createUploadMiddleware, assertUploadedFileSignature, assertUploadedFileSize, buildUploadedFileMeta } from '../utils/upload.js'
+import { rateLimit } from '../middlewares/security.js'
 import { failure, paginated, success } from '../utils/response.js'
 
 const uploadAvatar = createUploadMiddleware('avatar')
@@ -58,7 +63,9 @@ function sendUploadSaveError(res, error) {
 }
 
 export function registerUploadRoutes(router) {
-  router.post('/api/upload/avatar', requireUser, uploadAvatar, async (req, res) => {
+  const uploadRateLimit = rateLimit({ key: 'upload', limit: 30 })
+
+  router.post('/api/upload/avatar', uploadRateLimit, requireUser, uploadAvatar, async (req, res) => {
     if (!requireFile(req, res)) return false
     await validateUploadedFile(req)
     let result
@@ -71,7 +78,7 @@ export function registerUploadRoutes(router) {
     return success(res, result, '头像上传成功', 201)
   })
 
-  router.post('/api/upload/community', requireUser, uploadCommunity, async (req, res) => {
+  router.post('/api/upload/community', uploadRateLimit, requireUser, uploadCommunity, async (req, res) => {
     if (!requireFile(req, res)) return false
     await validateUploadedFile(req)
     let result
@@ -83,7 +90,7 @@ export function registerUploadRoutes(router) {
     return success(res, result, '社区媒体上传成功', 201)
   })
 
-  router.post('/api/upload/product', requireAdmin, uploadProduct, async (req, res) => {
+  router.post('/api/upload/product', uploadRateLimit, requireAdmin, uploadProduct, async (req, res) => {
     if (!requireFile(req, res)) return false
     await validateUploadedFile(req)
     let result
@@ -95,7 +102,7 @@ export function registerUploadRoutes(router) {
     return success(res, result, '商品示例图上传成功', 201)
   })
 
-  router.post('/api/upload/review', requireUser, uploadReview, async (req, res) => {
+  router.post('/api/upload/review', uploadRateLimit, requireUser, uploadReview, async (req, res) => {
     if (!requireFile(req, res)) return false
     await validateUploadedFile(req)
     let result
@@ -107,7 +114,7 @@ export function registerUploadRoutes(router) {
     return success(res, result, '评价媒体上传成功', 201)
   })
 
-  router.post('/api/upload/book', requireAdmin, uploadBook, async (req, res) => {
+  router.post('/api/upload/book', uploadRateLimit, requireAdmin, uploadBook, async (req, res) => {
     if (!requireFile(req, res)) return false
     await validateUploadedFile(req)
     try {
@@ -117,7 +124,7 @@ export function registerUploadRoutes(router) {
     }
   })
 
-  router.post('/api/upload/event', requireAdmin, uploadEvent, async (req, res) => {
+  router.post('/api/upload/event', uploadRateLimit, requireAdmin, uploadEvent, async (req, res) => {
     if (!requireFile(req, res)) return false
     await validateUploadedFile(req)
     try {
@@ -127,13 +134,36 @@ export function registerUploadRoutes(router) {
     }
   })
 
+  router.get('/api/upload/files/stats', requireAdmin, async (_req, res) => success(res, await getUploadFileStats()))
+
+  router.get('/api/upload/files/:id/detail', requireAdmin, async (req, res) => {
+    const detail = await getUploadFileDetail(req.params.id)
+    if (!detail) return failure(res, 404, '上传文件不存在', 404)
+    await logAdminAction({ admin: req.user, action: 'view_detail', module: 'upload', targetType: 'file', targetId: req.params.id, description: '查看上传文件详情', req })
+    return success(res, detail)
+  })
+
+  router.get('/api/upload/files/:id/references', requireAdmin, async (req, res) => {
+    const result = await listUploadFiles({ page: 1, pageSize: 1, id: req.params.id })
+    const file = result.items.find((item) => Number(item.id) === Number(req.params.id))
+    if (!file) return failure(res, 404, '?????', 404)
+    await logAdminAction({ admin: req.user, action: 'view_sensitive', module: 'upload', targetType: 'file', targetId: req.params.id, description: '????????', req })
+    return success(res, await getUploadFileReferences(file.url))
+  })
+
   router.get('/api/upload/files', requireAdmin, async (req, res) => {
     const result = await listUploadFiles(req.query)
     return paginated(res, result.items, result.meta)
   })
 
+  router.post('/api/upload/files/batch-delete', requireAdmin, async (req, res) => {
+    const result = await batchDeleteUploadFiles(req.body.ids, { force: Boolean(req.body.force) })
+    await logAdminAction({ admin: req.user, action: 'batch_delete', module: 'upload', targetType: 'file', description: '????????', req, payload: result })
+    return success(res, result, result.errors.length ? '????????' : '?????')
+  })
+
   router.delete('/api/upload/files/:id', requireAdmin, async (req, res) => {
-    const deleted = await deleteUploadFile(req.params.id)
+    const deleted = await deleteUploadFile(req.params.id, { force: req.query.force === '1' })
     if (!deleted) return failure(res, 404, '上传文件不存在', 404)
     await logAdminAction({ admin: req.user, action: 'delete', module: 'upload', targetType: 'file', targetId: req.params.id, description: '删除上传文件', req })
     return success(res, {}, '上传文件已删除')

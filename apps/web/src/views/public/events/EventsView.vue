@@ -31,6 +31,7 @@ function openEvent(event) {
 }
 onMounted(() => {
   eventsStore.fetchEvents()
+  eventsStore.fetchRegistrations()
 })
 watch([visibleEvents, view], async () => {
   if (eventsStore.loading) return
@@ -58,7 +59,7 @@ watch([visibleEvents, view], async () => {
       <section class="metric-grid" aria-label="活动统计">
         <div class="metric-card"><strong>{{ eventsStore.items.length }}</strong><span>近期活动</span></div>
         <div class="metric-card"><strong>{{ eventsStore.items.reduce((sum, item) => sum + item.attendees, 0) }}</strong><span>已报名人次</span></div>
-        <div class="metric-card"><strong>{{ eventsStore.registrations.filter((item) => item.status === 'registered').length }}</strong><span>我的报名</span></div>
+        <div class="metric-card metric-card--link" role="button" tabindex="0" @click="router.push('/account/activities')" @keydown.enter="router.push('/account/activities')"><strong>{{ eventsStore.registrations.filter((item) => item.status === 'registered').length }}</strong><span>我的报名</span></div>
         <div class="metric-card"><strong>3</strong><span>活动空间</span></div>
       </section>
 

@@ -34,6 +34,13 @@ const actionMessage = ref('')
 const actionError = ref('')
 const reviewForm = reactive({ rating: 5, content: '' })
 const locationText = computed(() => book.value?.locationLabel || (book.value?.seatId ? `绑定座位 #${book.value.seatId}` : '到店后由馆员指引'))
+const hasReservableStock = computed(() => Number(book.value?.reservableStock || 0) > 0)
+const reservationSummary = computed(() => {
+  if (!book.value) return ''
+  return hasReservableStock.value
+    ? `当前剩余 ${book.value.reservableStock} 本可预约，已有 ${book.value.activeReservationCount || 0} 本预约中。`
+    : `当前可预约名额已满，已有 ${book.value.activeReservationCount || 0} 本预约中，请等待归还或联系馆员。`
+})
 const recommendations = computed(() => {
   if (!book.value) return []
   const sameCategory = booksStore.items.filter((item) => item.id !== book.value.id && item.category === book.value.category)
@@ -97,6 +104,16 @@ async function toggleLike(review) {
   }
 }
 
+async function deleteReview(review) {
+  if (!authStore.isAuthenticated || !confirm('确认删除这条评价？')) return
+  try {
+    await booksStore.deleteBookReview(review.id)
+    await loadReviews()
+  } catch (error) {
+    actionError.value = error.message || '删除失败'
+  }
+}
+
 async function loadReviews() {
   if (!book.value?.id) return
   reviewsLoading.value = true
@@ -137,7 +154,7 @@ async function reserveBook() {
   actionMessage.value = ''
   try {
     const response = await booksStore.createBookReservation(book.value.id)
-    actionMessage.value = `预约成功：${response.data.locationLabel || locationText.value}`
+    actionMessage.value = `预约成功：${response.data.locationLabel || locationText.value}，可在会员中心查看预约记录。`
     await booksStore.fetchBookDetail(safeSlug.value, { silent: true })
   } catch (error) {
     actionError.value = error.message || '预约失败，请稍后重试'
@@ -202,7 +219,10 @@ onMounted(loadBook)
         <div class="detail-copy">
           <div class="cb-cluster">
             <BaseBadge variant="neutral">{{ book.category }}</BaseBadge>
-            <BaseBadge :variant="book.stock > 0 ? 'success' : 'danger'">{{ book.status }}</BaseBadge>
+            <BaseBadge :variant="book.reservableStock > 0 ? 'success' : 'danger'">{{ book.reservableStock > 0 ? '可预约' : '预约已满' }}</BaseBadge>
+            <BaseBadge v-if="book.isRecommended || book.isFeatured" variant="premium">推荐</BaseBadge>
+            <BaseBadge v-if="book.isNew" variant="success">新书</BaseBadge>
+            <BaseBadge v-if="book.stock > 0 && book.stock <= book.lowStockThreshold" variant="warning">低库存</BaseBadge>
           </div>
           <h1>{{ book.title }}</h1>
           <span class="detail-author">{{ book.author }}</span>
@@ -212,14 +232,34 @@ onMounted(loadBook)
             <span>馆藏位置</span>
             <strong>{{ locationText }}</strong>
           </div>
+          <div class="book-booking-card" :class="{ 'is-empty': !hasReservableStock }">
+            <div class="book-booking-card__header">
+              <span>图书预约</span>
+              <BaseBadge :variant="hasReservableStock ? 'success' : 'danger'">{{ hasReservableStock ? '可预约' : '预约已满' }}</BaseBadge>
+            </div>
+            <div class="book-booking-card__stats">
+              <div>
+                <span>可预约数</span>
+                <strong>{{ book.reservableStock }} 本</strong>
+              </div>
+              <div>
+                <span>当前预约中</span>
+                <strong>{{ book.activeReservationCount || 0 }} 本</strong>
+              </div>
+            </div>
+            <p class="book-booking-card__note">{{ reservationSummary }}</p>
+          </div>
           <p v-if="actionMessage" class="form-success">{{ actionMessage }}</p>
           <p v-if="actionError" class="form-error">{{ actionError }}</p>
           <div class="detail-actions">
             <BaseButton :variant="favorite ? 'secondary' : 'outline'" @click="toggleFavorite($event)">
               {{ favorite ? '已收藏' : '加入收藏' }}
             </BaseButton>
-            <BaseButton :loading="reservationSubmitting" :disabled="book.stock === 0 || reservationSubmitting" @click="reserveBook">
-              {{ book.stock === 0 ? '暂无可预约馆藏' : '预约图书' }}
+            <BaseButton :loading="reservationSubmitting" :disabled="!hasReservableStock || reservationSubmitting" @click="reserveBook">
+              {{ hasReservableStock ? '预约图书' : '暂无可预约图书' }}
+            </BaseButton>
+            <BaseButton v-if="authStore.isAuthenticated" variant="ghost" @click="router.push({ path: '/account/bookings', query: { tab: 'books' } })">
+              我的图书预约
             </BaseButton>
           </div>
         </div>
@@ -232,9 +272,11 @@ onMounted(loadBook)
             <div class="detail-info-item"><span>ISBN</span><strong>{{ book.isbn }}</strong></div>
             <div class="detail-info-item"><span>出版社</span><strong>{{ book.publisher }}</strong></div>
             <div class="detail-info-item"><span>出版年份</span><strong>{{ book.year }}</strong></div>
-            <div class="detail-info-item"><span>页数</span><strong>{{ book.pages }} 页</strong></div>
+            <div class="detail-info-item"><span>页数</span><strong>{{ book.pages === '-' ? '-' : `${book.pages} 页` }}</strong></div>
             <div class="detail-info-item"><span>语言</span><strong>{{ book.language }}</strong></div>
-            <div class="detail-info-item"><span>馆藏</span><strong>{{ book.stock }} 本可用</strong></div>
+            <div class="detail-info-item"><span>馆藏</span><strong>{{ book.stock }} 本在馆</strong></div>
+            <div v-if="book.shelfArea" class="detail-info-item"><span>书架区域</span><strong>{{ book.shelfArea }}</strong></div>
+            <div v-if="book.shelfCode" class="detail-info-item"><span>书架编号</span><strong>{{ book.shelfCode }}</strong></div>
           </div>
         </section>
 
@@ -271,6 +313,7 @@ onMounted(loadBook)
                 <div class="review-actions">
                   <button type="button" @click="toggleLike(review)">{{ review.liked ? '取消点赞' : '点赞' }} {{ review.likeCount || 0 }}</button>
                   <button type="button" @click="activeReplyId = activeReplyId === review.id ? null : review.id">回复</button>
+                  <button v-if="authStore.user?.id === review.user?.id" type="button" class="review-action--danger" @click="deleteReview(review)">删除</button>
                 </div>
                 <div v-if="activeReplyId === review.id" class="reply-form">
                   <BaseTextarea v-model="replyContent" label="回复内容" :maxlength="300" />
@@ -278,9 +321,23 @@ onMounted(loadBook)
                 </div>
                 <div v-if="review.children?.length" class="reply-list">
                   <article v-for="reply in review.children.slice(0, 2)" :key="reply.id" class="reply-item">
-                    <strong>{{ reply.user?.nickname || '匿名用户' }}</strong>
-                    <span>{{ reply.content }}</span>
-                    <button type="button" @click="toggleLike(reply)">{{ reply.liked ? '取消点赞' : '点赞' }} {{ reply.likeCount || 0 }}</button>
+                    <span class="reply-item__avatar">
+                      <img v-if="reply.user?.avatar" :src="resolveUploadUrl(reply.user.avatar)" alt="" decoding="async" />
+                      <span v-else class="avatar">{{ (reply.user?.nickname || '用').slice(0, 1) }}</span>
+                    </span>
+                    <div>
+                      <button class="reply-item__name" type="button" @click="router.push(`/users/${reply.user?.id}`)">{{ reply.user?.nickname || '匿名用户' }}</button>
+                      <span>{{ reply.content }}</span>
+                    </div>
+                    <div class="reply-item__actions">
+                      <button type="button" @click="toggleLike(reply)">{{ reply.liked ? '取消点赞' : '点赞' }} {{ reply.likeCount || 0 }}</button>
+                      <button type="button" @click="activeReplyId = activeReplyId === reply.id ? null : reply.id">回复</button>
+                      <button v-if="authStore.user?.id === reply.user?.id" type="button" class="review-action--danger" @click="deleteReview(reply)">删除</button>
+                    </div>
+                    <div v-if="activeReplyId === reply.id" class="reply-form" style="margin-top:var(--cb-space-2)">
+                      <BaseTextarea v-model="replyContent" label="回复内容" :maxlength="300" />
+                      <BaseButton size="sm" @click="submitReply(reply)">发布回复</BaseButton>
+                    </div>
                   </article>
                 </div>
               </div>
@@ -334,6 +391,14 @@ onMounted(loadBook)
 .detail-content-image { display:block; width:100%; height:100%; min-height:28rem; object-fit:cover; border-radius:var(--cb-radius-xl); }
 .book-location-card { display:grid; gap:var(--cb-space-1); padding:var(--cb-space-4); background:var(--cb-bg-soft); border:1px solid var(--cb-border-soft); border-radius:var(--cb-radius-lg); }
 .book-location-card span { color:var(--cb-text-muted); font-size:var(--cb-font-size-sm); }
+.book-booking-card { display:grid; gap:var(--cb-space-3); padding:var(--cb-space-4); background:color-mix(in srgb, var(--cb-success) 8%, var(--cb-bg-surface)); border:1px solid color-mix(in srgb, var(--cb-success) 26%, var(--cb-border-soft)); border-radius:var(--cb-radius-lg); }
+.book-booking-card.is-empty { background:color-mix(in srgb, var(--cb-danger) 8%, var(--cb-bg-surface)); border-color:color-mix(in srgb, var(--cb-danger) 24%, var(--cb-border-soft)); }
+.book-booking-card__header,
+.book-booking-card__stats { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--cb-space-3); }
+.book-booking-card__stats > div { display:grid; gap:var(--cb-space-1); }
+.book-booking-card__stats span,
+.book-booking-card__header span { color:var(--cb-text-muted); font-size:var(--cb-font-size-sm); }
+.book-booking-card__note { color:var(--cb-text-secondary); }
 .book-reviews,.review-form,.review-list { display:grid; gap:var(--cb-space-4); }
 .reviews-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--cb-space-3); }
 .review-item { display:grid; grid-template-columns:auto minmax(0,1fr); gap:var(--cb-space-3); padding:var(--cb-space-4); background:var(--cb-bg-surface); border:1px solid var(--cb-border-soft); border-radius:var(--cb-radius-lg); }
@@ -346,9 +411,17 @@ onMounted(loadBook)
 .reply-form,
 .reply-list { display:flex; flex-wrap:wrap; gap:var(--cb-space-2); margin-top:var(--cb-space-2); }
 .review-actions button,
-.reply-item button { color:var(--cb-color-coffee); background:transparent; border:0; font-weight:var(--cb-font-semibold); }
+.reply-item button,
+.reply-item__actions button { color:var(--cb-color-coffee); background:transparent; border:0; font-weight:var(--cb-font-semibold); }
+.review-action--danger { color:var(--cb-danger) !important; }
+.reply-item__actions { display:flex; flex-wrap:wrap; gap:var(--cb-space-2); }
 .reply-form { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; width:100%; }
 .reply-list { display:grid; width:100%; padding:var(--cb-space-3); background:var(--cb-bg-soft); border-radius:var(--cb-radius-lg); }
-.reply-item { display:flex; flex-wrap:wrap; gap:var(--cb-space-2); align-items:center; color:var(--cb-text-secondary); font-size:var(--cb-font-size-sm); }
+.reply-item { display:flex; flex-wrap:wrap; gap:var(--cb-space-2); align-items:flex-start; color:var(--cb-text-secondary); font-size:var(--cb-font-size-sm); }
+.reply-item__avatar { width:1.75rem; height:1.75rem; flex-shrink:0; border-radius:var(--cb-radius-pill); overflow:hidden; }
+.reply-item__avatar img { width:100%; height:100%; object-fit:cover; }
+.reply-item__avatar .avatar { display:inline-grid; width:100%; height:100%; place-items:center; background:var(--cb-color-coffee); color:var(--cb-text-inverse); font-size:var(--cb-font-size-xs); font-weight:var(--cb-font-bold); }
+.reply-item__name { color:var(--cb-color-coffee); font-weight:var(--cb-font-semibold); background:none; border:0; padding:0; cursor:pointer; font-size:inherit; }
+.reply-item__name:hover { text-decoration:underline; }
 .form-success { color:var(--cb-success); }
 </style>

@@ -31,10 +31,10 @@ const searchGroups = [
 const searchTotal = computed(() => searchGroups.reduce((sum, group) => sum + searchResults.value[group.key].length, 0))
 let searchTimer
 let searchSequence = 0
-const pendingOrders = computed(() => adminStore.orders.filter((item) => item.status === 'pending_review').length)
-const pendingBookings = computed(() => adminStore.bookings.filter((item) => item.status === 'pending').length)
+const pendingOrders = computed(() => adminStore.orders.filter((item) => item.status === 'pending_review'))
+const pendingBookings = computed(() => adminStore.bookings.filter((item) => item.status === 'pending'))
 const pendingPosts = computed(() => Number(adminStore.dashboardStats.pendingPosts || 0))
-const pendingTotal = computed(() => pendingOrders.value + pendingBookings.value + pendingPosts.value)
+const pendingTotal = computed(() => pendingOrders.value.length + pendingBookings.value.length + pendingPosts.value)
 const searchTargets = [
   { label: '商品', path: '/products' }, { label: '订单', path: '/orders' }, { label: '用户', path: '/users' },
   { label: '社区', path: '/community' }, { label: '活动', path: '/events' }, { label: '图书', path: '/books' },
@@ -50,6 +50,12 @@ async function go(path) {
   searchOpen.value = false
   noticeOpen.value = false
   await router.push({ path, query: keyword.value.trim() ? { keyword: keyword.value.trim() } : {} })
+}
+
+async function goQuery(path, status) {
+  searchOpen.value = false
+  noticeOpen.value = false
+  await router.push({ path, query: { status } })
 }
 
 async function runSearch() {
@@ -148,9 +154,25 @@ async function logout() {
       </div>
       <div v-if="noticeOpen" class="admin-header__popover admin-header__notices">
         <strong>待办事项</strong>
-        <button v-if="pendingPosts" type="button" @click="go('/community')">待审核社区内容 <b>{{ pendingPosts }}</b></button>
-        <button v-if="pendingOrders" type="button" @click="go('/orders')">待审核支付订单 <b>{{ pendingOrders }}</b></button>
-        <button v-if="pendingBookings" type="button" @click="go('/bookings')">待处理预约 <b>{{ pendingBookings }}</b></button>
+        <div v-if="pendingPosts" class="notice-group">
+          <small>待审核帖子 · {{ pendingPosts }} 篇</small>
+          <button type="button" @click="goQuery('/community', 'pending')">查看所有待审核内容</button>
+        </div>
+        <div v-if="pendingOrders.length" class="notice-group">
+          <small>待审核订单 · {{ pendingOrders.length }} 笔</small>
+          <button v-for="order in pendingOrders.slice(0, 5)" :key="order.id" type="button" @click="router.push(`/orders/${order.id}`)">
+            #{{ order.orderNo || order.id }} · ￥{{ order.totalAmount || order.amount }}
+          </button>
+          <button v-if="pendingOrders.length > 5" type="button" @click="goQuery('/orders', 'pending_review')">查看全部 {{ pendingOrders.length }} 笔待审核订单</button>
+        </div>
+        <div v-if="pendingBookings.length" class="notice-group">
+          <small>待处理预约 · {{ pendingBookings.length }} 个</small>
+          <button v-for="booking in pendingBookings.slice(0, 5)" :key="booking.id" type="button" @click="router.push(`/bookings/${booking.id}`)">
+            {{ booking.bookingNo || `#${booking.id}` }} · {{ booking.spaceName || booking.userName || '' }}
+          </button>
+          <button v-if="pendingBookings.length > 5" type="button" @click="goQuery('/bookings', 'pending')">查看全部 {{ pendingBookings.length }} 个待处理预约</button>
+        </div>
+        <button v-if="pendingPosts || pendingBookings.length" type="button" @click="router.push('/logs')">操作日志</button>
         <p v-if="pendingTotal === 0">暂无待处理事项</p>
       </div>
       <ThemeToggle />
@@ -280,6 +302,8 @@ async function logout() {
 .admin-header__popover button { padding:var(--cb-space-2) var(--cb-space-3); color:var(--cb-text-primary); text-align:left; background:var(--cb-bg-soft); border:0; border-radius:var(--cb-radius-md); }
 .admin-header__notices b { float:right; color:var(--cb-danger); }
 .admin-header__notices p { color:var(--cb-text-muted); }
+.notice-group { display:grid; gap:var(--cb-space-1); }
+.notice-group small { color:var(--cb-text-muted); font-size:var(--cb-font-size-xs); padding:var(--cb-space-2) var(--cb-space-3) 0; }
 
 .admin-header__profile-trigger {
   display: flex;

@@ -53,7 +53,7 @@ const sortOptions = [
 const visibleBooks = computed(() => booksStore.items)
 const totalBooks = computed(() => booksStore.meta?.total ?? visibleBooks.value.length)
 const totalPages = computed(() => Math.max(1, Math.ceil(totalBooks.value / pageSize)))
-const borrowableCount = computed(() => visibleBooks.value.filter((book) => book.stock > 0).length)
+const borrowableCount = computed(() => visibleBooks.value.filter((book) => book.reservableStock > 0).length)
 const favoriteCount = computed(() => visibleBooks.value.reduce((total, book) => total + Number(book.favorites || 0), 0))
 
 const sortMap = { recommended: 'default', rating: 'rating_desc', latest: 'newest', stock: 'stock_desc' }
@@ -138,7 +138,7 @@ watch(() => visibleBooks.value.map((book) => book.id).join(','), async () => {
       <section class="catalog-stats" aria-label="图书统计">
         <div class="catalog-stat"><strong>{{ totalBooks }}</strong><span>全部图书数量</span></div>
         <div class="catalog-stat"><strong>{{ visibleBooks.length }}</strong><span>当前页数量</span></div>
-        <div class="catalog-stat"><strong>{{ borrowableCount }}</strong><span>可借阅数量</span></div>
+        <div class="catalog-stat"><strong>{{ borrowableCount }}</strong><span>可预约图书</span></div>
         <div class="catalog-stat"><strong>{{ favoriteCount.toLocaleString('zh-CN') }}</strong><span>收藏人数</span></div>
       </section>
 
@@ -170,7 +170,10 @@ watch(() => visibleBooks.value.map((book) => book.id).join(','), async () => {
             </div>
             <h2>{{ book.title }}</h2>
             <span class="catalog-card__author">{{ book.author }}</span>
-            <BaseBadge :variant="book.stock > 0 ? 'success' : 'danger'">{{ book.status }}</BaseBadge>
+            <BaseBadge :variant="book.reservableStock > 0 ? 'success' : 'danger'">{{ book.reservableStock > 0 ? '可预约' : '预约已满' }}</BaseBadge>
+            <BaseBadge v-if="book.isRecommended || book.isFeatured" variant="premium">推荐</BaseBadge>
+            <BaseBadge v-if="book.isNew" variant="success">新书</BaseBadge>
+            <BaseBadge v-if="book.stock > 0 && book.stock <= book.lowStockThreshold" variant="warning">低库存</BaseBadge>
             <p>{{ book.summary }}</p>
             <div class="catalog-card__actions">
               <BaseButton size="sm" @click.stop="router.push(`/books/${book.slug}`)">查看详情</BaseButton>

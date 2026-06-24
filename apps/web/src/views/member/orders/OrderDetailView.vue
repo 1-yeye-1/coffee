@@ -39,6 +39,32 @@ const pickupNames = {
 }
 const paymentNames = { wechat: '微信支付', alipay: '支付宝', store: '到店支付' }
 const shouldPoll = computed(() => ['pending_payment', 'pending_review'].includes(order.value?.status))
+const paymentStatusText = {
+  created: '待支付',
+  reviewing: '待后台确认',
+  confirmed: '支付已确认',
+  rejected: '支付被驳回',
+  expired: '支付已过期',
+}
+const refundStatusText = {
+  refunding: '退款处理中',
+  refunded: '退款已完成',
+  refund_rejected: '退款被驳回',
+}
+const operationalRows = computed(() => {
+  if (!order.value) return []
+  const item = order.value
+  return [
+    item.paymentStatus ? ['支付状态', paymentStatusText[item.paymentStatus] || item.paymentStatus] : null,
+    item.cancelReason ? ['取消原因', item.cancelReason] : null,
+    item.timeline?.cancelledAt ? ['取消时间', formatDate(item.timeline.cancelledAt)] : null,
+    refundStatusText[item.status] ? ['退款状态', refundStatusText[item.status]] : null,
+    item.refund?.reason ? ['退款原因', item.refund.reason] : null,
+    item.refund?.amount !== null && item.refund?.amount !== undefined ? ['退款金额', `￥${item.refund.amount}`] : null,
+    item.refund?.note ? ['退款审核备注', item.refund.note] : null,
+    item.refund?.refundedAt ? ['退款完成时间', formatDate(item.refund.refundedAt)] : null,
+  ].filter(Boolean)
+})
 
 function meta(status) {
   return statusMeta[status] || { label: status, badge: 'neutral', step: 1 }
@@ -167,6 +193,13 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <div v-if="operationalRows.length" class="order-operational-note">
+          <div v-for="[label, value] in operationalRows" :key="label">
+            <span>{{ label }}</span>
+            <strong>{{ value || '暂无' }}</strong>
+          </div>
+        </div>
+
         <div class="order-detail-actions">
           <BaseButton variant="outline" :loading="refreshing" @click="refreshStatus">刷新状态</BaseButton>
           <BaseButton v-if="order.status === 'pending_payment'" :loading="paying" @click="pay">去支付</BaseButton>
@@ -261,5 +294,26 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: var(--cb-space-3);
   justify-content: flex-end;
+}
+.order-operational-note {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--cb-space-3);
+  padding: var(--cb-space-4);
+  background: var(--cb-bg-soft);
+  border: 0.0625rem solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-lg);
+}
+.order-operational-note div {
+  display: grid;
+  gap: var(--cb-space-1);
+}
+.order-operational-note span {
+  color: var(--cb-text-muted);
+  font-size: var(--cb-font-size-sm);
+}
+.order-operational-note strong {
+  color: var(--cb-text-primary);
+  overflow-wrap: anywhere;
 }
 </style>

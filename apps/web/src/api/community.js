@@ -11,3 +11,4 @@ export const likeComment = (id, commentId) => request(`/posts/${id}/comments/${c
 export const unlikeComment = (id, commentId) => request(`/posts/${id}/comments/${commentId}/like`, { method: 'DELETE' })
 export const togglePostLike = (id) => request(`/posts/${id}/like`, { method: 'POST' })
 export const fetchPostLikes = (id) => request(`/posts/${id}/likes`)
+export const deletePost = (id) => request(`/posts/${id}`, { method: 'DELETE' })

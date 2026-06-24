@@ -14,9 +14,9 @@
   --shadow-hover: 0 28px 70px rgb(42 24 16 / 0.18);
   --radius-card: 24px;
   --radius-pill: 999px;
-  --transition-fast: 160ms ease;
-  --transition-base: 260ms ease;
-  --transition-slow: 420ms cubic-bezier(.16, 1, .3, 1);
+  --transition-fast: 140ms ease;
+  --transition-base: 220ms ease;
+  --transition-slow: 320ms cubic-bezier(.16, 1, .3, 1);
   color-scheme: light dark;
 
   /* Theme-aware semantic surfaces. Keep feature styles on these aliases. */
@@ -137,9 +137,9 @@
   --cb-cursor-text: var(--cb-text-primary);
 
   /* Motion */
-  --cb-duration-fast: 150ms;
-  --cb-duration-normal: 250ms;
-  --cb-duration-slow: 400ms;
+  --cb-duration-fast: 140ms;
+  --cb-duration-normal: 220ms;
+  --cb-duration-slow: 320ms;
   --cb-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --cb-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
 

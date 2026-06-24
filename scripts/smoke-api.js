@@ -22,7 +22,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-async function request(method, path, { token, body, formData, expectedStatus } = {}) {
+async function request(method, path, { token, body, formData, expectedStatus, raw = false } = {}) {
   const headers = {}
   if (token) headers.Authorization = `Bearer ${token}`
   if (body !== undefined) headers['Content-Type'] = 'application/json'
@@ -31,11 +31,11 @@ async function request(method, path, { token, body, formData, expectedStatus } =
     headers,
     body: formData || (body === undefined ? undefined : JSON.stringify(body)),
   })
-  const payload = await response.json().catch(() => null)
+  const payload = raw ? await response.text() : await response.json().catch(() => null)
   if (expectedStatus && response.status !== expectedStatus) {
     throw new Error(`${method} ${path} expected ${expectedStatus}, got ${response.status} ${payload?.message || ''}`)
   }
-  if (!expectedStatus && (!response.ok || payload?.code !== 0)) {
+  if (!expectedStatus && (!response.ok || (!raw && payload?.code !== 0))) {
     throw new Error(`${method} ${path} failed: ${response.status} ${payload?.message || ''}`)
   }
   return { response, payload }
@@ -396,13 +396,28 @@ async function main() {
   await request('PATCH', `/admin/posts/${submittedPost.payload.data.id}/status`, { token: adminToken, body: { status: 'hidden' } })
   await request('GET', `/posts/${submittedPost.payload.data.id}`, { expectedStatus: 404 })
   logPass('community moderation and report synchronization')
+  await request('POST', `/admin/community/users/${me.payload.data.id}/penalty`, { token: adminToken, body: { penaltyType: 'mute_1d' }, expectedStatus: 400 })
+  const mutePenalty = await request('POST', `/admin/community/users/${me.payload.data.id}/penalty`, { token: adminToken, body: { penaltyType: 'mute_1d', reason: 'smoke mute' } })
+  assert(mutePenalty.payload.data.risk.status === 'post_limited', 'mute_1d should limit community posting')
+  const blockedPost = await request('POST', '/posts', { token: userToken, body: { title: `blocked ${stamp}`, content: 'blocked by smoke penalty' }, expectedStatus: 403 })
+  assert(String(blockedPost.payload.message).includes('限制发帖'), 'limited user post should return clear error')
+  const blockedComment = await request('POST', `/posts/${post.id}/comments`, { token: userToken, body: { content: `blocked comment ${stamp}` }, expectedStatus: 403 })
+  assert(String(blockedComment.payload.message).includes('限制发帖'), 'limited user comment should return clear error')
+  const restorePenalty = await request('POST', `/admin/community/users/${me.payload.data.id}/penalty`, { token: adminToken, body: { penaltyType: 'restore', reason: 'smoke restore' } })
+  assert(restorePenalty.payload.data.risk.status === 'normal', 'restore should clear community posting limit')
+  await request('POST', `/posts/${post.id}/comments`, { token: userToken, body: { content: `restored comment ${stamp}` } })
+  const [penaltyAuditRows] = await pool.query("SELECT action FROM audit_logs WHERE action = 'community.user.penalty' AND target_id = ?", [String(me.payload.data.id)])
+  assert(penaltyAuditRows.length >= 2, 'community penalty audit logs missing')
+  logPass('community penalty risk posting block restore and audit flow')
   const unauthLike = await request('POST', `/posts/${post.id}/like`, { expectedStatus: 401 })
   assert(unauthLike.payload.code === 401, 'unauth like should return 401')
   await request('POST', `/posts/${post.id}/like`, { token: userToken })
   const postLikes = await request('GET', `/posts/${post.id}/likes`)
   assert(postLikes.payload.data.items.some((item) => item.nickname === 'Smoke Profile'), 'post like users missing')
   logPass('community like, bookmark, gallery, new post and comment data')
-  await request('DELETE', `/upload/files/${uploaded.payload.data.file.id}`, { token: adminToken })
+  const protectedUploadDelete = await request('DELETE', `/upload/files/${uploaded.payload.data.file.id}`, { token: adminToken, expectedStatus: 409 })
+  assert(protectedUploadDelete.payload.code === 409, 'referenced upload should require force delete')
+  await request('DELETE', `/upload/files/${uploaded.payload.data.file.id}?force=1`, { token: adminToken })
 
   await request('POST', `/posts/${post.id}/comments`, { token: userToken, body: { content: `anonymous smoke ${stamp}`, isAnonymous: true } })
   const publicPost = await request('GET', `/posts/${post.id}`)
@@ -426,34 +441,51 @@ async function main() {
   assert(registrationList.payload.data.find((item) => Number(item.eventId) === Number(smokeEvent.payload.data.id))?.registrationStatus === 'registered', 'event registration missing')
   await request('DELETE', `/events/${smokeEvent.payload.data.id}/register`, { token: userToken })
   await request('POST', `/events/${smokeEvent.payload.data.id}/register`, { token: userToken })
+  const adminRegistrations = await request('GET', `/admin/events/${smokeEvent.payload.data.id}/registrations?keyword=Smoke&page=1&pageSize=10`, { token: adminToken })
+  const adminRegistration = adminRegistrations.payload.data.find((item) => Number(item.eventId) === Number(smokeEvent.payload.data.id) && Number(item.userId) === Number(me.payload.data.id))
+  assert(adminRegistration?.registrationId && adminRegistration.status === 'registered', 'admin event registrations list missing user')
+  const attendedRegistration = await request('PATCH', `/admin/events/${smokeEvent.payload.data.id}/registrations/${adminRegistration.registrationId}/status`, { token: adminToken, body: { status: 'attended' } })
+  assert(attendedRegistration.payload.code === 0, 'admin mark attended failed')
+  let adminRegistrationRows = await request('GET', `/admin/events/${smokeEvent.payload.data.id}/registrations?status=attended`, { token: adminToken })
+  assert(adminRegistrationRows.payload.data.some((item) => Number(item.registrationId) === Number(adminRegistration.registrationId) && item.checkinStatus === 'attended'), 'admin attended status not persisted')
+  const absentRegistration = await request('PATCH', `/admin/events/${smokeEvent.payload.data.id}/registrations/${adminRegistration.registrationId}/status`, { token: adminToken, body: { status: 'absent', reason: 'smoke absent' } })
+  assert(absentRegistration.payload.code === 0, 'admin mark absent failed')
+  adminRegistrationRows = await request('GET', `/admin/events/${smokeEvent.payload.data.id}/registrations?checkinStatus=absent`, { token: adminToken })
+  assert(adminRegistrationRows.payload.data.some((item) => Number(item.registrationId) === Number(adminRegistration.registrationId) && item.absentAt), 'admin absent status not persisted')
+  await request('PATCH', `/admin/events/${smokeEvent.payload.data.id}/registrations/${adminRegistration.registrationId}/status`, { token: adminToken, body: { status: 'cancelled' }, expectedStatus: 400 })
+  const registrationExport = await request('GET', `/admin/events/${smokeEvent.payload.data.id}/registrations/export?checkinStatus=absent`, { token: adminToken, raw: true })
+  assert(registrationExport.payload.includes('活动名称') && registrationExport.payload.includes('Smoke Event'), 'admin event registrations export invalid')
   const [[eventCount]] = await pool.query('SELECT attendees FROM events WHERE id = ?', [smokeEvent.payload.data.id])
-  assert(Number(eventCount.attendees) === 1, 'event re-registration count invalid')
-  logPass('event register cancel re-register flow')
+  assert(Number(eventCount.attendees) === 0, 'event attended/absent count invalid')
+  const [eventAuditRows] = await pool.query("SELECT action FROM audit_logs WHERE module = 'events' AND target_id = ? AND action IN ('event.registration.status.update','event.registration.export')", [String(smokeEvent.payload.data.id)])
+  assert(eventAuditRows.some((row) => row.action === 'event.registration.status.update') && eventAuditRows.some((row) => row.action === 'event.registration.export'), 'event registration audit logs missing')
+  logPass('event register list status export and audit flow')
 
   const spaces = await request('GET', '/spaces')
   assert(spaces.payload.data.length > 0, 'spaces list empty')
   logPass('spaces list')
 
-  const bookingNow = new Date()
-  const bookingDate = `${bookingNow.getFullYear()}-${String(bookingNow.getMonth() + 1).padStart(2, '0')}-${String(bookingNow.getDate()).padStart(2, '0')}`
+  const bookingDate = eventDate
+  const bookingTimeSlot = '09:00-11:00'
+  const bookingTimeSlotQuery = encodeURIComponent(bookingTimeSlot)
   const seatList = await request('GET', '/seats')
   assert(seatList.payload.data.length > 0, 'seat list empty')
   assert(seatList.payload.data.every((seat) => seat.id && seat.code && seat.name && Number.isFinite(Number(seat.capacity))
     && Number.isFinite(Number(seat.x)) && Number.isFinite(Number(seat.y)) && ['available', 'maintenance'].includes(seat.status)), 'seat tooltip fields incomplete')
-  const availability = await request('GET', `/seats/availability?date=${bookingDate}&timeSlot=09%3A00-11%3A00`)
+  const availability = await request('GET', `/seats/availability?date=${bookingDate}&timeSlot=${bookingTimeSlotQuery}`)
   assert(availability.payload.data.every((seat) => seat.seatId && seat.code && seat.name && 'area' in seat
     && Number.isFinite(Number(seat.capacity)) && Number.isFinite(Number(seat.x)) && Number.isFinite(Number(seat.y))
     && ['available', 'reserved', 'maintenance'].includes(seat.status)), 'seat availability tooltip fields incomplete')
   const freeSeats = availability.payload.data.filter((item) => item.status === 'available')
   assert(freeSeats.length >= 2, 'not enough available seats')
-  const memberBooking = await request('POST', '/bookings', { token: userToken, body: { date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[0].seatId, peopleCount: 1, contactName: 'Wrong Name', phone: '13800138000' } })
+  const memberBooking = await request('POST', '/bookings', { token: userToken, body: { date: bookingDate, timeSlot: bookingTimeSlot, seatId: freeSeats[0].seatId, peopleCount: 1, contactName: 'Wrong Name', phone: '13800138000' } })
   assert(memberBooking.payload.data.bookingNo && memberBooking.payload.data.date === bookingDate
-    && memberBooking.payload.data.timeSlot === '09:00-11:00' && memberBooking.payload.data.seatCode === freeSeats[0].code
+    && memberBooking.payload.data.timeSlot === bookingTimeSlot && memberBooking.payload.data.seatCode === freeSeats[0].code
     && memberBooking.payload.data.createdAt, 'member reservation card fields incomplete')
-  await request('POST', '/bookings', { token: userToken, body: { date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[0].seatId, peopleCount: 1 }, expectedStatus: 409 })
+  await request('POST', '/bookings', { token: userToken, body: { date: bookingDate, timeSlot: bookingTimeSlot, seatId: freeSeats[0].seatId, peopleCount: 1 }, expectedStatus: 409 })
   const myBookings = await request('GET', '/bookings/my', { token: userToken })
   assert(myBookings.payload.data.length && myBookings.payload.data.every((item) => item.phone === smokePhone), 'member booking must use token user phone')
-  const occupied = await request('GET', `/seats/availability?date=${bookingDate}&timeSlot=09%3A00-11%3A00`)
+  const occupied = await request('GET', `/seats/availability?date=${bookingDate}&timeSlot=${bookingTimeSlotQuery}`)
   assert(occupied.payload.data.find((item) => item.seatId === freeSeats[0].seatId)?.status === 'reserved', 'seat should be reserved')
   logPass('member seat booking flow')
 
@@ -462,12 +494,12 @@ async function main() {
   const guestCode = 'A7K9P'
   const { hashPassword: hashGuestCode } = await import('../server/utils/crypto.js')
   await pool.query('UPDATE image_captchas SET code_hash = ? WHERE captcha_id = ?', [await hashGuestCode(guestCode), captcha.payload.data.captchaId])
-  const guestBooking = await request('POST', '/bookings/guest', { body: { phone: guestPhone, captchaId: captcha.payload.data.captchaId, captchaCode: guestCode, name: '游客测试', date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[1].seatId, peopleCount: 1 } })
+  const guestBooking = await request('POST', '/bookings/guest', { body: { phone: guestPhone, captchaId: captcha.payload.data.captchaId, captchaCode: guestCode, name: '游客测试', date: bookingDate, timeSlot: bookingTimeSlot, seatId: freeSeats[1].seatId, peopleCount: 1 } })
   assert(guestBooking.payload.data.accountCreated === true, 'guest account should be created')
   assert(guestBooking.payload.data.user?.nickname && guestBooking.payload.data.booking?.bookingNo
-    && guestBooking.payload.data.booking.date === bookingDate && guestBooking.payload.data.booking.timeSlot === '09:00-11:00'
+    && guestBooking.payload.data.booking.date === bookingDate && guestBooking.payload.data.booking.timeSlot === bookingTimeSlot
     && guestBooking.payload.data.booking.seatCode === freeSeats[1].code && guestBooking.payload.data.booking.createdAt, 'guest reservation card fields incomplete')
-  await request('POST', '/bookings/guest', { body: { phone: guestPhone, captchaId: captcha.payload.data.captchaId, captchaCode: guestCode, name: '游客测试', date: bookingDate, timeSlot: '09:00-11:00', seatId: freeSeats[1].seatId, peopleCount: 1 }, expectedStatus: 400 })
+  await request('POST', '/bookings/guest', { body: { phone: guestPhone, captchaId: captcha.payload.data.captchaId, captchaCode: guestCode, name: '游客测试', date: bookingDate, timeSlot: bookingTimeSlot, seatId: freeSeats[1].seatId, peopleCount: 1 }, expectedStatus: 400 })
   const loginCaptcha = await request('GET', '/auth/captcha')
   const loginCaptchaCode = 'B8L2Q'
   await pool.query('UPDATE image_captchas SET code_hash = ? WHERE captcha_id = ?', [await hashGuestCode(loginCaptchaCode), loginCaptcha.payload.data.captchaId])
@@ -482,7 +514,7 @@ async function main() {
   assert(!guestBookings.payload.data.some((item) => item.phone === smokePhone), 'user B can see user A bookings')
   logPass('guest verification booking flow')
 
-  const usage = await request('GET', `/admin/seats/usage?date=${bookingDate}&timeSlot=09%3A00-11%3A00`, { token: adminToken })
+  const usage = await request('GET', `/admin/seats/usage?date=${bookingDate}&timeSlot=${bookingTimeSlotQuery}`, { token: adminToken })
   assert(usage.payload.data.some((item) => item.bookingInfo?.phoneMasked), 'admin seat usage missing booking info')
   logPass('admin seat usage')
 
@@ -493,6 +525,58 @@ async function main() {
   const syncedSeats = await request('GET', '/seats')
   const syncedSeat = syncedSeats.payload.data.find((seat) => Number(seat.id) === Number(createdSeat.payload.data.id))
   assert(Number(syncedSeat?.x) === 45 && Number(syncedSeat?.y) === 65, 'frontend seat endpoint did not expose saved coordinates')
+  const [[spaceForAdminBooking]] = await pool.query("SELECT id FROM spaces WHERE slug = 'city-reading-room' LIMIT 1")
+  const adminBookingBase = {
+    userId: me.payload.data.id,
+    spaceId: spaceForAdminBooking.id,
+    seatId: createdSeat.payload.data.id,
+    date: eventDate,
+    contactName: 'Smoke Profile',
+    phone: smokePhone,
+  }
+  async function insertAdminBooking(suffix, timeSlot, status = 'pending') {
+    const bookingNo = `SMOKE-AB-${stamp}-${suffix}`
+    const [result] = await pool.query(
+      `INSERT INTO bookings
+        (booking_no, user_id, space_id, seat_id, booking_date, booking_time, time_slot, seat, people_count, contact_name, phone, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+      [bookingNo, adminBookingBase.userId, adminBookingBase.spaceId, adminBookingBase.seatId, adminBookingBase.date, timeSlot, timeSlot, createdSeat.payload.data.code, adminBookingBase.contactName, adminBookingBase.phone, status],
+    )
+    return { id: result.insertId, bookingNo }
+  }
+  const flowBooking = await insertAdminBooking('FLOW', '18:00-20:00')
+  const confirmedBooking = await request('PATCH', `/admin/bookings/${flowBooking.id}/status`, { token: adminToken, body: { status: 'confirmed' } })
+  assert(confirmedBooking.payload.data.status === 'confirmed', 'admin booking pending -> confirmed failed')
+  const completedBooking = await request('PATCH', `/admin/bookings/${flowBooking.id}/status`, { token: adminToken, body: { status: 'completed' } })
+  assert(completedBooking.payload.data.status === 'completed' && completedBooking.payload.data.completedAt, 'admin booking confirmed -> completed failed')
+  await request('PATCH', `/admin/bookings/${flowBooking.id}/status`, { token: adminToken, body: { status: 'cancelled', reason: 'completed cannot cancel' }, expectedStatus: 409 })
+
+  const cancelledBooking = await insertAdminBooking('CANCEL', '13:00-14:30')
+  await request('PATCH', `/admin/bookings/${cancelledBooking.id}/status`, { token: adminToken, body: { status: 'cancelled' }, expectedStatus: 400 })
+  const cancelReason = 'smoke admin cancel reason'
+  const cancelResult = await request('PATCH', `/admin/bookings/${cancelledBooking.id}/status`, { token: adminToken, body: { status: 'cancelled', reason: cancelReason } })
+  assert(cancelResult.payload.data.status === 'cancelled' && cancelResult.payload.data.cancelReason === cancelReason, 'admin cancel reason not returned')
+  const [[cancelDb]] = await pool.query('SELECT cancel_reason AS reason FROM bookings WHERE id = ?', [cancelledBooking.id])
+  assert(cancelDb.reason === cancelReason, 'admin cancel reason not persisted')
+  const [[cancelNotice]] = await pool.query("SELECT COUNT(*) AS count FROM user_notifications WHERE user_id = ? AND related_type = 'booking' AND related_id = ? AND type = 'booking' AND content LIKE ?", [me.payload.data.id, cancelledBooking.id, `%${cancelReason}%`])
+  assert(Number(cancelNotice.count) === 1, 'admin cancel notification missing')
+
+  const noShowBooking = await insertAdminBooking('NOSHOW', '14:30-16:00')
+  await request('PATCH', `/admin/bookings/${noShowBooking.id}/status`, { token: adminToken, body: { status: 'confirmed' } })
+  const noShowResult = await request('PATCH', `/admin/bookings/${noShowBooking.id}/status`, { token: adminToken, body: { status: 'no_show' } })
+  assert(noShowResult.payload.data.status === 'no_show' && noShowResult.payload.data.noShowAt, 'admin no-show transition failed')
+
+  const batchA = await insertAdminBooking('BATCHA', '16:00-17:30')
+  const batchB = await insertAdminBooking('BATCHB', '17:00-19:00')
+  const batchCancel = await request('PATCH', '/admin/bookings/batch-status', { token: adminToken, body: { ids: [batchA.id, batchB.id], status: 'cancelled', reason: 'smoke batch cancel' } })
+  assert(batchCancel.payload.data.updated.length === 2 && batchCancel.payload.data.errors.length === 0, 'admin batch cancel failed')
+  const detail = await request('GET', `/admin/bookings/${cancelledBooking.id}`, { token: adminToken })
+  assert(detail.payload.data.operationLogs.some((log) => log.action === 'booking.cancel' && log.payload?.reason === cancelReason), 'admin booking detail audit logs missing cancel reason')
+  const [bookingAuditRows] = await pool.query('SELECT action, payload FROM audit_logs WHERE target_type = ? AND target_id IN (?, ?, ?) ORDER BY id DESC', ['booking', String(flowBooking.id), String(cancelledBooking.id), String(noShowBooking.id)])
+  assert(bookingAuditRows.some((row) => row.action === 'booking.status.update') && bookingAuditRows.some((row) => row.action === 'booking.cancel') && bookingAuditRows.some((row) => row.action === 'booking.no_show'), 'admin booking audit logs incomplete')
+  const adminBookingStats = await request('GET', `/admin/bookings/stats?date=${eventDate}&timeSlot=13%3A00-14%3A30`, { token: adminToken })
+  assert(Number.isFinite(adminBookingStats.payload.data.seatUsageRate), 'admin booking stats invalid')
+  logPass('admin booking detail, transitions, cancel reason, batch cancel, notifications and audit logs')
   const disabledSeat = await request('PATCH', `/admin/seats/${createdSeat.payload.data.id}/status`, { token: adminToken, body: { status: 'disabled' } })
   assert(disabledSeat.payload.data.status === 'maintenance', 'seat maintenance status failed')
   await request('DELETE', `/admin/seats/${createdSeat.payload.data.id}`, { token: adminToken })

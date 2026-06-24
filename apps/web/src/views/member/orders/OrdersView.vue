@@ -135,13 +135,13 @@ onBeforeUnmount(() => window.clearInterval(pollTimer))
     </section>
 
     <div class="orders-toolbar">
-      <BaseButton variant="outline" :loading="refreshing" @click="refreshOrders(false)">刷新状态</BaseButton>
       <span v-if="shouldPoll" class="text-muted">待确认订单会自动同步状态。</span>
+      <BaseButton variant="outline" :loading="refreshing" @click="refreshOrders(false)">刷新状态</BaseButton>
     </div>
 
     <ErrorPanel v-if="orderStore.error" title="订单同步失败" :message="orderStore.error" @retry="refreshOrders(false)" />
 
-    <BaseTabs v-model="activeStatus" :tabs="tabs">
+    <BaseTabs v-model="activeStatus" :tabs="tabs" variant="member">
       <div class="order-list">
         <article v-for="order in visibleOrders" :key="order.id" class="order-card">
           <header class="order-card__header">
@@ -202,10 +202,14 @@ onBeforeUnmount(() => window.clearInterval(pollTimer))
   flex-wrap: wrap;
   gap: var(--cb-space-3);
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
 }
 .cancel-confirm {
   display: grid;
   gap: var(--cb-space-4);
+}
+
+.orders-toolbar:has(.text-muted) .base-button {
+  margin-left: auto;
 }
 </style>

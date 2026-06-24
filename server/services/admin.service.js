@@ -48,6 +48,12 @@ function mapUser(row) {
     level: row.level,
     growthValue: Number(row.growthValue || 0),
     lastCheckinDate: row.lastCheckinDate,
+    lastLoginAt: row.lastLoginAt,
+    disabledReason: row.disabledReason,
+    bookingLimitUntil: row.bookingLimitUntil,
+    postLimitUntil: row.postLimitUntil,
+    bio: row.bio,
+    gender: row.gender,
     orders: Number(row.orders || 0),
     bookings: Number(row.bookings || 0),
     posts: Number(row.posts || 0),
@@ -88,6 +94,8 @@ export async function listAdminUsers(query = {}) {
   const [rows] = await pool.execute(
     `SELECT u.id, u.username, u.nickname, u.email, u.phone, u.avatar, u.role, u.status,
       u.points, u.level, u.growth_value AS growthValue, DATE_FORMAT(u.last_checkin_date, '%Y-%m-%d') AS lastCheckinDate,
+      u.last_login_at AS lastLoginAt, u.disabled_reason AS disabledReason, u.booking_limit_until AS bookingLimitUntil,
+      u.post_limit_until AS postLimitUntil, u.bio, u.gender,
       DATE_FORMAT(u.birthday, '%Y-%m-%d') AS birthday, u.created_at AS createdAt, u.updated_at AS updatedAt,
       COUNT(DISTINCT o.id) AS orders,
       COUNT(DISTINCT b.id) AS bookings,
@@ -100,7 +108,7 @@ export async function listAdminUsers(query = {}) {
      LEFT JOIN user_coupons uc ON uc.user_id = u.id
      ${whereSql}
      GROUP BY u.id
-     ORDER BY u.created_at DESC, u.id DESC
+     ORDER BY u.created_at ASC, u.id ASC
      LIMIT ${safeLimit} OFFSET ${safeOffset}`,
     params,
   )
@@ -124,6 +132,9 @@ export async function updateAdminUser(id, payload, operatorId) {
     level: 'level',
     points: 'points',
     status: 'status',
+    disabledReason: 'disabled_reason',
+    bookingLimitUntil: 'booking_limit_until',
+    postLimitUntil: 'post_limit_until',
   }
 
   Object.entries(allowed).forEach(([key, column]) => {
@@ -163,6 +174,8 @@ export async function updateAdminUser(id, payload, operatorId) {
   const [[row]] = await pool.execute(
     `SELECT u.id, u.username, u.nickname, u.email, u.phone, u.avatar, u.role, u.status,
       u.points, u.level, u.growth_value AS growthValue, DATE_FORMAT(u.last_checkin_date, '%Y-%m-%d') AS lastCheckinDate,
+      u.last_login_at AS lastLoginAt, u.disabled_reason AS disabledReason, u.booking_limit_until AS bookingLimitUntil,
+      u.post_limit_until AS postLimitUntil, u.bio, u.gender,
       DATE_FORMAT(u.birthday, '%Y-%m-%d') AS birthday, u.created_at AS createdAt, u.updated_at AS updatedAt,
       0 AS orders, 0 AS bookings, 0 AS posts,
       (SELECT COUNT(*) FROM user_coupons uc WHERE uc.user_id = u.id) AS couponCount
@@ -178,4 +191,71 @@ export async function writeAudit(operatorId, action, module, payload = null, con
   const safePayload = payload?.operatorType ? { ...payload } : payload
   if (safePayload?.operatorType) delete safePayload.operatorType
   await recordAudit({ operatorId, operatorType, action, module, payload: safePayload, connection })
+}
+
+
+export async function getAdminUserDetail(id) {
+  const [[row]] = await pool.execute(
+    `SELECT u.id, u.username, u.nickname, u.email, u.phone, u.avatar, u.role, u.status,
+      u.points, u.level, u.growth_value AS growthValue, DATE_FORMAT(u.last_checkin_date, '%Y-%m-%d') AS lastCheckinDate,
+      u.last_login_at AS lastLoginAt, u.disabled_reason AS disabledReason, u.booking_limit_until AS bookingLimitUntil,
+      u.post_limit_until AS postLimitUntil, u.bio, u.gender, DATE_FORMAT(u.birthday, '%Y-%m-%d') AS birthday,
+      u.created_at AS createdAt, u.updated_at AS updatedAt,
+      COUNT(DISTINCT o.id) AS orders,
+      COALESCE(SUM(CASE WHEN o.status IN ('paid','completed') THEN o.total_amount ELSE 0 END), 0) AS spending,
+      COUNT(DISTINCT b.id) AS bookings,
+      SUM(CASE WHEN b.status = 'no_show' THEN 1 ELSE 0 END) AS noShows,
+      COUNT(DISTINCT er.id) AS eventRegistrations,
+      SUM(CASE WHEN er.status IN ('attended','checked_in') THEN 1 ELSE 0 END) AS eventAttended,
+      COUNT(DISTINCT p.id) AS posts,
+      COUNT(DISTINCT c.id) AS comments,
+      COUNT(DISTINCT pl.id) AS likes,
+      COUNT(DISTINCT uf.id) AS favorites
+     FROM users u
+     LEFT JOIN orders o ON o.user_id = u.id
+     LEFT JOIN bookings b ON b.user_id = u.id
+     LEFT JOIN event_registrations er ON er.user_id = u.id
+     LEFT JOIN posts p ON p.user_id = u.id
+     LEFT JOIN comments c ON c.user_id = u.id
+     LEFT JOIN post_likes pl ON pl.user_id = u.id
+     LEFT JOIN user_favorites uf ON uf.user_id = u.id
+     WHERE u.id = ? AND u.role = 'user'
+     GROUP BY u.id LIMIT 1`,
+    [id],
+  )
+  if (!row) return null
+  const [points] = await pool.execute('SELECT id, points, type, source, description, created_at AS createdAt FROM user_points WHERE user_id = ? ORDER BY id DESC LIMIT 30', [id])
+  const [risks] = await pool.execute('SELECT id, risk_type AS riskType, reason, operator_id AS operatorId, start_at AS startAt, end_at AS endAt, created_at AS createdAt FROM user_risk_logs WHERE user_id = ? ORDER BY id DESC LIMIT 30', [id])
+  return { ...mapUser(row), behavior: { spending: Number(row.spending || 0), noShows: Number(row.noShows || 0), eventRegistrations: Number(row.eventRegistrations || 0), eventAttended: Number(row.eventAttended || 0), comments: Number(row.comments || 0), likes: Number(row.likes || 0), favorites: Number(row.favorites || 0) }, pointLogs: points, riskLogs: risks }
+}
+
+export async function applyUserRisk(id, payload = {}, operatorId = null) {
+  const riskType = String(payload.riskType || payload.type || '').trim()
+  const reason = String(payload.reason || '').trim()
+  const endAt = payload.endAt || payload.until || null
+  if (!['disable', 'enable', 'booking_limit', 'booking_unlimit', 'post_limit', 'post_unlimit'].includes(riskType)) {
+    throw Object.assign(new Error('????????'), { statusCode: 400 })
+  }
+  if (!reason && !riskType.endsWith('unlimit') && riskType !== 'enable') throw Object.assign(new Error('??????????'), { statusCode: 400 })
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [[user]] = await connection.execute('SELECT id FROM users WHERE id = ? AND role = "user" FOR UPDATE', [id])
+    if (!user) { await connection.rollback(); return null }
+    if (riskType === 'disable') await connection.execute("UPDATE users SET status = 'disabled', disabled_reason = ? WHERE id = ?", [reason, id])
+    if (riskType === 'enable') await connection.execute("UPDATE users SET status = 'active', disabled_reason = NULL WHERE id = ?", [id])
+    if (riskType === 'booking_limit') await connection.execute('UPDATE users SET booking_limit_until = ? WHERE id = ?', [endAt, id])
+    if (riskType === 'booking_unlimit') await connection.execute('UPDATE users SET booking_limit_until = NULL WHERE id = ?', [id])
+    if (riskType === 'post_limit') await connection.execute('UPDATE users SET post_limit_until = ? WHERE id = ?', [endAt, id])
+    if (riskType === 'post_unlimit') await connection.execute('UPDATE users SET post_limit_until = NULL WHERE id = ?', [id])
+    await connection.execute('INSERT INTO user_risk_logs (user_id, risk_type, reason, operator_id, start_at, end_at) VALUES (?, ?, ?, ?, NOW(), ?)', [id, riskType, reason || null, operatorId, endAt])
+    await writeAudit(operatorId, 'user.risk.update', 'users', { id, riskType, reason, endAt, operatorType: 'admin' }, connection)
+    await connection.commit()
+    return getAdminUserDetail(id)
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
 }

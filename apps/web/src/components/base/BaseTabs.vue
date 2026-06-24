@@ -164,6 +164,43 @@ function handleKeydown(event, index) {
   border-radius: var(--cb-radius-xl);
 }
 
+.base-tabs--member {
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.base-tabs--member .base-tabs__list {
+  gap: var(--cb-space-4);
+  padding-bottom: var(--cb-space-3);
+  border-bottom: 0.0625rem solid var(--cb-border-soft);
+}
+
+.base-tabs--member .base-tabs__tab {
+  min-height: auto;
+  padding: 0 0 var(--cb-space-3);
+  color: var(--cb-text-secondary);
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.base-tabs--member .base-tabs__tab::after {
+  right: 0;
+  left: 0;
+}
+
+.base-tabs--member .base-tabs__tab--active {
+  color: var(--cb-color-coffee);
+  background: transparent;
+  box-shadow: none;
+}
+
+.base-tabs--member .base-tabs__panel {
+  padding-block: var(--cb-space-5) 0;
+}
+
 .base-tabs--community .base-tabs__tab--active {
   color: var(--cb-text-inverse);
   background: var(--cb-color-coffee);

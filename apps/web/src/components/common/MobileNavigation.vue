@@ -1,5 +1,5 @@
 <script setup>
-import { BaseDrawer } from '@/components/base'
+import BaseDrawer from '@/components/base/BaseDrawer.vue'
 
 defineProps({
   modelValue: Boolean,
@@ -60,4 +60,3 @@ function close() {
   background: var(--cb-bg-soft);
 }
 </style>
-

@@ -1,5 +1,5 @@
 import { requireAdmin } from '../middlewares/auth.js'
-import { getAdminLogDetail, listAdminLogs } from '../services/admin-log.service.js'
+import { exportAdminLogs, getAdminLogDetail, getAdminLogStats, listAdminLogs } from '../services/admin-log.service.js'
 import { failure, paginated, success } from '../utils/response.js'
 
 export function registerAdminLogRoutes(router) {

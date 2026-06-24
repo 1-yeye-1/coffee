@@ -1,6 +1,6 @@
 import PublicLayout from '@/layouts/PublicLayout.vue'
-import HomeView from '@/views/public/HomeView.vue'
 
+const HomeView = () => import('@/views/public/HomeView.vue')
 const ComponentPreview = () => import('@/views/ComponentPreview.vue')
 const LayoutPreview = () => import('@/views/LayoutPreview.vue')
 const PlaceholderView = () => import('@/views/PlaceholderView.vue')

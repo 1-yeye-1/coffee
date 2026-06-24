@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS users (
   gender VARCHAR(20) NULL,
   birthday DATE NULL,
   bio VARCHAR(500) NULL,
+  last_login_at TIMESTAMP NULL,
+  disabled_reason VARCHAR(500) NULL,
+  booking_limit_until DATETIME NULL,
+  post_limit_until DATETIME NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -23,7 +27,8 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY uk_users_email (email),
   UNIQUE KEY uk_users_phone (phone),
   KEY idx_users_status (status),
-  KEY idx_users_role (role)
+  KEY idx_users_role (role),
+  KEY idx_users_limits (booking_limit_until, post_limit_until)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS admin_users (
@@ -211,6 +216,7 @@ CREATE TABLE IF NOT EXISTS books (
   category VARCHAR(100) NOT NULL,
   rating DECIMAL(3,1) NOT NULL DEFAULT 0.0,
   stock INT NOT NULL DEFAULT 0,
+  reservable_stock INT NOT NULL DEFAULT 0,
   status VARCHAR(50) NOT NULL,
   cover_tone VARCHAR(50) NULL,
   cover_url VARCHAR(500) NULL,
@@ -224,13 +230,26 @@ CREATE TABLE IF NOT EXISTS books (
   author_bio TEXT NULL,
   seat_id BIGINT UNSIGNED NULL,
   location_label VARCHAR(255) NULL,
+  is_recommended TINYINT(1) NOT NULL DEFAULT 0,
+  is_featured TINYINT(1) NOT NULL DEFAULT 0,
+  is_new TINYINT(1) NOT NULL DEFAULT 0,
+  shelf_area VARCHAR(120) NULL,
+  shelf_code VARCHAR(120) NULL,
+  borrow_count INT NOT NULL DEFAULT 0,
+  favorite_count INT NOT NULL DEFAULT 0,
+  damaged_count INT NOT NULL DEFAULT 0,
+  lost_count INT NOT NULL DEFAULT 0,
+  low_stock_threshold INT NOT NULL DEFAULT 3,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_books_slug (slug),
   KEY idx_books_category (category),
   KEY idx_books_status (status),
-  KEY idx_books_seat (seat_id)
+  KEY idx_books_seat (seat_id),
+  KEY idx_books_stock (stock),
+  KEY idx_books_reservable_stock (reservable_stock),
+  KEY idx_books_flags (is_recommended, is_featured, is_new)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS products (
@@ -254,13 +273,53 @@ CREATE TABLE IF NOT EXISTS products (
   storage TEXT NULL,
   tone VARCHAR(50) NULL,
   cover_url VARCHAR(500) NULL,
+  is_featured TINYINT(1) NOT NULL DEFAULT 0,
+  is_new TINYINT(1) NOT NULL DEFAULT 0,
+  is_hot TINYINT(1) NOT NULL DEFAULT 0,
+  low_stock_threshold INT NOT NULL DEFAULT 5,
+  view_count INT NOT NULL DEFAULT 0,
+  favorite_count INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_products_slug (slug),
   KEY idx_products_product_type (product_type),
   KEY idx_products_category (category),
-  KEY idx_products_status (status)
+  KEY idx_products_status (status),
+  KEY idx_products_stock (stock),
+  KEY idx_products_flags (is_featured, is_new, is_hot)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS product_stock_logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  product_id BIGINT UNSIGNED NOT NULL,
+  change_type VARCHAR(40) NOT NULL,
+  change_amount INT NOT NULL,
+  before_stock INT NOT NULL,
+  after_stock INT NOT NULL,
+  reason VARCHAR(500) NULL,
+  operator_id BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_product_stock_logs_product (product_id, created_at),
+  KEY idx_product_stock_logs_operator (operator_id),
+  CONSTRAINT fk_product_stock_logs_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS book_stock_logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  book_id BIGINT UNSIGNED NOT NULL,
+  change_type VARCHAR(40) NOT NULL,
+  change_amount INT NOT NULL,
+  before_stock INT NOT NULL,
+  after_stock INT NOT NULL,
+  reason VARCHAR(500) NULL,
+  operator_id BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_book_stock_logs_book (book_id, created_at),
+  KEY idx_book_stock_logs_operator (operator_id),
+  CONSTRAINT fk_book_stock_logs_book FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS admin_settings (
@@ -347,6 +406,12 @@ CREATE TABLE IF NOT EXISTS orders (
   total_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
   status VARCHAR(30) NOT NULL DEFAULT 'pending_payment',
   note TEXT NULL,
+  cancel_reason VARCHAR(500) NULL,
+  refund_reason VARCHAR(500) NULL,
+  refund_amount DECIMAL(10,2) NULL,
+  refund_note VARCHAR(500) NULL,
+  refunded_at TIMESTAMP NULL,
+  refund_operator_id BIGINT UNSIGNED NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   paid_at TIMESTAMP NULL,
@@ -356,6 +421,7 @@ CREATE TABLE IF NOT EXISTS orders (
   UNIQUE KEY uk_orders_order_no (order_no),
   KEY idx_orders_user_id (user_id),
   KEY idx_orders_status (status),
+  KEY idx_orders_payment_method (payment_method),
   KEY idx_orders_created_at (created_at),
   CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB;
@@ -429,6 +495,10 @@ CREATE TABLE IF NOT EXISTS event_registrations (
   event_id BIGINT UNSIGNED NOT NULL,
   user_id BIGINT UNSIGNED NOT NULL,
   status VARCHAR(30) NOT NULL DEFAULT 'registered',
+  registered_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  cancelled_at TIMESTAMP NULL,
+  attended_at TIMESTAMP NULL,
+  absent_at TIMESTAMP NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -620,11 +690,58 @@ CREATE TABLE IF NOT EXISTS seats (
   height INT NOT NULL DEFAULT 52,
   sort_order INT NOT NULL DEFAULT 0,
   status VARCHAR(20) NOT NULL DEFAULT 'available',
+  maintenance_reason VARCHAR(500) NULL,
+  maintenance_until DATETIME NULL,
+  usage_count INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_seats_code (code),
-  KEY idx_seats_status (status)
+  KEY idx_seats_status (status),
+  KEY idx_seats_usage (usage_count)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS user_risk_logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  risk_type VARCHAR(40) NOT NULL,
+  reason VARCHAR(500) NULL,
+  operator_id BIGINT UNSIGNED NULL,
+  start_at DATETIME NULL,
+  end_at DATETIME NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_user_risk_logs_user (user_id, created_at),
+  KEY idx_user_risk_logs_type (risk_type),
+  CONSTRAINT fk_user_risk_logs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS user_penalties (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  penalty_type VARCHAR(40) NOT NULL,
+  reason VARCHAR(500) NULL,
+  start_at DATETIME NULL,
+  end_at DATETIME NULL,
+  operator_id BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_user_penalties_user (user_id, created_at),
+  KEY idx_user_penalties_type (penalty_type),
+  CONSTRAINT fk_user_penalties_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS seat_maintenance_logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  seat_id BIGINT UNSIGNED NOT NULL,
+  reason VARCHAR(500) NULL,
+  start_at DATETIME NULL,
+  end_at DATETIME NULL,
+  operator_id BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_seat_maintenance_logs_seat (seat_id, created_at),
+  CONSTRAINT fk_seat_maintenance_logs_seat FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS bookings (
@@ -642,6 +759,11 @@ CREATE TABLE IF NOT EXISTS bookings (
   contact_name VARCHAR(120) NOT NULL,
   phone VARCHAR(40) NOT NULL,
   note TEXT NULL,
+  cancel_reason VARCHAR(500) NULL,
+  cancelled_at TIMESTAMP NULL,
+  completed_at TIMESTAMP NULL,
+  no_show_at TIMESTAMP NULL,
+  status_updated_by BIGINT UNSIGNED NULL,
   status VARCHAR(30) NOT NULL DEFAULT 'confirmed',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

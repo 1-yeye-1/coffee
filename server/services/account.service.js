@@ -1,6 +1,7 @@
 import { pool } from '../db/mysql.js'
 import { shanghaiDateString } from '../utils/date.js'
 import { assertPhone, normalizePhone, phoneExists, verifyCode } from './auth.service.js'
+import { hashPassword, verifyPassword } from '../utils/crypto.js'
 import { createNotification, listNotifications as listUserNotifications, markAsRead } from './notifications.service.js'
 import { writeAudit } from './admin.service.js'
 import { getAccountOverviewStats, postCommentCountSql, postLikeCountSql } from './stats.service.js'
@@ -9,6 +10,8 @@ const userSelect = `
   id, username, nickname, email, phone, avatar, status, points, level,
   growth_value AS growthValue, DATE_FORMAT(last_checkin_date, '%Y-%m-%d') AS lastCheckinDate,
   profile_public AS profilePublic, gender, DATE_FORMAT(birthday, '%Y-%m-%d') AS birthday, bio,
+  disabled_reason AS disabledReason, booking_limit_until AS bookingLimitUntil,
+  post_limit_until AS postLimitUntil,
   created_at AS createdAt, updated_at AS updatedAt
 `
 
@@ -228,6 +231,27 @@ export async function listMyPosts(userId) {
   return rows.map((item) => ({ ...item, featured: Boolean(item.featured) }))
 }
 
+export async function changePassword(userId, payload) {
+  const oldPassword = String(payload.oldPassword || '').trim()
+  const newPassword = String(payload.newPassword || '').trim()
+  if (!oldPassword || !newPassword) throw Object.assign(new Error('旧密码和新密码不能为空'), { statusCode: 400 })
+  if (newPassword.length < 6) throw Object.assign(new Error('新密码不能少于 6 位'), { statusCode: 400 })
+  if (oldPassword === newPassword) throw Object.assign(new Error('新密码不能与旧密码相同'), { statusCode: 400 })
+
+  const [[user]] = await pool.execute(
+    'SELECT id, password FROM users WHERE id = ? AND role = "user" LIMIT 1',
+    [userId],
+  )
+  if (!user) throw Object.assign(new Error('用户不存在'), { statusCode: 404 })
+  const valid = await verifyPassword(oldPassword, user.password)
+  if (!valid) throw Object.assign(new Error('旧密码不正确'), { statusCode: 403 })
+
+  const newHash = await hashPassword(newPassword)
+  await pool.execute('UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?', [newHash, userId])
+  await writeAudit(userId, 'user.password.update', 'account', {})
+  return { message: '密码修改成功' }
+}
+
 export async function getSecuritySettings(userId) {
   const [[user]] = await pool.execute(
     'SELECT id, phone, updated_at AS passwordUpdatedAt FROM users WHERE id = ? AND role = "user" LIMIT 1',
@@ -264,7 +288,7 @@ export async function getPublicProfile(userId) {
     throw Object.assign(new Error('该用户已关闭个人主页访问'), { statusCode: 403 })
   }
 
-  const [[postsCount], [likesCount], [posts]] = await Promise.all([
+  const [[postsCount], [likesCount], [posts], [comments], [reviews]] = await Promise.all([
     pool.execute("SELECT COUNT(*) AS total FROM posts WHERE user_id = ? AND status = 'published'", [userId]),
     pool.execute(
       `SELECT COUNT(*) AS total
@@ -282,6 +306,24 @@ export async function getPublicProfile(userId) {
        ORDER BY created_at DESC, id DESC LIMIT 20`,
       [userId],
     ),
+    pool.execute(
+      `SELECT c.id, c.content, c.post_id AS postId, p.slug AS postSlug, p.title AS postTitle,
+        c.created_at AS createdAt
+       FROM comments c
+       INNER JOIN posts p ON p.id = c.post_id
+       WHERE c.user_id = ? AND c.status = 'published'
+       ORDER BY c.created_at DESC, c.id DESC LIMIT 10`,
+      [userId],
+    ),
+    pool.execute(
+      `SELECT r.id, r.content, r.rating, r.book_id AS bookId, r.parent_id AS parentId,
+        b.slug AS bookSlug, b.title AS bookTitle, r.created_at AS createdAt, 'book' AS reviewType
+       FROM book_reviews r
+       LEFT JOIN books b ON b.id = r.book_id
+       WHERE r.user_id = ? AND r.status = 'published' AND r.parent_id IS NULL
+       ORDER BY r.created_at DESC, r.id DESC LIMIT 10`,
+      [userId],
+    ),
   ])
 
   return {
@@ -294,6 +336,8 @@ export async function getPublicProfile(userId) {
     postsCount: Number(postsCount[0].total),
     likesCount: Number(likesCount[0].total),
     posts,
+    comments: comments || [],
+    reviews: reviews || [],
   }
 }
 

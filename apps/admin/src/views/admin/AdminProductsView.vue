@@ -5,6 +5,7 @@ const productTypes = [
   { label: '咖啡商品', value: 'coffee' },
   { label: '文创商品', value: 'cultural' },
 ]
+
 const statuses = [
   { label: '上架', value: 'active' },
   { label: '下架', value: 'inactive' },
@@ -28,10 +29,10 @@ const categories = [
 ].map((item) => ({ label: item, value: item }))
 
 const columns = [
-  { key: 'visual', label: '商品视觉' },
+  { key: 'visual', label: '商品图' },
   { key: 'primary', label: '商品' },
-  { key: 'productType', label: '商品类型' },
-  { key: 'category', label: '细分类' },
+  { key: 'productType', label: '类型' },
+  { key: 'category', label: '分类' },
   { key: 'price', label: '价格' },
   { key: 'stock', label: '库存' },
   { key: 'sales', label: '销量' },
@@ -43,24 +44,28 @@ const fields = [
   { key: 'name', label: '名称' },
   { key: 'productType', label: '商品类型', type: 'select', options: productTypes, default: 'coffee' },
   { key: 'supportsBrewMethod', label: '咖啡商品支持制作方式', type: 'checkbox', default: true },
-  { key: 'imageUrl', label: '商品示例图', type: 'image' },
-  { key: 'category', label: '细分类', type: 'select', options: categories },
+  { key: 'imageUrl', label: '商品图片', type: 'image' },
+  { key: 'category', label: '分类', type: 'select', options: categories },
   { key: 'price', label: '价格', type: 'number' },
   { key: 'originalPrice', label: '原价', type: 'number' },
   { key: 'stock', label: '库存', type: 'number' },
+  { key: 'lowStockThreshold', label: '低库存预警值', type: 'number', default: 5 },
   { key: 'sales', label: '销量', type: 'number' },
-  { key: 'flavor', label: '风味/卖点（顿号分隔）', array: true },
-  { key: 'origin', label: '产地/来源' },
-  { key: 'roast', label: '烘焙度/规格' },
+  { key: 'isFeatured', label: '推荐商品', type: 'checkbox', default: false },
+  { key: 'isNew', label: '新品标记', type: 'checkbox', default: false },
+  { key: 'isHot', label: '热销标记', type: 'checkbox', default: false },
+  { key: 'flavor', label: '风味 / 卖点（顿号或逗号分隔）', array: true },
+  { key: 'origin', label: '产地 / 来源' },
+  { key: 'roast', label: '烘焙度 / 规格' },
   { key: 'description', label: '简介', type: 'textarea' },
   { key: 'status', label: '状态', type: 'select', options: statuses, default: 'active' },
 ]
 
 const stats = [
   { label: '商品总数', icon: 'P', value: (items) => items.length, hint: '全部商品' },
-  { label: '咖啡商品', icon: 'C', value: (items) => items.filter((item) => item.productType === 'coffee').length, hint: '能直接饮用的咖啡' },
-  { label: '文创商品', icon: 'W', value: (items) => items.filter((item) => item.productType === 'cultural').length, hint: '器具、杯子、礼盒与周边' },
-  { label: '库存紧张', icon: '!', value: (items) => items.filter((item) => item.stock > 0 && item.stock < 10).length, hint: '库存少于 10 件' },
+  { label: '推荐商品', icon: '★', value: (items) => items.filter((item) => item.isFeatured).length, hint: '首页或列表优先展示' },
+  { label: '新品 / 热销', icon: 'N', value: (items) => `${items.filter((item) => item.isNew).length} / ${items.filter((item) => item.isHot).length}`, hint: '新品与热销标记' },
+  { label: '低库存预警', icon: '!', value: (items) => items.filter((item) => Number(item.stock || 0) <= Number(item.lowStockThreshold || 5)).length, hint: '库存达到预警值' },
 ]
 </script>
 
@@ -68,7 +73,7 @@ const stats = [
   <AdminCrudView
     type="products"
     title="商品管理"
-    description="维护咖啡商品与文创商品，咖啡商品可配置制作方式。"
+    description="维护咖啡商品与文创商品，支持推荐、新品、热销标记、库存预警和库存调整。"
     singular="商品"
     :columns="columns"
     :fields="fields"

@@ -7,11 +7,11 @@ gsap.registerPlugin(ScrollTrigger)
 
 const MAX_ITEMS = 20
 const MOTION = Object.freeze({
-  duration: 0.28,
-  durationFast: 0.18,
-  stagger: 0.035,
+  duration: 0.24,
+  durationFast: 0.16,
+  stagger: 0.03,
   staggerList: 0.025,
-  distance: 14,
+  distance: 12,
   ease: 'power2.out',
 })
 
@@ -99,10 +99,10 @@ export function useGsapReveal(root = null) {
   }
 
   const revealPage = (target = ':scope > *', options = {}) => reveal(target, {
-    key: 'page', y: 16, duration: 0.48, stagger: 0.04, ...options,
+    key: 'page', y: 12, duration: 0.24, stagger: 0.035, ...options,
   })
   const revealSection = (target, options = {}) => reveal(target, {
-    key: options.key || `section:${String(target)}`, y: 26, duration: 0.6, stagger: 0, ...options,
+    key: options.key || `section:${String(target)}`, y: 18, duration: 0.32, stagger: 0, ...options,
   })
   const revealCards = (target, options = {}) => reveal(target, {
     key: options.key || `cards:${String(target)}`, ...options,
@@ -123,8 +123,8 @@ export function useGsapReveal(root = null) {
       {
         opacity: 1,
         y: 0,
-        duration: Math.min(options.duration ?? 0.26, 0.3),
-        delay: Math.min(index, 4) * 0.025,
+        duration: Math.min(options.duration ?? 0.24, 0.28),
+        delay: Math.min(index, 4) * 0.02,
         ease: MOTION.ease,
         clearProps: 'transform,opacity',
         scrollTrigger: { trigger: element, start: 'top 88%', once: true },
@@ -178,8 +178,8 @@ export function useGsapReveal(root = null) {
     const dialog = element.querySelector('.base-modal__dialog')
     return track(inContext(() => {
       const timeline = gsap.timeline({ onComplete: done })
-      if (leaving) timeline.to(dialog, { opacity: 0, scale: 0.98, y: 6, duration: 0.16 }).to(element, { opacity: 0, duration: 0.15 }, '<')
-      else timeline.fromTo(element, { opacity: 0 }, { opacity: 1, duration: 0.16 }).fromTo(dialog, { opacity: 0, scale: 0.98, y: 8 }, { opacity: 1, scale: 1, y: 0, duration: 0.24, ease: MOTION.ease }, '<')
+      if (leaving) timeline.to(dialog, { opacity: 0, scale: 0.98, y: 6, duration: 0.14 }).to(element, { opacity: 0, duration: 0.12 }, '<')
+      else timeline.fromTo(element, { opacity: 0 }, { opacity: 1, duration: 0.12 }).fromTo(dialog, { opacity: 0, scale: 0.98, y: 8 }, { opacity: 1, scale: 1, y: 0, duration: 0.2, ease: MOTION.ease }, '<')
       return timeline
     }), 'modal')
   }
@@ -194,8 +194,8 @@ export function useGsapReveal(root = null) {
     const offset = side === 'left' ? -42 : 42
     return track(inContext(() => {
       const timeline = gsap.timeline({ onComplete: done })
-      if (leaving) timeline.to(panel, { opacity: 0, x: offset, duration: 0.18 }).to(element, { opacity: 0, duration: 0.15 }, '<')
-      else timeline.fromTo(element, { opacity: 0 }, { opacity: 1, duration: 0.16 }).fromTo(panel, { opacity: 0, x: offset }, { opacity: 1, x: 0, duration: 0.24, ease: MOTION.ease }, '<')
+      if (leaving) timeline.to(panel, { opacity: 0, x: offset, duration: 0.16 }).to(element, { opacity: 0, duration: 0.12 }, '<')
+      else timeline.fromTo(element, { opacity: 0 }, { opacity: 1, duration: 0.12 }).fromTo(panel, { opacity: 0, x: offset }, { opacity: 1, x: 0, duration: 0.22, ease: MOTION.ease }, '<')
       return timeline
     }), 'drawer')
   }

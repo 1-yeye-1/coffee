@@ -90,8 +90,6 @@ const popularArea = computed(() => {
   return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '阅读区'
 })
 const occupancyStats = computed(() => [usageRate.value, availableCount.value, reservedCount.value])
-const readyToConfirm = computed(() => Boolean(selectedSeatId.value && selectedDate.value && selectedTime.value))
-const stepTitle = computed(() => ['选择预约对象', '选择日期和时间', '填写预约信息', '确认预约'][stepIndex.value - 1] || '空间预约')
 
 
 function getDateValidationMessage(value) {
@@ -124,13 +122,13 @@ function selectSeat(seat, event) {
 }
 
 function validateStep(step = stepIndex.value) {
-  if (step === 1 && !selectedSeatId.value) return '请选择预约对象'
-  if (step === 2) {
+  if (step === 1) {
     if (!selectedDate.value) return '请选择预约日期'
     const dateMessage = getDateValidationMessage(selectedDate.value)
     if (dateMessage) return dateMessage
     if (!selectedTime.value) return '请选择预约时间'
   }
+  if (step === 2 && !selectedSeatId.value) return '请选择预约对象'
   if (step === 3) {
     if (!peopleCount.value) return '请选择预约人数'
     if (peopleCount.value > Number(selectedSeat.value?.capacity || 0)) return '预约人数超过座位容量'
@@ -141,11 +139,18 @@ function validateStep(step = stepIndex.value) {
   return ''
 }
 
-function nextStep() {
+async function nextStep() {
   error.value = validateStep()
   if (error.value) {
     shakeError('.booking-step-page')
     return
+  }
+  if (stepIndex.value === 1) {
+    await refreshAvailability()
+    if (error.value) {
+      shakeError('.booking-step-page')
+      return
+    }
   }
   stepIndex.value = Math.min(4, stepIndex.value + 1)
 }
@@ -162,6 +167,9 @@ function selectDate(value) {
     return
   }
   selectedDate.value = value
+  const active = fixedTimeSlots.find((slot) => slot.value === selectedTime.value)
+  if (active && isSlotDisabled(active)) selectedTime.value = ''
+  selectedSeatId.value = null
   error.value = ''
 }
 
@@ -204,6 +212,7 @@ function selectTimeSlot(slot) {
     return
   }
   selectedTime.value = slot.value
+  selectedSeatId.value = null
   error.value = ''
 }
 
@@ -290,7 +299,8 @@ async function submitBooking() {
     toastVisible.value = true
     showReservationCard('.reservation-card')
     successCheck('.booking-confirm .base-button')
-    await refreshAvailability()
+    error.value = ''
+    bookingStore.fetchAvailability(selectedDate.value, selectedTime.value).catch(() => {})
   } catch (requestError) {
     error.value = requestError.message || '预约提交失败'
     shakeError('.booking-confirm')
@@ -373,12 +383,12 @@ onMounted(async () => {
     <main class="cb-container engagement-content booking-flow-shell">
       <BookingProgress :step="currentStep" />
       <Transition name="booking-step-slide" mode="out-in">
-        <section v-if="stepIndex === 1" key="seat" class="booking-step-page booking-map-panel">
+        <section v-if="stepIndex === 2" key="seat" class="booking-step-page booking-map-panel">
           <div class="booking-step-page__header">
             <div>
-              <span class="section-eyebrow">第 1 步</span>
+              <span class="section-eyebrow">第 2 步</span>
               <h2 class="section-title">选择预约对象</h2>
-              <p class="text-muted">点击地图上的座位。已预约或不可用的位置不能选择。</p>
+              <p class="text-muted">座位状态来自 {{ selectedDate }} {{ selectedTime }} 的数据库可用情况。已预约或不可用的位置不能选择。</p>
             </div>
           </div>
           <div class="seat-legend">
@@ -406,16 +416,17 @@ onMounted(async () => {
           </section>
           <p v-if="error" class="form-error">{{ error }}</p>
           <div class="booking-step-actions">
+            <BaseButton variant="ghost" type="button" @click="prevStep">返回</BaseButton>
             <BaseButton :disabled="!selectedSeatId" @click="nextStep">确定座位</BaseButton>
           </div>
         </section>
 
-        <section v-else-if="stepIndex === 2" key="time" class="booking-step-page booking-time-panel">
+        <section v-else-if="stepIndex === 1" key="time" class="booking-step-page booking-time-panel">
           <div class="booking-step-page__header">
             <div>
-              <span class="section-eyebrow">第 2 步</span>
+              <span class="section-eyebrow">第 1 步</span>
               <h2 class="section-title">选择日期和时间</h2>
-              <p class="text-muted">选择预约日期后，从固定时间段中挑选一个可预约时段；也可以手动输入其他日期。</p>
+              <p class="text-muted">先确定预约日期和时段，再查看该时段真实可预约座位。当天已过期时段会自动禁用。</p>
             </div>
           </div>
           <div class="ios-picker ios-picker--date" aria-label="日期选择">
@@ -451,8 +462,7 @@ onMounted(async () => {
           <p class="text-muted">当前时间段：{{ selectedTime || '请选择时间段' }}</p>
           <p v-if="error" class="form-error">{{ error }}</p>
           <div class="booking-step-actions">
-            <BaseButton variant="ghost" type="button" @click="prevStep">返回</BaseButton>
-            <BaseButton :disabled="!selectedDate || !selectedTime" @click="nextStep">确定时间</BaseButton>
+            <BaseButton :disabled="!selectedDate || !selectedTime" @click="nextStep">查看可预约座位</BaseButton>
           </div>
         </section>
 
@@ -550,9 +560,15 @@ onMounted(async () => {
   border-radius: var(--cb-radius-2xl);
 }
 .booking-step-page {
-  min-height: min(72rem, calc(100vh - 13rem));
+  min-height: 30rem;
   align-content: start;
   box-shadow: var(--cb-shadow-sm);
+}
+.booking-time-panel {
+  min-height: auto;
+}
+.booking-map-panel {
+  min-height: min(42rem, calc(100vh - 10rem));
 }
 .booking-step-page__header {
   display: flex;
@@ -610,10 +626,10 @@ onMounted(async () => {
 .captcha-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .reservation-section { padding-bottom: var(--cb-space-12); }
 :deep(.seat-motion-ring) { position: absolute; inset: -.3rem; border: .12rem solid var(--cb-color-gold); border-radius: inherit; pointer-events: none; }
-.ios-picker { position: relative; display: grid; max-height: 9rem; overflow-y: auto; gap: var(--cb-space-2); padding-block: 3rem; scroll-snap-type: y mandatory; scroll-behavior: smooth; background: linear-gradient(180deg, color-mix(in srgb, var(--cb-bg-surface) 92%, transparent), var(--cb-bg-surface) 35%, var(--cb-bg-surface) 65%, color-mix(in srgb, var(--cb-bg-surface) 92%, transparent)); border: .0625rem solid var(--cb-border-soft); border-radius: var(--cb-radius-xl); -webkit-overflow-scrolling: touch; }
-.ios-picker::before { position: sticky; z-index: 0; top: calc(50% - 1.375rem); height: 2.75rem; margin-block: -2.75rem; background: color-mix(in srgb, var(--cb-color-gold) 10%, transparent); border-block: .0625rem solid color-mix(in srgb, var(--cb-color-gold) 45%, var(--cb-border-soft)); content: ""; pointer-events: none; }
+.ios-picker { position: relative; display: grid; max-height: 9rem; overflow-y: auto; gap: var(--cb-space-2); padding-block: 3rem; scroll-snap-type: y mandatory; scroll-behavior: smooth; background: var(--cb-bg-surface); border: .0625rem solid var(--cb-border-soft); border-radius: var(--cb-radius-xl); -webkit-overflow-scrolling: touch; }
+.ios-picker::before { position: sticky; z-index: 0; top: calc(50% - 1.375rem); height: 2.75rem; margin-block: -2.75rem; background: transparent; border-block: .0625rem solid var(--cb-border-soft); content: ""; pointer-events: none; }
 .ios-picker__item { position: relative; z-index: 1; min-height: 2.75rem; padding: 0 var(--cb-space-4); color: var(--cb-text-secondary); white-space: nowrap; background: transparent; border: 0; border-radius: var(--cb-radius-lg); scroll-snap-align: center; }
-.ios-picker__item.is-active { color: var(--cb-color-coffee); font-weight: var(--cb-font-bold); background: color-mix(in srgb, var(--cb-color-gold) 18%, transparent); }
+.ios-picker__item.is-active { color: var(--cb-text-inverse); font-weight: var(--cb-font-bold); background: var(--cb-color-coffee); }
 .ios-time-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cb-space-3); }
 .ios-picker--date { max-height: 10rem; }
 .time-slot-grid {

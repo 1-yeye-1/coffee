@@ -1,39 +1,66 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 
-import NotificationDrawer from './NotificationDrawer.vue'
-
 const authStore = useAuthStore()
 const notificationsStore = useNotificationsStore()
+
+let NotificationDrawer = null
+let pollTimer = null
 const open = ref(false)
+const drawerReady = ref(false)
+const POLL_INTERVAL = 30_000
+
+async function loadDrawer() {
+  if (!NotificationDrawer) {
+    const mod = await import('./NotificationDrawer.vue')
+    NotificationDrawer = mod.default
+    await nextTick()
+  }
+  drawerReady.value = true
+}
+
+function startPolling() {
+  stopPolling()
+  if (!authStore.isAuthenticated) return
+  pollTimer = setInterval(refresh, POLL_INTERVAL)
+}
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+}
 
 async function refresh() {
-  if (authStore.isAuthenticated) await notificationsStore.fetchUnreadCount()
-  else notificationsStore.reset()
+    if (authStore.isAuthenticated) await notificationsStore.fetchUnreadCount({ force: true })
+    else notificationsStore.reset()
+  }
+
+function handleVisibility() {
+  if (document.visibilityState === 'visible') refresh()
 }
 
 function toggle() {
   open.value = !open.value
+  if (open.value) loadDrawer()
 }
 
 onMounted(() => {
   refresh()
-  window.addEventListener('coffee-book:auth-login', refresh)
-  window.addEventListener('coffee-book:auth-logout', refresh)
+  startPolling()
+  document.addEventListener('visibilitychange', handleVisibility)
+  window.addEventListener('coffee-book:auth-login', () => { refresh(); startPolling() })
+  window.addEventListener('coffee-book:auth-logout', () => { stopPolling(); notificationsStore.reset() })
   window.addEventListener('coffee-book:notifications-updated', refresh)
 })
 
 onBeforeUnmount(() => {
+  stopPolling()
+  document.removeEventListener('visibilitychange', handleVisibility)
   window.removeEventListener('coffee-book:auth-login', refresh)
   window.removeEventListener('coffee-book:auth-logout', refresh)
   window.removeEventListener('coffee-book:notifications-updated', refresh)
-})
-
-watch(open, (value) => {
-  if (!value) refresh()
 })
 </script>
 
@@ -55,7 +82,12 @@ watch(open, (value) => {
         {{ notificationsStore.unreadCount > 99 ? '99+' : notificationsStore.unreadCount }}
       </span>
     </button>
-    <NotificationDrawer v-model="open" />
+    <component v-if="open && drawerReady" :is="NotificationDrawer" v-model="open" />
+    <div v-else-if="open" class="notification-drawer" role="dialog" aria-modal="true" aria-label="消息中心加载中">
+      <aside class="notification-drawer__panel" style="display:grid;place-items:center;padding:var(--cb-space-5)">
+        <p class="text-muted">正在加载消息中心...</p>
+      </aside>
+    </div>
   </div>
 </template>
 

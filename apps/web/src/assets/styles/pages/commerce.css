@@ -360,6 +360,11 @@
   margin-bottom: var(--cb-space-6);
 }
 
+.member-page-title .page-title {
+  max-width: none;
+  font-size: clamp(var(--cb-font-size-3xl), 4vw, var(--cb-font-size-4xl));
+}
+
 .order-stat {
   display: grid;
   gap: var(--cb-space-1);

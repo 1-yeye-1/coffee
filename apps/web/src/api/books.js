@@ -44,3 +44,7 @@ export function fetchMyBookReservations() {
 export function cancelBookReservation(id) {
   return request(`/book-reservations/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
+
+export function deleteBookReview(reviewId) {
+  return request(`/books/reviews/${encodeURIComponent(reviewId)}`, { method: 'DELETE' })
+}

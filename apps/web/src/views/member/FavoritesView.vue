@@ -24,7 +24,7 @@ onMounted(() => membershipStore.fetchFavorites())
     <header><span class="section-eyebrow">Favorites</span><h2 class="page-title">我的收藏</h2></header>
     <ErrorPanel v-if="membershipStore.error" :message="membershipStore.error" @retry="membershipStore.fetchFavorites" />
     <BaseSkeleton v-else-if="membershipStore.loading" variant="card" />
-    <BaseTabs v-model="type" :tabs="tabs"><div class="favorite-grid">
+    <BaseTabs v-model="type" :tabs="tabs" variant="member"><div class="favorite-grid">
       <article v-for="item in items" :key="item.id" class="favorite-card">
         <BaseBadge variant="neutral">{{ item.category }}</BaseBadge><h3>{{ item.title }}</h3><p>{{ item.meta }}</p>
         <div class="cb-cluster"><BaseButton size="sm" variant="outline" @click="router.push(pathFor(item))">查看详情</BaseButton><BaseButton size="sm" variant="ghost" @click="membershipStore.removeFavorite(item.id)">取消收藏</BaseButton></div>

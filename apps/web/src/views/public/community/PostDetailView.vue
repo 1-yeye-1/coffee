@@ -1,9 +1,9 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getPublicProfile } from '@/api/account'
-import { resolveUploadUrl } from '@/api/upload'
+import { resolveUploadUrl, uploadCommunityMedia } from '@/api/upload'
 import { BaseBadge, BaseButton, BaseModal, BaseSkeleton, BaseTextarea, BaseToast, EmptyState, ErrorPanel } from '@/components/base'
 import CommunityGallery from '@/components/community/CommunityGallery.vue'
 import { useCommunityMotion } from '@/composables/useCommunityMotion'
@@ -19,6 +19,10 @@ const comment = ref('')
 const isAnonymous = ref(false)
 const activeReplyId = ref(null)
 const replyContent = ref('')
+const commentMediaUrl = ref('')
+const commentMediaType = ref('')
+const commentUploading = ref(false)
+const commentRestrictionNotice = ref('')
 const likedCommentIds = ref(new Set())
 const toastVisible = ref(false)
 const toastTitle = ref('评论成功')
@@ -37,24 +41,58 @@ const postParam = computed(() => route.params.slug || route.params.id)
 const post = computed(() => communityStore.getPostBySlug(postParam.value))
 const related = computed(() => communityStore.posts.filter((item) => item.id !== post.value?.id).slice(0, 3))
 const galleryImages = computed(() => [post.value, ...related.value].filter((item) => item?.mediaType === 'image' && item.mediaUrl))
+const EXPAND_REPLY_LIMIT = 3
+
+function flattenReplies(nodes) {
+  const result = []
+  for (const node of nodes) {
+    result.push(node)
+    if (node.children?.length) result.push(...flattenReplies(node.children))
+  }
+  return result
+}
+
 const commentTree = computed(() => {
   const nodes = (Array.isArray(post.value?.comments) ? post.value.comments : []).map((item) => ({
     ...item,
     liked: likedCommentIds.value.has(Number(item.id)),
     children: [],
+    parentAuthor: null,
   }))
   const byId = new Map(nodes.map((item) => [Number(item.id), item]))
   const roots = []
   for (const item of nodes) {
     const parent = item.parentId ? byId.get(Number(item.parentId)) : null
-    if (parent) parent.children.push(item)
-    else roots.push(item)
+    if (parent) {
+        item.parentAuthor = parent.user?.nickname || parent.author || ''
+      parent.children.push(item)
+    } else {
+      roots.push(item)
+    }
   }
-  return roots
+  return roots.map((root) => ({
+    ...root,
+    flatReplies: flattenReplies(root.children),
+  }))
 })
+
+const repliedExpanded = reactive({})
 const formatDate = (value) => new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 const commentCount = computed(() => Array.isArray(post.value?.comments) ? post.value.comments.length : 0)
 const isAvatarImage = (value) => /^(https?:\/\/|data:|blob:|\/uploads\/)/.test(String(value || ''))
+
+function formatRestrictionTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
 
 function showToast(title, message) {
   toastTitle.value = title
@@ -63,26 +101,96 @@ function showToast(title, message) {
   nextTick(() => { toastVisible.value = true })
 }
 
+function friendlyCommunityRestriction(error) {
+  const rawMessage = String(error?.message || '')
+  const risk = error?.data?.risk || error?.data || {}
+  const reason = risk.reason || risk.penaltyReason || risk.limitReason || ''
+  const restoreAt = risk.restoreAt || risk.until || risk.endAt || risk.postLimitUntil || risk.commentLimitUntil || ''
+  const isCommunityRisk = error?.status === 403
+    || error?.statusCode === 403
+    || reason
+    || restoreAt
+    || /\u9650\u5236|\u98ce\u63a7|\u7981\u8a00|\u53d1\u5e16|\u8bc4\u8bba|\u4e92\u52a8|\u6062\u590d\u65f6\u95f4/.test(rawMessage)
+  if (!isCommunityRisk) return ''
+
+  const restoreMatch = rawMessage.match(/\u6062\u590d\u65f6\u95f4(?:\u4e3a|\uff1a|:)?\s*([^\uff0c\u3002\uff1b;]+)/)
+  const reasonMatch = rawMessage.match(/\u539f\u56e0(?:\u4e3a|\uff1a|:)?\s*([^\uff0c\u3002\uff1b;]+)/)
+  const parts = ['\u5f53\u524d\u65e0\u6cd5\u8bc4\u8bba\uff0c\u4f60\u7684\u793e\u533a\u4e92\u52a8\u6743\u9650\u6682\u65f6\u53d7\u9650\u3002']
+  if (reason || reasonMatch?.[1]) parts.push(`\u9650\u5236\u539f\u56e0\uff1a${reason || reasonMatch[1]}\u3002`)
+  if (restoreAt || restoreMatch?.[1]) parts.push(`\u6062\u590d\u65f6\u95f4\uff1a${formatRestrictionTime(restoreAt || restoreMatch[1])}\u3002`)
+  return parts.join('')
+}
+
+async function handleCommentUpload(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  commentUploading.value = true
+  try {
+    const response = await uploadCommunityMedia(file)
+    commentMediaUrl.value = response.data?.url || ''
+    commentMediaType.value = response.data?.file?.fileType === 'video' ? 'video' : 'image'
+  } catch (error) {
+    commentRestrictionNotice.value = error.message || '媒体上传失败'
+  } finally {
+    commentUploading.value = false
+    event.target.value = ''
+  }
+}
+
+async function deleteCommentItem(item) {
+  if (!authStore.isAuthenticated || !confirm('确认删除这条评论？')) return
+  try {
+    await communityStore.deleteComment(post.value.id, item.id)
+    showToast('删除成功', '评论已删除。')
+    await communityStore.fetchPostDetail(postParam.value)
+    await nextTick()
+    if (commentsOpen.value) revealComment(commentsRef.value, true)
+  } catch (error) {
+    showToast('删除失败', error.message || '无法删除评论')
+  }
+}
+
 async function submitComment() {
   if (!comment.value.trim()) return
   if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
-  await communityStore.addComment(post.value.id, comment.value, isAnonymous.value)
-  comment.value = ''
-  commentsOpen.value = true
-  await nextTick()
-  const comments = commentsRef.value?.querySelectorAll('.comment') || []
-  highlightPost(comments[comments.length - 1])
-  showToast('评论成功', '你的评论已发布。')
+  commentRestrictionNotice.value = ''
+  try {
+    const payload = { content: comment.value.trim(), isAnonymous: isAnonymous.value }
+    if (commentMediaUrl.value) {
+      payload.mediaUrl = commentMediaUrl.value
+      payload.mediaType = commentMediaType.value
+    }
+    await communityStore.addComment(post.value.id, payload)
+    comment.value = ''
+    commentMediaUrl.value = ''
+    commentMediaType.value = ''
+    commentsOpen.value = true
+    await nextTick()
+    const comments = commentsRef.value?.querySelectorAll('.comment') || []
+    highlightPost(comments[comments.length - 1])
+    showToast('\u8bc4\u8bba\u6210\u529f', '\u4f60\u7684\u8bc4\u8bba\u5df2\u53d1\u5e03\u3002')
+  } catch (error) {
+    const message = friendlyCommunityRestriction(error) || '\u5f53\u524d\u65e0\u6cd5\u8bc4\u8bba\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002'
+    commentRestrictionNotice.value = message
+    showToast('\u8bc4\u8bba\u5931\u8d25', message)
+  }
 }
 
 async function submitReply(parent) {
   if (!replyContent.value.trim()) return
   if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
-  await communityStore.replyComment(post.value.id, parent.id, replyContent.value)
-  replyContent.value = ''
-  activeReplyId.value = null
-  commentsOpen.value = true
-  showToast('回复成功', '你的回复已发布。')
+  commentRestrictionNotice.value = ''
+  try {
+    await communityStore.replyComment(post.value.id, parent.id, replyContent.value)
+    replyContent.value = ''
+    activeReplyId.value = null
+    commentsOpen.value = true
+    showToast('\u56de\u590d\u6210\u529f', '\u4f60\u7684\u56de\u590d\u5df2\u53d1\u5e03\u3002')
+  } catch (error) {
+    const message = friendlyCommunityRestriction(error) || '\u5f53\u524d\u65e0\u6cd5\u56de\u590d\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002'
+    commentRestrictionNotice.value = message
+    showToast('\u56de\u590d\u5931\u8d25', message)
+  }
 }
 
 async function toggleCommentLike(item) {
@@ -222,9 +330,14 @@ watch(postParam, (value) => {
           </div>
           <div class="comment-composer">
             <BaseTextarea v-model="comment" label="发表评论" placeholder="写下你的想法..." :maxlength="300" show-count />
+            <p v-if="commentRestrictionNotice" class="comment-restriction-notice" role="alert">{{ commentRestrictionNotice }}</p>
             <div class="comment-composer__actions">
               <label class="anonymous-toggle"><input v-model="isAnonymous" type="checkbox" /> 匿名评论</label>
-              <BaseButton :disabled="!comment.trim()" @click="submitComment">发表评论</BaseButton>
+              <label class="comment-upload-label">
+                <input class="comment-upload-input" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,.mov,image/*,video/*" @change.stop.prevent="handleCommentUpload" />
+                <span class="comment-upload-hint">{{ commentMediaUrl ? '媒体已附加' : '附加图片/视频' }}</span>
+              </label>
+              <BaseButton :disabled="!comment.trim() || commentUploading" @click="submitComment">{{ commentUploading ? '上传中...' : '发表评论' }}</BaseButton>
             </div>
           </div>
           <div v-show="commentsOpen" ref="commentsRef" class="comment-list">
@@ -240,21 +353,58 @@ watch(postParam, (value) => {
                 <div class="comment-actions">
                   <button type="button" @click="toggleCommentLike(item)">{{ item.liked ? '取消点赞' : '点赞' }} {{ item.likeCount || 0 }}</button>
                   <button type="button" @click="activeReplyId = activeReplyId === item.id ? null : item.id">回复</button>
+                  <button v-if="authStore.user?.id === item.user?.id" type="button" class="comment-action--danger" @click="deleteCommentItem(item)">删除</button>
                 </div>
                 <div v-if="activeReplyId === item.id" class="comment-reply-form">
                   <BaseTextarea v-model="replyContent" label="回复内容" placeholder="写下你的回复..." :maxlength="300" show-count />
                   <BaseButton size="sm" :disabled="!replyContent.trim()" @click="submitReply(item)">发布回复</BaseButton>
                 </div>
-                <div v-if="item.children?.length" class="comment-replies">
-                  <article v-for="reply in item.children.slice(0, 2)" :key="reply.id" class="comment-reply">
-                    <div class="comment-reply__meta">
-                      <button class="comment__name" type="button" @click="visitUser(reply.user?.id)">{{ reply.user?.nickname || reply.author }}</button>
-                      <small>{{ formatDate(reply.createdAt) }}</small>
+                <!-- Flat replies under this comment -->
+                <template v-if="item.flatReplies?.length">
+                  <div class="comment-replies">
+                    <div
+                      v-for="reply in item.flatReplies"
+                      :key="reply.id"
+                      v-show="item.flatReplies.length <= EXPAND_REPLY_LIMIT || repliedExpanded[item.id] || item.flatReplies.indexOf(reply) < EXPAND_REPLY_LIMIT"
+                      class="comment-reply"
+                    >
+                      <img
+                        v-if="reply.user?.avatar"
+                        class="comment-reply__avatar"
+                        :src="resolveUploadUrl(reply.user.avatar)"
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <span v-else class="avatar comment-reply__avatar">{{ (reply.user?.nickname || reply.author || '用').slice(0, 1) }}</span>
+                      <div>
+                        <div class="comment-reply__meta">
+                          <button class="comment__name" type="button" @click="visitUser(reply.user?.id)">{{ reply.user?.nickname || reply.author }}</button>
+                          <small v-if="reply.parentAuthor" class="reply-to">回复 @{{ reply.parentAuthor }}</small>
+                          <small>{{ formatDate(reply.createdAt) }}</small>
+                        </div>
+                        <p>{{ reply.content }}</p>
+                        <div class="comment-reply__actions">
+                          <button type="button" @click="toggleCommentLike(reply)">{{ reply.liked ? '取消点赞' : '点赞' }} {{ reply.likeCount || 0 }}</button>
+                          <button type="button" @click="activeReplyId = activeReplyId === reply.id ? null : reply.id">回复</button>
+                          <button v-if="authStore.user?.id === reply.user?.id" type="button" class="comment-action--danger" @click="deleteCommentItem(reply)">删除</button>
+                        </div>
+                        <div v-if="activeReplyId === reply.id" class="comment-reply-form" style="margin-top:var(--cb-space-2)">
+                          <BaseTextarea v-model="replyContent" label="回复内容" placeholder="写下你的回复..." :maxlength="300" show-count />
+                          <BaseButton size="sm" :disabled="!replyContent.trim()" @click="submitReply(reply)">发布回复</BaseButton>
+                        </div>
+                      </div>
                     </div>
-                    <p>{{ reply.content }}</p>
-                    <button type="button" @click="toggleCommentLike(reply)">{{ reply.liked ? '取消点赞' : '点赞' }} {{ reply.likeCount || 0 }}</button>
-                  </article>
-                </div>
+                    <button
+                      v-if="item.flatReplies.length > EXPAND_REPLY_LIMIT"
+                      type="button"
+                      class="comment-reply__toggle"
+                      @click="repliedExpanded[item.id] = !repliedExpanded[item.id]"
+                    >
+                      {{ repliedExpanded[item.id] ? '收起回复' : `展开全部 ${item.flatReplies.length} 条回复` }}
+                    </button>
+                  </div>
+                </template>
               </div>
             </div>
           </div>
@@ -366,11 +516,34 @@ watch(postParam, (value) => {
   margin-top: var(--cb-space-2);
 }
 .comment-actions button,
-.comment-reply button {
+.comment-reply button,
+.comment-reply__actions button {
   color: var(--cb-color-coffee);
   font-weight: var(--cb-font-semibold);
   background: transparent;
   border: 0;
+}
+.comment-action--danger { color: var(--cb-danger) !important; }
+
+.comment-upload-label {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.comment-upload-input {
+  display: none;
+}
+.comment-upload-hint {
+  color: var(--cb-text-muted);
+  font-size: var(--cb-font-size-sm);
+  padding: var(--cb-space-2) var(--cb-space-3);
+  border: 1px solid var(--cb-border-soft);
+  border-radius: var(--cb-radius-lg);
+  transition: color var(--cb-duration-fast);
+}
+.comment-upload-hint:hover {
+  color: var(--cb-color-coffee);
+  border-color: var(--cb-color-coffee);
 }
 .comments-panel {
   display: grid;
@@ -387,9 +560,32 @@ watch(postParam, (value) => {
   border: 0.0625rem solid var(--cb-border-soft);
   border-radius: var(--cb-radius-xl);
 }
+.comment-restriction-notice {
+  margin: 0;
+  padding: var(--cb-space-3);
+  color: var(--cb-danger);
+  background: color-mix(in srgb, var(--cb-danger) 10%, var(--cb-bg-surface));
+  border: 0.0625rem solid color-mix(in srgb, var(--cb-danger) 28%, transparent);
+  border-radius: var(--cb-radius-lg);
+  font-size: var(--cb-font-size-sm);
+  line-height: var(--cb-line-relaxed);
+  overflow-wrap: anywhere;
+}
+.comment-reply__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cb-space-2);
+}
+.comment-reply__actions button {
+  color: var(--cb-color-coffee);
+  font-weight: var(--cb-font-semibold);
+  background: transparent;
+  border: 0;
+}
 .comment-reply-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--cb-space-3);
   align-items: end;
 }
 .comment-list {
@@ -430,9 +626,17 @@ watch(postParam, (value) => {
 }
 .comment-reply {
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--cb-space-2);
   color: var(--cb-text-secondary);
   font-size: var(--cb-font-size-sm);
+}
+.comment-reply__avatar {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--cb-radius-pill);
+  object-fit: cover;
+  align-self: flex-start;
 }
 .comment-reply__meta {
   display: flex;
@@ -440,6 +644,20 @@ watch(postParam, (value) => {
   gap: var(--cb-space-2);
   align-items: center;
 }
+.reply-to {
+  color: var(--cb-color-coffee);
+}
+.comment-reply__toggle {
+  width: 100%;
+  padding: var(--cb-space-2) 0;
+  color: var(--cb-color-coffee);
+  font-size: var(--cb-font-size-sm);
+  text-align: center;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.comment-reply__toggle:hover { color: var(--cb-color-gold); }
 .like-users {
   display: grid;
   gap: var(--cb-space-3);

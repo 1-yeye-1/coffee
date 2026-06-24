@@ -20,6 +20,7 @@ const commentColumns = `
   id, post_id AS postId, user_id AS userId, parent_id AS parentId, author, content, status, is_anonymous AS isAnonymous,
   created_at AS createdAt, updated_at AS updatedAt
 `
+const PERMANENT_LIMIT_AT = '9999-12-31 23:59:59'
 
 function slugify(value) {
   return String(value || '')
@@ -89,10 +90,45 @@ async function getReports(postId) {
   }))
 }
 
+function formatLimitTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime()) || date.getFullYear() >= 9999) return '永久限制'
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+async function assertCanPost(userId, connection = pool) {
+  const [[risk]] = await connection.execute(
+    `SELECT post_limit_until AS postLimitUntil FROM users WHERE id = ? LIMIT 1`,
+    [userId || 0],
+  )
+  if (risk?.postLimitUntil && new Date(risk.postLimitUntil).getTime() > Date.now()) {
+    const message = new Date(risk.postLimitUntil).getFullYear() >= 9999
+      ? '账号已被永久限制发帖和评论'
+      : `账号已被限制发帖，恢复时间为 ${formatLimitTime(risk.postLimitUntil)}`
+    throw Object.assign(new Error(message), { statusCode: 403 })
+  }
+}
+
+function riskState(postLimitUntil) {
+  if (!postLimitUntil || new Date(postLimitUntil).getTime() <= Date.now()) {
+    return { status: 'normal', label: '正常', postLimitUntil: null, isPermanent: false }
+  }
+  const isPermanent = new Date(postLimitUntil).getFullYear() >= 9999
+  return {
+    status: isPermanent ? 'permanent_post_ban' : 'post_limited',
+    label: isPermanent ? '永久限制' : '限制发帖中',
+    postLimitUntil,
+    restoreAt: isPermanent ? null : postLimitUntil,
+    isPermanent,
+  }
+}
+
 async function attachComments(posts, publishedOnly = true) {
   return Promise.all(posts.map(async (post) => ({
     ...post,
     status: post.reviewStatus,
+    authorRisk: riskState(post.postLimitUntil),
     featured: Boolean(post.featured),
     comments: await getComments(post.id, publishedOnly),
     ...(publishedOnly ? {} : { reports: await getReports(post.id) }),
@@ -109,10 +145,12 @@ export async function listPosts(query = {}, admin = false) {
     params.push(query.status)
   }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
-  const orderBy = query.sort === 'latest' ? 'p.created_at DESC, p.id DESC' : 'likes DESC, p.created_at DESC'
+  const orderBy = query.sort === 'latest' ? 'p.created_at DESC, p.id DESC'
+    : admin ? 'p.created_at ASC, p.id ASC'
+    : 'likes DESC, p.created_at DESC'
   const [countRows] = await pool.execute(`SELECT COUNT(*) AS total FROM posts p ${where}`, params)
   const [rows] = await pool.query(
-    `SELECT ${postColumns} FROM posts p LEFT JOIN users u ON u.id = p.user_id ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
+    `SELECT ${postColumns}, u.post_limit_until AS postLimitUntil FROM posts p LEFT JOIN users u ON u.id = p.user_id ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
     [...params, pageSize, offset],
   )
   return { items: await attachComments(rows, !admin), meta: { page, pageSize, total: Number(countRows[0].total) } }
@@ -123,7 +161,7 @@ export async function findPost(idOrSlug, admin = false) {
   const params = [idOrSlug, idOrSlug]
   if (!admin) clauses.push("p.status = 'published'")
   const [rows] = await pool.execute(
-    `SELECT ${postColumns} FROM posts p LEFT JOIN users u ON u.id = p.user_id WHERE ${clauses.join(' AND ')} LIMIT 1`,
+    `SELECT ${postColumns}, u.post_limit_until AS postLimitUntil FROM posts p LEFT JOIN users u ON u.id = p.user_id WHERE ${clauses.join(' AND ')} LIMIT 1`,
     params,
   )
   const [post] = await attachComments(rows, !admin)
@@ -131,6 +169,7 @@ export async function findPost(idOrSlug, admin = false) {
 }
 
 export async function createPost(payload, user) {
+  await assertCanPost(user?.id)
   const title = String(payload.title || '').trim()
   const content = String(payload.content || '').trim()
   const slug = `${slugify(payload.slug || title)}-${Date.now()}`
@@ -166,7 +205,8 @@ export async function createComment(postId, payload, user) {
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
-    const author = user?.username || 'Coffee Reader'
+    await assertCanPost(user?.id, connection)
+    const author = user?.nickname || user?.username || 'Coffee Reader'
     const parentId = payload.parentId || payload.parent_id || null
     if (parentId) {
       const [[parent]] = await connection.execute(
@@ -174,7 +214,6 @@ export async function createComment(postId, payload, user) {
         [parentId, postId],
       )
       if (!parent) throw Object.assign(new Error('回复的评论不存在'), { statusCode: 404 })
-      if (parent.parentId) throw Object.assign(new Error('最多支持两层评论'), { statusCode: 400 })
     }
     const [result] = await connection.execute(
       `INSERT INTO comments (post_id, user_id, parent_id, author, content, status, is_anonymous)
@@ -189,6 +228,34 @@ export async function createComment(postId, payload, user) {
     )
     await writeAudit(user?.id, 'comment.create', 'community', { postId, commentId: result.insertId }, connection)
     await connection.commit()
+
+    // Notify post author (if not the commenter)
+    const [[postAuthor]] = await pool.execute('SELECT user_id AS userId FROM posts WHERE id = ?', [postId])
+    if (postAuthor?.userId && String(postAuthor.userId) !== String(user?.id || '')) {
+      await createNotification({
+        userId: postAuthor.userId,
+        title: '有人评论了你的帖子',
+        content: `${author} 评论了你的帖子：${String(payload.content || '').slice(0, 60)}`,
+        type: 'community',
+        relatedId: postId,
+        relatedType: 'post',
+      })
+    }
+    // Notify parent comment author (if replying)
+    if (parentId) {
+      const [[parentComment]] = await pool.execute('SELECT user_id AS userId FROM comments WHERE id = ?', [parentId])
+      if (parentComment?.userId && String(parentComment.userId) !== String(user?.id || '')) {
+        await createNotification({
+          userId: parentComment.userId,
+          title: '有人回复了你的评论',
+          content: `${author} 回复了你：${String(payload.content || '').slice(0, 60)}`,
+          type: 'community',
+          relatedId: postId,
+          relatedType: 'post',
+        })
+      }
+    }
+
     return findPost(postId, true)
   } catch (error) {
     await connection.rollback()
@@ -253,6 +320,17 @@ export async function deleteComment(postId, commentId, userId) {
   } finally {
     connection.release()
   }
+}
+
+export async function deleteOwnPost(postId, userId) {
+  const [[post]] = await pool.execute(
+    'SELECT id, title FROM posts WHERE id = ? AND user_id = ? LIMIT 1',
+    [postId, userId],
+  )
+  if (!post) return false
+  await pool.execute("UPDATE posts SET status = 'deleted', deleted_at = NOW() WHERE id = ?", [postId])
+  await writeAudit(userId, 'post.delete', 'community', { postId, title: post.title })
+  return true
 }
 
 export async function togglePostLike(postId, userId) {
@@ -457,4 +535,57 @@ export async function updatePostStatus(id, status, operatorId, reason = '') {
     })
   }
   return findPost(id, true)
+}
+
+
+export async function applyUserPenalty(userId, payload = {}, operatorId = null) {
+  const penaltyType = String(payload.penaltyType || payload.type || '').trim()
+  const reason = String(payload.reason || '').trim()
+  const durationDays = Number(payload.durationDays || 0)
+  let endAt = payload.endAt || payload.until || null
+  const legacyMap = { mute: 'mute_1d', post_limit: 'post_ban' }
+  const normalizedType = legacyMap[penaltyType] || penaltyType
+  if (!['mute_1d', 'mute_7d', 'post_ban', 'permanent_post_ban', 'restore'].includes(normalizedType)) throw Object.assign(new Error('处罚类型无效'), { statusCode: 400 })
+  if (!reason) throw Object.assign(new Error('处罚原因必填'), { statusCode: 400 })
+  if (normalizedType === 'mute_1d') endAt = new Date(Date.now() + 86400000)
+  if (normalizedType === 'mute_7d') endAt = new Date(Date.now() + 7 * 86400000)
+  if (normalizedType === 'post_ban') {
+    if (!endAt && durationDays > 0) endAt = new Date(Date.now() + durationDays * 86400000)
+    if (!endAt) throw Object.assign(new Error('限制发帖需要填写到期时间或天数'), { statusCode: 400 })
+  }
+  if (normalizedType === 'permanent_post_ban') endAt = PERMANENT_LIMIT_AT
+  if (endAt instanceof Date) endAt = endAt.toISOString().slice(0, 19).replace('T', ' ')
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [[user]] = await connection.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId])
+    if (!user) { await connection.rollback(); return null }
+    if (normalizedType === 'restore') await connection.execute('UPDATE users SET post_limit_until = NULL WHERE id = ?', [userId])
+    else await connection.execute('UPDATE users SET post_limit_until = ? WHERE id = ?', [endAt, userId])
+    await connection.execute(
+      'INSERT INTO user_penalties (user_id, penalty_type, reason, start_at, end_at, operator_id) VALUES (?, ?, ?, NOW(), ?, ?)',
+      [userId, normalizedType, reason, normalizedType === 'restore' ? null : endAt, operatorId],
+    )
+    await connection.execute(
+      'INSERT INTO user_risk_logs (user_id, risk_type, reason, operator_id, start_at, end_at) VALUES (?, ?, ?, ?, NOW(), ?)',
+      [userId, normalizedType === 'restore' ? 'post_unlimit' : 'community_penalty', reason, operatorId, normalizedType === 'restore' ? null : endAt],
+    )
+    await writeAudit(operatorId, 'community.user.penalty', 'community', { userId, penaltyType: normalizedType, reason, endAt, operatorType: 'admin' }, connection)
+    await createNotification({
+      userId,
+      title: normalizedType === 'restore' ? '社区发言权限已恢复' : '社区发言权限已调整',
+      content: normalizedType === 'restore' ? `管理员已恢复你的社区发言权限。原因：${reason}` : `你的社区发言权限已被限制。原因：${reason}${endAt ? `，恢复时间：${formatLimitTime(endAt)}` : ''}`,
+      type: 'audit',
+      relatedId: userId,
+      relatedType: 'user',
+    }, connection)
+    await connection.commit()
+    const [[updated]] = await pool.execute('SELECT post_limit_until AS postLimitUntil FROM users WHERE id = ? LIMIT 1', [userId])
+    return { userId: Number(userId), penaltyType: normalizedType, endAt: normalizedType === 'restore' ? null : endAt, risk: riskState(updated?.postLimitUntil) }
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
 }

@@ -153,6 +153,15 @@ async function submitReply(review) {
   activeReplyId.value = null
   await loadReviews()
 }
+async function deleteReview(review) {
+  if (!authStore.isAuthenticated || !confirm('确认删除这条评价？')) return
+  try {
+    await productsStore.deleteProductReview(review.id)
+    await loadReviews()
+  } catch (error) {
+    notify('删除失败', error.message || '无法删除评价', 'error')
+  }
+}
 async function toggleLike(review) {
   if (!authStore.isAuthenticated) { await router.push(`/login?redirect=${encodeURIComponent(route.fullPath)}`); return }
   const id = Number(review.id)
@@ -201,6 +210,10 @@ onMounted(loadProduct)
           <div class="cb-cluster">
             <BaseBadge variant="neutral">{{ product?.category || '商品' }}</BaseBadge>
             <BaseBadge :variant="stock > 0 ? 'success' : 'danger'">{{ stock > 0 ? '有库存' : '已售罄' }}</BaseBadge>
+            <BaseBadge v-if="product?.isFeatured" variant="premium">推荐</BaseBadge>
+            <BaseBadge v-if="product?.isNew" variant="success">新品</BaseBadge>
+            <BaseBadge v-if="product?.isHot" variant="warning">热销</BaseBadge>
+            <BaseBadge v-if="stock > 0 && stock <= product?.lowStockThreshold" variant="warning">低库存</BaseBadge>
           </div>
           <h1>{{ product?.name || '商品详情' }}</h1>
           <div class="catalog-price-row">
@@ -258,9 +271,9 @@ onMounted(loadProduct)
                 <p v-if="review.content">{{ review.content }}</p>
                 <img v-if="review.mediaType === 'image'" class="review-media" :src="resolveUploadUrl(review.mediaUrl)" alt="评价图片" loading="lazy" decoding="async" />
                 <video v-else-if="review.mediaType === 'video'" class="review-media" controls :src="resolveUploadUrl(review.mediaUrl)">当前浏览器不支持视频播放。</video>
-                <div class="review-actions"><button type="button" @click="toggleLike(review)">{{ review.liked ? '取消点赞' : '点赞' }} {{ review.likeCount || 0 }}</button><button type="button" @click="activeReplyId = activeReplyId === review.id ? null : review.id">回复</button></div>
+                <div class="review-actions"><button type="button" @click="toggleLike(review)">{{ review.liked ? '取消点赞' : '点赞' }} {{ review.likeCount || 0 }}</button><button type="button" @click="activeReplyId = activeReplyId === review.id ? null : review.id">回复</button><button v-if="authStore.user?.id === review.user?.id" type="button" class="review-action--danger" @click="deleteReview(review)">删除</button></div>
                 <div v-if="activeReplyId === review.id" class="reply-form"><BaseTextarea v-model="replyContent" label="回复内容" :maxlength="300" /><BaseButton size="sm" @click="submitReply(review)">发布回复</BaseButton></div>
-                <div v-if="review.children?.length" class="reply-list"><article v-for="reply in review.children.slice(0, 2)" :key="reply.id" class="reply-item"><strong>{{ reply.user?.nickname || '匿名用户' }}</strong><span>{{ reply.content }}</span><button type="button" @click="toggleLike(reply)">{{ reply.liked ? '取消点赞' : '点赞' }} {{ reply.likeCount || 0 }}</button></article></div>
+                <div v-if="review.children?.length" class="reply-list"><article v-for="reply in review.children.slice(0, 2)" :key="reply.id" class="reply-item"><span class="reply-item__avatar"><img v-if="reply.user?.avatar" :src="resolveUploadUrl(reply.user.avatar)" alt="" decoding="async" /><span v-else class="avatar-small">{{ (reply.user?.nickname || '用').slice(0, 1) }}</span></span><div><button class="reply-item__name" type="button" @click="router.push(`/users/${reply.user?.id}`)">{{ reply.user?.nickname || '匿名用户' }}</button><span>{{ reply.content }}</span></div><div class="reply-item__actions"><button type="button" @click="toggleLike(reply)">{{ reply.liked ? '取消点赞' : '点赞' }} {{ reply.likeCount || 0 }}</button><button type="button" @click="activeReplyId = activeReplyId === reply.id ? null : reply.id">回复</button><button v-if="authStore.user?.id === reply.user?.id" type="button" class="review-action--danger" @click="deleteReview(reply)">删除</button></div><div v-if="activeReplyId === reply.id" class="reply-form" style="margin-top:var(--cb-space-2)"><BaseTextarea v-model="replyContent" label="回复内容" :maxlength="300" /><BaseButton size="sm" @click="submitReply(reply)">发布回复</BaseButton></div></article></div>
               </div>
             </article>
           </div>
@@ -403,8 +416,16 @@ onMounted(loadProduct)
 .reply-form,
 .reply-list { display: flex; flex-wrap: wrap; gap: var(--cb-space-2); margin-top: var(--cb-space-2); }
 .review-actions button,
-.reply-item button { color: var(--cb-color-coffee); background: transparent; border: 0; font-weight: var(--cb-font-semibold); }
+.reply-item button,
+.reply-item__actions button { color: var(--cb-color-coffee); background: transparent; border: 0; font-weight: var(--cb-font-semibold); }
+.review-action--danger { color: var(--cb-danger) !important; }
+.reply-item__actions { display: flex; flex-wrap: wrap; gap: var(--cb-space-2); }
 .reply-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; width: 100%; }
 .reply-list { display: grid; width: 100%; padding: var(--cb-space-3); background: var(--cb-bg-soft); border-radius: var(--cb-radius-lg); }
-.reply-item { display: flex; flex-wrap: wrap; gap: var(--cb-space-2); align-items: center; color: var(--cb-text-secondary); font-size: var(--cb-font-size-sm); }
+.reply-item { display: flex; flex-wrap: wrap; gap: var(--cb-space-2); align-items: flex-start; color: var(--cb-text-secondary); font-size: var(--cb-font-size-sm); }
+.reply-item__avatar { width: 1.75rem; height: 1.75rem; flex-shrink: 0; border-radius: var(--cb-radius-pill); overflow: hidden; }
+.reply-item__avatar img { width: 100%; height: 100%; object-fit: cover; }
+.reply-item__avatar .avatar-small { display: inline-grid; width: 100%; height: 100%; place-items: center; background: var(--cb-color-coffee); color: var(--cb-text-inverse); font-size: var(--cb-font-size-xs); font-weight: var(--cb-font-bold); }
+.reply-item__name { color: var(--cb-color-coffee); font-weight: var(--cb-font-semibold); background: none; border: 0; padding: 0; cursor: pointer; font-size: inherit; }
+.reply-item__name:hover { text-decoration: underline; }
 </style>

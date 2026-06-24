@@ -84,6 +84,36 @@ watch(() => route.params.id, load)
           </div>
           <p v-else class="text-muted">暂时没有公开帖子。</p>
         </section>
+
+        <section v-if="profile.comments?.length" class="detail-panel section-block">
+          <h2 class="section-title">近期评论</h2>
+          <div class="record-list">
+            <button
+              v-for="item in profile.comments"
+              :key="`c-${item.id}`"
+              class="choice-chip"
+              type="button"
+              @click="router.push(`/community/${item.postSlug}`)"
+            >
+              {{ item.postTitle || `帖子 #${item.postId}` }}：{{ item.content.slice(0, 60) }}{{ item.content.length > 60 ? '...' : '' }}
+            </button>
+          </div>
+        </section>
+
+        <section v-if="profile.reviews?.length" class="detail-panel section-block">
+          <h2 class="section-title">图书评价</h2>
+          <div class="record-list">
+            <button
+              v-for="item in profile.reviews"
+              :key="`r-${item.id}`"
+              class="choice-chip"
+              type="button"
+              @click="router.push(`/books/${item.bookSlug || item.bookId}`)"
+            >
+              {{ item.bookTitle || `#${item.bookId}` }} · {{ '★'.repeat(item.rating || 5) }}：{{ item.content.slice(0, 60) }}{{ item.content.length > 60 ? '...' : '' }}
+            </button>
+          </div>
+        </section>
       </template>
     </main>
   </div>

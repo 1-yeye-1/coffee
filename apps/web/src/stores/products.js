@@ -7,6 +7,11 @@ const normalize = (product = {}) => ({
   flavor: Array.isArray(product.flavor) ? product.flavor : [],
   reviewAverage: Number(product.reviewAverage) || 0,
   reviewCount: Number(product.reviewCount) || 0,
+  isFeatured: Boolean(product.isFeatured),
+  isNew: Boolean(product.isNew),
+  isHot: Boolean(product.isHot),
+  recommended: Boolean(product.recommended ?? product.isFeatured ?? product.isHot),
+  lowStockThreshold: Number(product.lowStockThreshold || 5),
 })
 export const useProductsStore = defineStore('products', {
   state: () => ({ items: [], currentProduct: null, meta: null, loading: false, error: '', source: 'api' }),

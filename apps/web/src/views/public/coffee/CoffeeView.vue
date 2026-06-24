@@ -41,13 +41,13 @@ const productTypes = [
 ]
 
 const sortOptions = [
-  { label: '默认推荐', value: 'recommended' },
+  { label: '综合排序', value: 'recommended' },
   { label: '价格从低到高', value: 'price-asc' },
   { label: '价格从高到低', value: 'price-desc' },
   { label: '销量优先', value: 'sales' },
 ]
 
-const sortMap = { recommended: 'default', 'price-asc': 'price_asc', 'price-desc': 'price_desc', sales: 'sales_desc' }
+const sortMap = { recommended: 'recommended', 'price-asc': 'price_asc', 'price-desc': 'price_desc', sales: 'sales_desc' }
 const visibleProducts = computed(() => productsStore.items)
 const totalProducts = computed(() => productsStore.meta?.total ?? visibleProducts.value.length)
 const totalPages = computed(() => Math.max(1, Math.ceil(totalProducts.value / pageSize)))
@@ -180,6 +180,10 @@ watch(() => visibleProducts.value.map((product) => product.id).join(','), async 
             <div class="catalog-card__topline">
               <BaseBadge variant="neutral">{{ product.category }}</BaseBadge>
               <BaseBadge :variant="product.stock > 0 ? 'success' : 'danger'">{{ product.stock > 0 ? '有库存' : '已售罄' }}</BaseBadge>
+              <BaseBadge v-if="product.isFeatured" variant="premium">推荐</BaseBadge>
+              <BaseBadge v-if="product.isNew" variant="success">新品</BaseBadge>
+              <BaseBadge v-if="product.isHot" variant="warning">热销</BaseBadge>
+              <BaseBadge v-if="product.stock > 0 && product.stock <= product.lowStockThreshold" variant="warning">低库存</BaseBadge>
             </div>
             <h2>{{ product.name }}</h2>
             <p>{{ product.flavor.join(' / ') }}</p>

@@ -7,6 +7,7 @@ import express from 'express'
 import { env } from './config/env.js'
 import { checkDatabaseConnection, pool } from './db/mysql.js'
 import { handleError } from './middlewares/error.js'
+import { securityHeaders } from './middlewares/security.js'
 import { createRouter } from './routes/index.js'
 import { auditContextMiddleware } from './services/audit.service.js'
 import { failure, success } from './utils/response.js'
@@ -15,6 +16,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const app = express()
+app.disable('x-powered-by')
 
 const allowedOrigins = env.corsOrigin
   .split(',')
@@ -23,7 +25,7 @@ const allowedOrigins = env.corsOrigin
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || (env.nodeEnv !== 'production' && allowedOrigins.includes('*'))) {
       callback(null, true)
       return
     }
@@ -33,10 +35,18 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }))
 
+app.use(securityHeaders)
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true, limit: '1mb' }))
 app.use(auditContextMiddleware)
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')))
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads'), {
+  fallthrough: false,
+  setHeaders(res) {
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+    res.setHeader('Cache-Control', 'public, max-age=86400')
+  },
+}))
 
 app.get('/api/health', (_req, res) => {
   return success(res, { database: env.db.name })

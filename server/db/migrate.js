@@ -52,6 +52,14 @@ async function migrate() {
     await ensureColumn(connection, databaseName, 'users', 'gender', 'VARCHAR(20) NULL AFTER profile_public')
     await ensureColumn(connection, databaseName, 'users', 'birthday', 'DATE NULL AFTER gender')
     await ensureColumn(connection, databaseName, 'users', 'bio', 'VARCHAR(500) NULL AFTER birthday')
+    await ensureColumn(connection, databaseName, 'users', 'last_login_at', 'TIMESTAMP NULL AFTER bio')
+    await ensureColumn(connection, databaseName, 'users', 'disabled_reason', 'VARCHAR(500) NULL AFTER last_login_at')
+    await ensureColumn(connection, databaseName, 'users', 'booking_limit_until', 'DATETIME NULL AFTER disabled_reason')
+    await ensureColumn(connection, databaseName, 'users', 'post_limit_until', 'DATETIME NULL AFTER booking_limit_until')
+    await ensureColumn(connection, databaseName, 'event_registrations', 'registered_at', 'TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP AFTER status')
+    await ensureColumn(connection, databaseName, 'event_registrations', 'cancelled_at', 'TIMESTAMP NULL AFTER registered_at')
+    await ensureColumn(connection, databaseName, 'event_registrations', 'attended_at', 'TIMESTAMP NULL AFTER cancelled_at')
+    await ensureColumn(connection, databaseName, 'event_registrations', 'absent_at', 'TIMESTAMP NULL AFTER attended_at')
     await ensureColumn(connection, databaseName, 'user_notifications', 'is_read', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER type')
     await ensureColumn(connection, databaseName, 'user_notifications', 'related_id', 'BIGINT UNSIGNED NULL AFTER is_read')
     await ensureColumn(connection, databaseName, 'user_notifications', 'related_type', 'VARCHAR(50) NULL AFTER related_id')
@@ -61,15 +69,47 @@ async function migrate() {
     await ensureColumn(connection, databaseName, 'bookings', 'seat_id', 'BIGINT UNSIGNED NULL AFTER slot_id')
     await ensureColumn(connection, databaseName, 'bookings', 'time_slot', 'VARCHAR(50) NULL AFTER booking_time')
     await ensureColumn(connection, databaseName, 'bookings', 'people_count', 'INT NOT NULL DEFAULT 1 AFTER time_slot')
+    await ensureColumn(connection, databaseName, 'bookings', 'cancel_reason', 'VARCHAR(500) NULL AFTER note')
+    await ensureColumn(connection, databaseName, 'bookings', 'cancelled_at', 'TIMESTAMP NULL AFTER cancel_reason')
+    await ensureColumn(connection, databaseName, 'bookings', 'completed_at', 'TIMESTAMP NULL AFTER cancelled_at')
+    await ensureColumn(connection, databaseName, 'bookings', 'no_show_at', 'TIMESTAMP NULL AFTER completed_at')
+    await ensureColumn(connection, databaseName, 'bookings', 'status_updated_by', 'BIGINT UNSIGNED NULL AFTER no_show_at')
     await ensureColumn(connection, databaseName, 'comments', 'status', "VARCHAR(30) NOT NULL DEFAULT 'published' AFTER content")
     await ensureColumn(connection, databaseName, 'comments', 'is_anonymous', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER status')
     await ensureColumn(connection, databaseName, 'seats', 'width', 'INT NOT NULL DEFAULT 64 AFTER y')
     await ensureColumn(connection, databaseName, 'seats', 'height', 'INT NOT NULL DEFAULT 52 AFTER width')
     await ensureColumn(connection, databaseName, 'seats', 'sort_order', 'INT NOT NULL DEFAULT 0 AFTER status')
+    await ensureColumn(connection, databaseName, 'seats', 'maintenance_reason', 'VARCHAR(500) NULL AFTER status')
+    await ensureColumn(connection, databaseName, 'seats', 'maintenance_until', 'DATETIME NULL AFTER maintenance_reason')
+    await ensureColumn(connection, databaseName, 'seats', 'usage_count', 'INT NOT NULL DEFAULT 0 AFTER maintenance_until')
+    await ensureColumn(connection, databaseName, 'products', 'cover_url', 'VARCHAR(500) NULL AFTER tone')
+    await ensureColumn(connection, databaseName, 'products', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER cover_url')
+    await ensureColumn(connection, databaseName, 'products', 'is_new', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER is_featured')
+    await ensureColumn(connection, databaseName, 'products', 'is_hot', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER is_new')
+    await ensureColumn(connection, databaseName, 'products', 'low_stock_threshold', 'INT NOT NULL DEFAULT 5 AFTER is_hot')
+    await ensureColumn(connection, databaseName, 'products', 'view_count', 'INT NOT NULL DEFAULT 0 AFTER low_stock_threshold')
+    await ensureColumn(connection, databaseName, 'products', 'favorite_count', 'INT NOT NULL DEFAULT 0 AFTER view_count')
+    await ensureColumn(connection, databaseName, 'books', 'is_recommended', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER location_label')
+    await ensureColumn(connection, databaseName, 'books', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER is_recommended')
+    await ensureColumn(connection, databaseName, 'books', 'is_new', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER is_featured')
+    await ensureColumn(connection, databaseName, 'books', 'shelf_area', 'VARCHAR(120) NULL AFTER is_new')
+    await ensureColumn(connection, databaseName, 'books', 'shelf_code', 'VARCHAR(120) NULL AFTER shelf_area')
+    await ensureColumn(connection, databaseName, 'books', 'borrow_count', 'INT NOT NULL DEFAULT 0 AFTER shelf_code')
+    await ensureColumn(connection, databaseName, 'books', 'favorite_count', 'INT NOT NULL DEFAULT 0 AFTER borrow_count')
+    await ensureColumn(connection, databaseName, 'books', 'damaged_count', 'INT NOT NULL DEFAULT 0 AFTER favorite_count')
+    await ensureColumn(connection, databaseName, 'books', 'lost_count', 'INT NOT NULL DEFAULT 0 AFTER damaged_count')
+    await ensureColumn(connection, databaseName, 'books', 'low_stock_threshold', 'INT NOT NULL DEFAULT 3 AFTER lost_count')
+    await ensureColumn(connection, databaseName, 'orders', 'cancel_reason', 'VARCHAR(500) NULL AFTER note')
+    await ensureColumn(connection, databaseName, 'orders', 'refund_reason', 'VARCHAR(500) NULL AFTER cancel_reason')
+    await ensureColumn(connection, databaseName, 'orders', 'refund_amount', 'DECIMAL(10,2) NULL AFTER refund_reason')
+    await ensureColumn(connection, databaseName, 'orders', 'refund_note', 'VARCHAR(500) NULL AFTER refund_amount')
+    await ensureColumn(connection, databaseName, 'orders', 'refunded_at', 'TIMESTAMP NULL AFTER refund_note')
+    await ensureColumn(connection, databaseName, 'orders', 'refund_operator_id', 'BIGINT UNSIGNED NULL AFTER refunded_at')
     await ensureUploadFilesUserNullable(connection)
     await connection.query(`ALTER TABLE ${databaseSql}.\`verification_codes\` MODIFY \`expires_at\` DATETIME NOT NULL`)
     await connection.query(`ALTER TABLE ${databaseSql}.\`payments\` MODIFY \`expires_at\` DATETIME NULL`)
     await connection.query(`UPDATE ${databaseSql}.\`user_notifications\` SET is_read = 1 WHERE read_at IS NOT NULL`)
+    await connection.query(`UPDATE ${databaseSql}.\`event_registrations\` SET registered_at = created_at WHERE registered_at IS NULL`)
     await connection.query(`UPDATE ${databaseSql}.\`seats\` SET status = 'maintenance' WHERE status = 'disabled'`)
     await connection.query(`UPDATE ${databaseSql}.\`audit_logs\` SET role = operator_type WHERE role IS NULL OR role = '' OR (role = 'user' AND operator_type = 'admin')`)
     await connection.query(`UPDATE ${databaseSql}.\`audit_logs\` SET user_name = admin_name WHERE (user_name IS NULL OR user_name = '') AND admin_name IS NOT NULL`)
@@ -89,9 +129,18 @@ async function migrate() {
     await ensureIndex(connection, databaseName, 'audit_logs', 'idx_audit_logs_operator', 'KEY idx_audit_logs_operator (operator_type, operator_id)')
     await ensureIndex(connection, databaseName, 'audit_logs', 'idx_audit_logs_action', 'KEY idx_audit_logs_action (action)')
     await ensureIndex(connection, databaseName, 'audit_logs', 'idx_audit_logs_role', 'KEY idx_audit_logs_role (role)')
+    await ensureIndex(connection, databaseName, 'users', 'idx_users_limits', 'KEY idx_users_limits (booking_limit_until, post_limit_until)')
+    await ensureIndex(connection, databaseName, 'products', 'idx_products_stock', 'KEY idx_products_stock (stock)')
+    await ensureIndex(connection, databaseName, 'products', 'idx_products_flags', 'KEY idx_products_flags (is_featured, is_new, is_hot)')
+    await ensureIndex(connection, databaseName, 'books', 'idx_books_stock', 'KEY idx_books_stock (stock)')
+    await ensureBookReservableStock(connection)
+    await ensureIndex(connection, databaseName, 'books', 'idx_books_flags', 'KEY idx_books_flags (is_recommended, is_featured, is_new)')
+    await ensureIndex(connection, databaseName, 'orders', 'idx_orders_payment_method', 'KEY idx_orders_payment_method (payment_method)')
+    await ensureIndex(connection, databaseName, 'seats', 'idx_seats_usage', 'KEY idx_seats_usage (usage_count)')
     await ensureIndex(connection, databaseName, 'user_notifications', 'idx_user_notifications_type', 'KEY idx_user_notifications_type (type)')
     await ensureIndex(connection, databaseName, 'user_notifications', 'idx_user_notifications_is_read', 'KEY idx_user_notifications_is_read (is_read)')
     await ensureIndex(connection, databaseName, 'bookings', 'idx_bookings_seat_date_time', 'KEY idx_bookings_seat_date_time (seat_id, booking_date, time_slot)')
+    await ensureIndex(connection, databaseName, 'bookings', 'idx_bookings_date_status', 'KEY idx_bookings_date_status (booking_date, status)')
     await ensureIndex(connection, databaseName, 'books', 'idx_books_seat', 'KEY idx_books_seat (seat_id)')
     await ensureIndex(connection, databaseName, 'posts', 'idx_posts_status', 'KEY idx_posts_status (status)')
     await ensureColumn(connection, databaseName, 'comments', 'parent_id', 'BIGINT UNSIGNED NULL AFTER user_id')
@@ -115,6 +164,7 @@ async function migrate() {
     await ensureBookReviews(connection)
     await ensureCommentLikes(connection)
     await ensureBookReservations(connection)
+    await ensureAdminOperationsTables(connection)
     await ensurePointsCenter(connection)
     await ensureMembershipGrowth(connection)
     await ensureColumn(connection, databaseName, 'user_coupons', 'request_key', 'VARCHAR(80) NULL AFTER coupon_code')
@@ -245,6 +295,24 @@ async function ensureSeats(connection) {
       VALUES (?, ?, ?, ?, ?, ?, 'available')
       ON DUPLICATE KEY UPDATE code=VALUES(code)`, seat)
   }
+}
+
+async function ensureBookReservableStock(connection) {
+  const [rows] = await connection.execute(
+    `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'books' AND COLUMN_NAME = 'reservable_stock'`,
+    [databaseName],
+  )
+  const columnExists = Number(rows[0].total) > 0
+  if (!columnExists) {
+    await connection.query(`ALTER TABLE ${databaseSql}.\`books\` ADD COLUMN \`reservable_stock\` INT NOT NULL DEFAULT 0 AFTER \`stock\``)
+    await connection.query(`UPDATE ${databaseSql}.\`books\` SET reservable_stock = GREATEST(stock, 0)`)
+  } else {
+    await connection.query(`UPDATE ${databaseSql}.\`books\`
+      SET reservable_stock = LEAST(GREATEST(COALESCE(reservable_stock, 0), 0), GREATEST(stock, 0))
+      WHERE reservable_stock < 0 OR reservable_stock > stock`)
+  }
+  await ensureIndex(connection, databaseName, 'books', 'idx_books_reservable_stock', 'KEY idx_books_reservable_stock (reservable_stock)')
 }
 
 async function migrateContentStatuses(connection) {
@@ -425,6 +493,79 @@ async function ensureBookReservations(connection) {
       CONSTRAINT fk_book_reservations_seat FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE SET NULL
     ) ENGINE=InnoDB`,
   )
+}
+
+async function ensureAdminOperationsTables(connection) {
+  await connection.query(`CREATE TABLE IF NOT EXISTS ${databaseSql}.\`product_stock_logs\` (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    product_id BIGINT UNSIGNED NOT NULL,
+    change_type VARCHAR(40) NOT NULL,
+    change_amount INT NOT NULL,
+    before_stock INT NOT NULL,
+    after_stock INT NOT NULL,
+    reason VARCHAR(500) NULL,
+    operator_id BIGINT UNSIGNED NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_product_stock_logs_product (product_id, created_at),
+    KEY idx_product_stock_logs_operator (operator_id),
+    CONSTRAINT fk_product_stock_logs_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB`)
+  await connection.query(`CREATE TABLE IF NOT EXISTS ${databaseSql}.\`book_stock_logs\` (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    book_id BIGINT UNSIGNED NOT NULL,
+    change_type VARCHAR(40) NOT NULL,
+    change_amount INT NOT NULL,
+    before_stock INT NOT NULL,
+    after_stock INT NOT NULL,
+    reason VARCHAR(500) NULL,
+    operator_id BIGINT UNSIGNED NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_book_stock_logs_book (book_id, created_at),
+    KEY idx_book_stock_logs_operator (operator_id),
+    CONSTRAINT fk_book_stock_logs_book FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB`)
+  await connection.query(`CREATE TABLE IF NOT EXISTS ${databaseSql}.\`user_risk_logs\` (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    risk_type VARCHAR(40) NOT NULL,
+    reason VARCHAR(500) NULL,
+    operator_id BIGINT UNSIGNED NULL,
+    start_at DATETIME NULL,
+    end_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_user_risk_logs_user (user_id, created_at),
+    KEY idx_user_risk_logs_type (risk_type),
+    CONSTRAINT fk_user_risk_logs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB`)
+  await connection.query(`CREATE TABLE IF NOT EXISTS ${databaseSql}.\`user_penalties\` (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    penalty_type VARCHAR(40) NOT NULL,
+    reason VARCHAR(500) NULL,
+    start_at DATETIME NULL,
+    end_at DATETIME NULL,
+    operator_id BIGINT UNSIGNED NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_user_penalties_user (user_id, created_at),
+    KEY idx_user_penalties_type (penalty_type),
+    CONSTRAINT fk_user_penalties_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB`)
+  await connection.query(`CREATE TABLE IF NOT EXISTS ${databaseSql}.\`seat_maintenance_logs\` (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    seat_id BIGINT UNSIGNED NOT NULL,
+    reason VARCHAR(500) NULL,
+    start_at DATETIME NULL,
+    end_at DATETIME NULL,
+    operator_id BIGINT UNSIGNED NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_seat_maintenance_logs_seat (seat_id, created_at),
+    CONSTRAINT fk_seat_maintenance_logs_seat FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB`)
 }
 
 async function removeLegacyAdminUsers(connection) {

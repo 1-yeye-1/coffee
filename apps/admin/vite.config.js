@@ -9,10 +9,16 @@ export default defineConfig({
   server: {
     host: '127.0.0.1',
     port: 5174,
+    proxy: {
+      '/uploads': 'http://127.0.0.1:4173',
+    },
   },
   preview: {
     host: '127.0.0.1',
     port: 4175,
+    proxy: {
+      '/uploads': 'http://127.0.0.1:4173',
+    },
   },
   build: {
     outDir: '../../dist/admin',

@@ -143,6 +143,24 @@
 .admin-user-avatar {
   border-radius: var(--cb-radius-pill);
 }
+img.admin-user-avatar {
+  display: block;
+  object-fit: cover;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--cb-radius-pill);
+}
+.admin-user-avatar--text {
+  display: inline-grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  color: var(--cb-text-inverse);
+  font-size: var(--cb-font-size-xs);
+  font-weight: var(--cb-font-bold);
+  background: var(--cb-color-coffee);
+  border-radius: var(--cb-radius-pill);
+}
 
 .admin-cell-primary {
   display: grid;
@@ -217,11 +235,21 @@
   display: grid;
   min-width: 0;
   flex: 1;
+  height: 12rem;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--cb-space-2);
   justify-items: center;
 }
 
+.admin-bar em {
+  color: var(--cb-text-primary);
+  font-size: var(--cb-font-size-sm);
+  font-style: normal;
+  font-weight: var(--cb-font-bold);
+}
+
 .admin-bar span {
+  align-self: end;
   width: min(100%, 2.5rem);
   min-height: var(--cb-space-2);
   background: linear-gradient(var(--cb-color-gold), var(--cb-color-coffee));
