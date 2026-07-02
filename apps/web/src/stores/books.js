@@ -32,7 +32,10 @@ const normalize = (book = {}) => ({
   lowStockThreshold: Number(book.lowStockThreshold || 3),
   shelfArea: book.shelfArea || '',
   shelfCode: book.shelfCode || '',
+<<<<<<< HEAD
   activeReservationCount: Number(book.activeReservationCount || 0),
+=======
+>>>>>>> origin/master
 })
 
 function safeSlug(value) {

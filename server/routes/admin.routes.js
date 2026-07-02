@@ -22,7 +22,11 @@ import {
   listBookings,
   updateBookingStatusAdmin,
 } from '../services/booking.service.js'
+<<<<<<< HEAD
 import { adjustBookStock, batchUpdateBooks, createBook, deleteBook, findBookById, getBookAdminDetail, getBookAdminStats, listAdminBookReservations, updateAdminBookReservationStatus, updateBook, updateBookFlags, updateBookStatus } from '../services/books.service.js'
+=======
+import { adjustBookStock, batchUpdateBooks, createBook, deleteBook, findBookById, getBookAdminDetail, getBookAdminStats, updateBook, updateBookFlags, updateBookStatus } from '../services/books.service.js'
+>>>>>>> origin/master
 import {
   findPost,
   listPosts,
@@ -179,6 +183,7 @@ export function registerAdminRoutes(router) {
     return success(res, book, '???????')
   })
 
+<<<<<<< HEAD
   router.get('/api/admin/books/:id/reservations', requireAdmin, async (req, res) => {
     if (!await findBookById(req.params.id)) return failure(res, 404, '图书不存在', 404)
     const result = await listAdminBookReservations(req.params.id, req.query)
@@ -192,6 +197,8 @@ export function registerAdminRoutes(router) {
     return success(res, reservation, '图书预约状态已更新')
   })
 
+=======
+>>>>>>> origin/master
   router.patch('/api/admin/books/batch', requireAdmin, async (req, res) => success(res, await batchUpdateBooks(req.body.ids, req.body, req.user.id)))
 
   router.delete('/api/admin/books/:id', requireAdmin, async (req, res) => {

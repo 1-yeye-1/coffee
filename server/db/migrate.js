@@ -133,7 +133,10 @@ async function migrate() {
     await ensureIndex(connection, databaseName, 'products', 'idx_products_stock', 'KEY idx_products_stock (stock)')
     await ensureIndex(connection, databaseName, 'products', 'idx_products_flags', 'KEY idx_products_flags (is_featured, is_new, is_hot)')
     await ensureIndex(connection, databaseName, 'books', 'idx_books_stock', 'KEY idx_books_stock (stock)')
+<<<<<<< HEAD
     await ensureBookReservableStock(connection)
+=======
+>>>>>>> origin/master
     await ensureIndex(connection, databaseName, 'books', 'idx_books_flags', 'KEY idx_books_flags (is_recommended, is_featured, is_new)')
     await ensureIndex(connection, databaseName, 'orders', 'idx_orders_payment_method', 'KEY idx_orders_payment_method (payment_method)')
     await ensureIndex(connection, databaseName, 'seats', 'idx_seats_usage', 'KEY idx_seats_usage (usage_count)')

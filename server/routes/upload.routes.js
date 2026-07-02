@@ -5,7 +5,10 @@ import { recordAudit } from '../services/audit.service.js'
 import {
   batchDeleteUploadFiles,
   deleteUploadFile,
+<<<<<<< HEAD
   getUploadFileDetail,
+=======
+>>>>>>> origin/master
   getUploadFileReferences,
   getUploadFileStats,
   listUploadFiles,
@@ -136,6 +139,7 @@ export function registerUploadRoutes(router) {
 
   router.get('/api/upload/files/stats', requireAdmin, async (_req, res) => success(res, await getUploadFileStats()))
 
+<<<<<<< HEAD
   router.get('/api/upload/files/:id/detail', requireAdmin, async (req, res) => {
     const detail = await getUploadFileDetail(req.params.id)
     if (!detail) return failure(res, 404, '上传文件不存在', 404)
@@ -143,6 +147,8 @@ export function registerUploadRoutes(router) {
     return success(res, detail)
   })
 
+=======
+>>>>>>> origin/master
   router.get('/api/upload/files/:id/references', requireAdmin, async (req, res) => {
     const result = await listUploadFiles({ page: 1, pageSize: 1, id: req.params.id })
     const file = result.items.find((item) => Number(item.id) === Number(req.params.id))

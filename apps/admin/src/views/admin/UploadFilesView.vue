@@ -1,9 +1,14 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 
+<<<<<<< HEAD
 import { batchDeleteUploadFiles, deleteUploadFile, fetchUploadFileStats, fetchUploadFiles } from '@/api/admin'
 import { BaseBadge, BaseButton, BaseDrawer, BaseModal, BasePagination, BaseSelect, BaseTable } from '@/components/base'
 import { useAdminStore } from '@/stores/admin'
+=======
+import { batchDeleteUploadFiles, deleteUploadFile, fetchUploadFileStats, fetchUploadFiles, getUploadFileReferences } from '@/api/admin'
+import { BaseBadge, BaseButton, BaseDrawer, BaseModal, BasePagination, BaseSelect, BaseTable } from '@/components/base'
+>>>>>>> origin/master
 import { resolveMediaUrl } from '@/utils/media'
 import '@/assets/styles/pages/admin-management.css'
 
@@ -63,7 +68,11 @@ const statCards = computed(() => [
   ['文件总数', stats.value?.total ?? meta.total],
   ['图片', stats.value?.images ?? rows.value.filter((item) => item.fileType === 'image').length],
   ['视频', stats.value?.videos ?? rows.value.filter((item) => item.fileType === 'video').length],
+<<<<<<< HEAD
   ['未引用', stats.value?.unreferenced ?? rows.value.filter((item) => !(item.references || []).length).length],
+=======
+  ['未引用', stats.value?.unreferenced ?? rows.value.filter((item) => !Number(item.referenceCount || item.referencesCount || 0)).length],
+>>>>>>> origin/master
 ])
 
 function assetUrl(url) {
@@ -80,10 +89,13 @@ function formatDate(value) {
   return value ? new Date(value).toLocaleString('zh-CN') : '-'
 }
 
+<<<<<<< HEAD
 function sceneLabel(scene) {
   return sceneLabelMap[scene] || sceneOptions.find((item) => item.value === scene)?.label || scene || '-'
 }
 
+=======
+>>>>>>> origin/master
 async function load(page = meta.page) {
   loading.value = true
   error.value = ''
@@ -126,6 +138,7 @@ function openPreview(item) {
   preview.value = { title: item.originalName || item.storedName || '上传媒体', type: item.fileType, url: assetUrl(item.url) }
 }
 
+<<<<<<< HEAD
 function openInNewWindow(item) {
   window.open(assetUrl(item.url), '_blank', 'noopener,noreferrer')
 }
@@ -138,6 +151,15 @@ async function openDetail(item) {
     detail.value = await adminStore.fetchUploadFileDetail(item.id)
   } catch {
     detail.value = { ...item, references: [], auditLogs: [] }
+=======
+async function openDetail(item) {
+  detailOpen.value = true
+  detailLoading.value = true
+  detail.value = { ...item, references: [] }
+  try {
+    const refs = await getUploadFileReferences(item.id)
+    detail.value = { ...item, references: refs.data?.items || refs.data || [] }
+>>>>>>> origin/master
   } finally {
     detailLoading.value = false
   }
@@ -156,7 +178,11 @@ async function confirmDelete() {
 }
 
 async function deleteUnreferenced() {
+<<<<<<< HEAD
   const ids = rows.value.filter((item) => selectedIds.value.includes(item.id) && !(item.references || []).length).map((item) => item.id)
+=======
+  const ids = rows.value.filter((item) => selectedIds.value.includes(item.id) && !Number(item.referenceCount || item.referencesCount || 0)).map((item) => item.id)
+>>>>>>> origin/master
   if (!ids.length) {
     error.value = '请选择未被引用的文件'
     return
@@ -177,6 +203,7 @@ async function copyUrl(item) {
   error.value = '文件 URL 已复制'
 }
 
+<<<<<<< HEAD
 function auditActionLabel(action) {
   if (!action) return '-'
   if (action.includes('.upload')) return '上传文件'
@@ -193,6 +220,8 @@ function auditOperatorLabel(log) {
   return `${name}（${type}）`
 }
 
+=======
+>>>>>>> origin/master
 onMounted(() => load(1))
 </script>
 
@@ -202,7 +231,11 @@ onMounted(() => load(1))
       <div class="admin-page__title">
         <span class="section-eyebrow">Uploads</span>
         <h1>上传文件</h1>
+<<<<<<< HEAD
         <p>查看用户上传媒体，检查引用关系，审计操作记录，并保护仍被业务引用的文件。</p>
+=======
+        <p>查看用户上传媒体，检查引用关系，并保护仍被业务引用的文件。</p>
+>>>>>>> origin/master
       </div>
     </header>
 
@@ -229,12 +262,20 @@ onMounted(() => load(1))
       <template #cell-select="{ item }"><input class="admin-select-cell" type="checkbox" :checked="selectedIds.includes(item.id)" :aria-label="`选择文件 ${item.originalName || item.id}`" @change="toggleSelect(item.id)" /></template>
       <template #cell-preview="{ item }">
         <button class="upload-preview-button" type="button" @click="openPreview(item)">
+<<<<<<< HEAD
           <img v-if="item.fileType === 'image'" class="upload-thumb" :src="assetUrl(item.url)" alt="上传图片缩略图" loading="lazy" decoding="async" @error="($event) => { $event.currentTarget.style.display = 'none'; const fb = $event.currentTarget.nextElementSibling; if (fb) fb.style.display = 'inline-grid'; }" />
           <span v-if="item.fileType === 'image'" class="upload-thumb-fallback" style="display:none">🖼</span>
           <span v-else class="upload-link">查看视频</span>
         </button>
       </template>
       <template #cell-scene="{ value }"><BaseBadge variant="neutral">{{ sceneLabel(value) }}</BaseBadge></template>
+=======
+          <img v-if="item.fileType === 'image'" class="upload-thumb" :src="assetUrl(item.url)" alt="上传图片缩略图" loading="lazy" decoding="async" />
+          <span v-else class="upload-link">查看视频</span>
+        </button>
+      </template>
+      <template #cell-scene="{ value }"><BaseBadge variant="neutral">{{ sceneOptions.find((item) => item.value === value)?.label || value }}</BaseBadge></template>
+>>>>>>> origin/master
       <template #cell-fileType="{ value }"><BaseBadge :variant="value === 'image' ? 'success' : 'warning'">{{ value === 'image' ? '图片' : '视频' }}</BaseBadge></template>
       <template #cell-size="{ value }">{{ formatSize(value) }}</template>
       <template #cell-createdAt="{ value }">{{ formatDate(value) }}</template>
@@ -243,13 +284,45 @@ onMounted(() => load(1))
           <BaseButton size="sm" variant="outline" @click="openDetail(item)">详情</BaseButton>
           <BaseButton size="sm" variant="ghost" @click="openPreview(item)">预览</BaseButton>
           <BaseButton size="sm" variant="ghost" @click="copyUrl(item)">复制 URL</BaseButton>
+<<<<<<< HEAD
           <BaseButton size="sm" variant="ghost" @click="openInNewWindow(item)">新窗口</BaseButton>
           <BaseButton size="sm" variant="danger" :disabled="(item.references || []).length > 0" @click="askDelete(item)">删除</BaseButton>
+=======
+          <BaseButton size="sm" variant="ghost" @click="window.open(assetUrl(item.url), '_blank', 'noopener')">新窗口</BaseButton>
+          <BaseButton size="sm" variant="danger" :disabled="Number(item.referenceCount || item.referencesCount || 0) > 0" @click="askDelete(item)">删除</BaseButton>
+>>>>>>> origin/master
         </div>
       </template>
     </BaseTable>
 
     <BasePagination v-if="pageCount > 1" v-model="meta.page" :total-pages="pageCount" @change="load" />
+<<<<<<< HEAD
+=======
+
+    <BaseDrawer v-model="detailOpen" title="文件详情" @close="detail = null">
+      <div v-if="detailLoading" class="upload-detail">加载中...</div>
+      <div v-else-if="detail" class="upload-detail">
+        <section>
+          <h3>{{ detail.originalName || detail.storedName }}</h3>
+          <p>{{ assetUrl(detail.url) }}</p>
+          <BaseBadge :variant="detail.references?.length ? 'warning' : 'success'">{{ detail.references?.length ? '已被引用，删除受保护' : '未引用' }}</BaseBadge>
+        </section>
+        <section>
+          <h3>引用关系</h3>
+          <article v-for="refItem in detail.references || []" :key="`${refItem.type}-${refItem.id}`" class="reference-item">
+            <strong>{{ refItem.type || refItem.module || '业务引用' }}</strong>
+            <span>{{ refItem.title || refItem.name || refItem.id }}</span>
+          </article>
+          <p v-if="!detail.references?.length" class="text-muted">暂无引用关系，可安全删除。</p>
+        </section>
+        <div class="admin-actions">
+          <BaseButton variant="outline" @click="copyUrl(detail)">复制 URL</BaseButton>
+          <BaseButton variant="outline" @click="window.open(assetUrl(detail.url), '_blank', 'noopener')">新窗口打开</BaseButton>
+          <BaseButton variant="danger" :disabled="detail.references?.length" @click="askDelete(detail)">删除文件</BaseButton>
+        </div>
+      </div>
+    </BaseDrawer>
+>>>>>>> origin/master
 
     <!-- ===== 详情抽屉 ===== -->
     <BaseDrawer v-model="detailOpen" title="文件详情" @close="detail = null">
@@ -328,7 +401,10 @@ onMounted(() => load(1))
       </div>
     </BaseModal>
 
+<<<<<<< HEAD
     <!-- ===== 媒体预览 ===== -->
+=======
+>>>>>>> origin/master
     <BaseModal :model-value="Boolean(preview)" :title="preview?.title || '媒体预览'" @update:model-value="(value) => { if (!value) preview = null }">
       <div v-if="preview" class="upload-preview">
         <img v-if="preview.type === 'image'" :src="preview.url" alt="上传图片预览" decoding="async" />
@@ -361,6 +437,7 @@ onMounted(() => load(1))
   object-fit: cover;
   border-radius: var(--cb-radius-md);
   border: 1px solid var(--cb-border-soft);
+<<<<<<< HEAD
   background: var(--cb-bg-soft);
 }
 
@@ -373,6 +450,8 @@ onMounted(() => load(1))
   border-radius: var(--cb-radius-md);
   border: 1px solid var(--cb-border-soft);
   background: var(--cb-bg-soft);
+=======
+>>>>>>> origin/master
 }
 
 .upload-link {
@@ -392,7 +471,11 @@ onMounted(() => load(1))
 
 .upload-preview,
 .upload-detail,
+<<<<<<< HEAD
 .upload-detail .detail-section {
+=======
+.upload-detail section {
+>>>>>>> origin/master
   display: grid;
   gap: var(--cb-space-4);
 }
@@ -407,6 +490,7 @@ onMounted(() => load(1))
   background: var(--cb-bg-soft);
 }
 
+<<<<<<< HEAD
 .detail-grid {
   display: grid;
   gap: var(--cb-space-3);
@@ -455,6 +539,8 @@ onMounted(() => load(1))
   overflow-wrap: anywhere;
 }
 
+=======
+>>>>>>> origin/master
 .reference-item {
   display: grid;
   gap: var(--cb-space-1);
@@ -464,6 +550,7 @@ onMounted(() => load(1))
   background: var(--cb-bg-soft);
 }
 
+<<<<<<< HEAD
 .reference-item strong {
   font-size: var(--cb-font-size-sm);
 }
@@ -498,6 +585,8 @@ onMounted(() => load(1))
   font-size: var(--cb-font-size-xs);
 }
 
+=======
+>>>>>>> origin/master
 @media (max-width: 48rem) {
   .admin-toolbar {
     grid-template-columns: 1fr;

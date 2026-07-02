@@ -206,7 +206,11 @@ export async function createComment(postId, payload, user) {
   try {
     await connection.beginTransaction()
     await assertCanPost(user?.id, connection)
+<<<<<<< HEAD
     const author = user?.nickname || user?.username || 'Coffee Reader'
+=======
+    const author = user?.username || 'Coffee Reader'
+>>>>>>> origin/master
     const parentId = payload.parentId || payload.parent_id || null
     if (parentId) {
       const [[parent]] = await connection.execute(

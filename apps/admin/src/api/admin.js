@@ -94,8 +94,11 @@ export const adjustProductStock = (id, payload) => request(`/admin/products/${id
 export const batchUpdateProducts = (payload) => request('/admin/products/batch', { method: 'PATCH', body: payload })
 export const fetchAdminBookStats = () => request('/admin/books/stats')
 export const getAdminBookDetail = (id) => request(`/admin/books/${id}/detail`)
+<<<<<<< HEAD
 export const fetchAdminBookReservations = (id, params = {}) => request(`/admin/books/${id}/reservations${toQuery(params)}`)
 export const updateAdminBookReservationStatus = (bookId, reservationId, payload) => request(`/admin/books/${bookId}/reservations/${reservationId}/status`, { method: 'PATCH', body: payload })
+=======
+>>>>>>> origin/master
 export const updateBookFlags = (id, payload) => request(`/admin/books/${id}/flags`, { method: 'PATCH', body: payload })
 export const adjustBookStock = (id, payload) => request(`/admin/books/${id}/stock`, { method: 'PATCH', body: payload })
 export const batchUpdateBooks = (payload) => request('/admin/books/batch', { method: 'PATCH', body: payload })
@@ -106,7 +109,10 @@ export const updateAdminUserRisk = (id, payload) => request(`/admin/users/${id}/
 export const updateAdminUserPenalty = (id, payload) => request(`/admin/users/${id}/penalty`, { method: 'PATCH', body: payload })
 export const applyCommunityUserPenalty = (id, payload) => request(`/admin/community/users/${id}/penalty`, { method: 'POST', body: payload })
 export const fetchUploadFileStats = () => request('/upload/files/stats')
+<<<<<<< HEAD
 export const fetchUploadFileDetail = (id) => request(`/upload/files/${id}/detail`)
+=======
+>>>>>>> origin/master
 export const getUploadFileReferences = (id) => request(`/upload/files/${id}/references`)
 export const batchDeleteUploadFiles = (payload) => request('/upload/files/batch-delete', { method: 'POST', body: payload })
 export const fetchAdminLogStats = () => request('/admin/logs/stats')

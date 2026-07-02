@@ -19,9 +19,12 @@ const comment = ref('')
 const isAnonymous = ref(false)
 const activeReplyId = ref(null)
 const replyContent = ref('')
+<<<<<<< HEAD
 const commentMediaUrl = ref('')
 const commentMediaType = ref('')
 const commentUploading = ref(false)
+=======
+>>>>>>> origin/master
 const commentRestrictionNotice = ref('')
 const likedCommentIds = ref(new Set())
 const toastVisible = ref(false)
@@ -121,6 +124,7 @@ function friendlyCommunityRestriction(error) {
   return parts.join('')
 }
 
+<<<<<<< HEAD
 async function handleCommentUpload(event) {
   const file = event.target.files?.[0]
   if (!file) return
@@ -150,11 +154,14 @@ async function deleteCommentItem(item) {
   }
 }
 
+=======
+>>>>>>> origin/master
 async function submitComment() {
   if (!comment.value.trim()) return
   if (!authStore.isAuthenticated) return router.push({ path: '/login', query: { redirect: route.fullPath } })
   commentRestrictionNotice.value = ''
   try {
+<<<<<<< HEAD
     const payload = { content: comment.value.trim(), isAnonymous: isAnonymous.value }
     if (commentMediaUrl.value) {
       payload.mediaUrl = commentMediaUrl.value
@@ -164,6 +171,10 @@ async function submitComment() {
     comment.value = ''
     commentMediaUrl.value = ''
     commentMediaType.value = ''
+=======
+    await communityStore.addComment(post.value.id, comment.value, isAnonymous.value)
+    comment.value = ''
+>>>>>>> origin/master
     commentsOpen.value = true
     await nextTick()
     const comments = commentsRef.value?.querySelectorAll('.comment') || []
@@ -571,6 +582,7 @@ watch(postParam, (value) => {
   line-height: var(--cb-line-relaxed);
   overflow-wrap: anywhere;
 }
+<<<<<<< HEAD
 .comment-reply__actions {
   display: flex;
   flex-wrap: wrap;
@@ -582,6 +594,8 @@ watch(postParam, (value) => {
   background: transparent;
   border: 0;
 }
+=======
+>>>>>>> origin/master
 .comment-reply-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

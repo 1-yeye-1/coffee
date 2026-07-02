@@ -12,12 +12,15 @@ const route = useRoute()
 const bookingStore = useBookingStore()
 const booksStore = useBooksStore()
 const loading = ref(false)
+<<<<<<< HEAD
 const activeTab = ref(route.query.tab === 'books' ? 'books' : 'space')
 
 const tabs = [
   { label: '空间预约', value: 'space' },
   { label: '图书预约', value: 'books' },
 ]
+=======
+>>>>>>> origin/master
 
 const statusMeta = {
   pending: { label: '待确认', badge: 'warning' },
@@ -55,6 +58,7 @@ function statusNote(booking) {
   return ''
 }
 
+<<<<<<< HEAD
 function reservationLocation(reservation) {
   return reservation.locationLabel
     || [reservation.seatName, reservation.seatCode].filter(Boolean).join(' · ')
@@ -71,6 +75,9 @@ function reservationNote(reservation) {
 }
 
 async function loadSpaceBookings() {
+=======
+async function load() {
+>>>>>>> origin/master
   loading.value = true
   bookingStore.apiError = ''
   try {
@@ -82,6 +89,7 @@ async function loadSpaceBookings() {
   }
 }
 
+<<<<<<< HEAD
 async function loadBookReservations() {
   loading.value = true
   try {
@@ -115,6 +123,14 @@ function openBookDetail(reservation) {
 
 watch(activeTab, loadActiveTab)
 onMounted(loadActiveTab)
+=======
+async function cancelBooking(id) {
+  await bookingStore.cancelBooking(id)
+  await load()
+}
+
+onMounted(load)
+>>>>>>> origin/master
 </script>
 
 <template>
@@ -123,6 +139,7 @@ onMounted(loadActiveTab)
       <span class="section-eyebrow">My Bookings</span>
       <h2 class="page-title">我的预约</h2>
     </header>
+<<<<<<< HEAD
 
     <BaseTabs v-model="activeTab" :tabs="tabs" variant="member" aria-label="预约类型">
       <template v-if="activeTab === 'space'">
@@ -159,6 +176,30 @@ onMounted(loadActiveTab)
             description="选择一个适合阅读和工作的时间段。"
             action-label="立即预约"
             @action="router.push('/booking')"
+=======
+    <ErrorPanel v-if="bookingStore.apiError" :message="bookingStore.apiError" @retry="load" />
+    <BaseSkeleton v-else-if="loading" variant="card" />
+    <div v-else class="record-list">
+      <article v-for="booking in bookingStore.bookings" :key="booking.id" class="record-row">
+        <div>
+          <div class="record-row__header">
+            <strong>{{ booking.date }} · {{ booking.timeSlot || booking.time }}</strong>
+            <BaseBadge :variant="bookingStatus(booking.status).badge">
+              {{ bookingStatus(booking.status).label }}
+            </BaseBadge>
+          </div>
+          <p>{{ booking.space }} · {{ booking.seatName || `座位 ${booking.seatCode || booking.seat}` }}</p>
+          <small>{{ booking.contactName }} · {{ booking.phone }}</small>
+          <small v-if="statusNote(booking)" class="record-row__note">{{ statusNote(booking) }}</small>
+        </div>
+        <div class="cb-cluster">
+          <BaseButton size="sm" variant="outline" @click="router.push('/booking')">查看座位</BaseButton>
+          <BaseButton
+            v-if="['pending', 'confirmed'].includes(booking.status)"
+            size="sm"
+            variant="ghost"
+            @click="cancelBooking(booking.id)"
+>>>>>>> origin/master
           >
             <template #icon>□</template>
           </EmptyState>
@@ -209,6 +250,7 @@ onMounted(loadActiveTab)
 </template>
 
 <style scoped>
+<<<<<<< HEAD
 .record-row__header {
   display: flex;
   align-items: center;
@@ -217,6 +259,8 @@ onMounted(loadActiveTab)
   margin-bottom: var(--cb-space-2);
 }
 
+=======
+>>>>>>> origin/master
 .record-row__note {
   display: block;
   margin-top: var(--cb-space-2);

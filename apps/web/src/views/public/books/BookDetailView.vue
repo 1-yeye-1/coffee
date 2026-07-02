@@ -219,7 +219,11 @@ onMounted(loadBook)
         <div class="detail-copy">
           <div class="cb-cluster">
             <BaseBadge variant="neutral">{{ book.category }}</BaseBadge>
+<<<<<<< HEAD
             <BaseBadge :variant="book.reservableStock > 0 ? 'success' : 'danger'">{{ book.reservableStock > 0 ? '可预约' : '预约已满' }}</BaseBadge>
+=======
+            <BaseBadge :variant="book.stock > 0 ? 'success' : 'danger'">{{ book.status }}</BaseBadge>
+>>>>>>> origin/master
             <BaseBadge v-if="book.isRecommended || book.isFeatured" variant="premium">推荐</BaseBadge>
             <BaseBadge v-if="book.isNew" variant="success">新书</BaseBadge>
             <BaseBadge v-if="book.stock > 0 && book.stock <= book.lowStockThreshold" variant="warning">低库存</BaseBadge>
@@ -274,7 +278,11 @@ onMounted(loadBook)
             <div class="detail-info-item"><span>出版年份</span><strong>{{ book.year }}</strong></div>
             <div class="detail-info-item"><span>页数</span><strong>{{ book.pages === '-' ? '-' : `${book.pages} 页` }}</strong></div>
             <div class="detail-info-item"><span>语言</span><strong>{{ book.language }}</strong></div>
+<<<<<<< HEAD
             <div class="detail-info-item"><span>馆藏</span><strong>{{ book.stock }} 本在馆</strong></div>
+=======
+            <div class="detail-info-item"><span>馆藏</span><strong>{{ book.stock }} 本可用</strong></div>
+>>>>>>> origin/master
             <div v-if="book.shelfArea" class="detail-info-item"><span>书架区域</span><strong>{{ book.shelfArea }}</strong></div>
             <div v-if="book.shelfCode" class="detail-info-item"><span>书架编号</span><strong>{{ book.shelfCode }}</strong></div>
           </div>

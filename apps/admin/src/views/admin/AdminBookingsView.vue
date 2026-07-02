@@ -12,7 +12,11 @@ const route = useRoute()
 const today = new Date().toISOString().slice(0, 10)
 const phone = ref(String(route.query.keyword || ''))
 const date = ref('')
+<<<<<<< HEAD
 const status = ref(String(route.query.status || 'all'))
+=======
+const status = ref('all')
+>>>>>>> origin/master
 const selectedIds = ref([])
 const batchLoading = ref(false)
 const detailOpen = ref(false)

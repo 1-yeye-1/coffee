@@ -1,14 +1,22 @@
 <script setup>
+<<<<<<< HEAD
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+=======
+import { defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+>>>>>>> origin/master
 
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 
 const authStore = useAuthStore()
 const notificationsStore = useNotificationsStore()
+<<<<<<< HEAD
 
 let NotificationDrawer = null
 let pollTimer = null
+=======
+const NotificationDrawer = defineAsyncComponent(() => import('./NotificationDrawer.vue'))
+>>>>>>> origin/master
 const open = ref(false)
 const drawerReady = ref(false)
 const POLL_INTERVAL = 30_000
@@ -43,7 +51,11 @@ function handleVisibility() {
 
 function toggle() {
   open.value = !open.value
+<<<<<<< HEAD
   if (open.value) loadDrawer()
+=======
+  if (open.value && (import.meta.env.DEV || import.meta.env.VITE_HOME_PERF === '1')) console.info(`[home-perf] header-lazy-loaded: ${Math.round(performance.now())}ms`)
+>>>>>>> origin/master
 }
 
 onMounted(() => {
@@ -82,12 +94,16 @@ onBeforeUnmount(() => {
         {{ notificationsStore.unreadCount > 99 ? '99+' : notificationsStore.unreadCount }}
       </span>
     </button>
+<<<<<<< HEAD
     <component v-if="open && drawerReady" :is="NotificationDrawer" v-model="open" />
     <div v-else-if="open" class="notification-drawer" role="dialog" aria-modal="true" aria-label="消息中心加载中">
       <aside class="notification-drawer__panel" style="display:grid;place-items:center;padding:var(--cb-space-5)">
         <p class="text-muted">正在加载消息中心...</p>
       </aside>
     </div>
+=======
+    <NotificationDrawer v-if="open" v-model="open" />
+>>>>>>> origin/master
   </div>
 </template>
 

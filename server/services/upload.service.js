@@ -184,6 +184,7 @@ export async function getUploadFileReferences(url) {
   return refs
 }
 
+<<<<<<< HEAD
 export async function getUploadFileDetail(id) {
   const [[file]] = await pool.execute(
     `SELECT f.id, f.user_id AS userId, f.scene, f.file_type AS fileType,
@@ -221,6 +222,8 @@ export async function getUploadFileDetail(id) {
   }
 }
 
+=======
+>>>>>>> origin/master
 export async function getUploadFileStats() {
   const [[row]] = await pool.execute(`SELECT
     COUNT(*) AS total,

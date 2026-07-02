@@ -22,7 +22,10 @@ const registration = computed(() => eventsStore.registrationFor(event.value?.id)
 const ended = computed(() => event.value && new Date(`${event.value.date}T23:59:59`) < new Date())
 const full = computed(() => event.value && Number(event.value.attendees) >= Number(event.value.capacity))
 const canRegister = computed(() => event.value && !ended.value && !full.value && !['ended', 'cancelled', 'draft'].includes(event.value.status))
+<<<<<<< HEAD
 const formatDate = (value) => value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '-'
+=======
+>>>>>>> origin/master
 const terminalRegistration = computed(() => ['attended', 'absent'].includes(registration.value?.registrationStatus))
 const actionLabel = computed(() => {
   const status = registration.value?.registrationStatus
@@ -88,10 +91,17 @@ onMounted(async () => {
               <div class="detail-list__row"><span>时间</span><strong>{{ event.date }} {{ event.time }}</strong></div>
               <div class="detail-list__row"><span>地点</span><strong>{{ event.location }}</strong></div>
               <div class="detail-list__row"><span>报名</span><strong>{{ event.attendees }} / {{ event.capacity }} 人</strong></div>
+<<<<<<< HEAD
               <div v-if="registration?.registeredAt" class="detail-list__row"><span>报名时间</span><strong>{{ formatDate(registration.registeredAt) }}</strong></div>
               <div v-if="registration?.cancelledAt" class="detail-list__row"><span>取消时间</span><strong>{{ formatDate(registration.cancelledAt) }}</strong></div>
               <div v-if="registration?.attendedAt" class="detail-list__row"><span>签到时间</span><strong>{{ formatDate(registration.attendedAt) }}</strong></div>
               <div v-if="registration?.absentAt" class="detail-list__row"><span>缺席记录</span><strong>{{ formatDate(registration.absentAt) }}</strong></div>
+=======
+              <div v-if="registration?.registeredAt" class="detail-list__row"><span>报名时间</span><strong>{{ registration.registeredAt }}</strong></div>
+              <div v-if="registration?.cancelledAt" class="detail-list__row"><span>取消时间</span><strong>{{ registration.cancelledAt }}</strong></div>
+              <div v-if="registration?.attendedAt" class="detail-list__row"><span>签到时间</span><strong>{{ registration.attendedAt }}</strong></div>
+              <div v-if="registration?.absentAt" class="detail-list__row"><span>缺席记录</span><strong>{{ registration.absentAt }}</strong></div>
+>>>>>>> origin/master
             </div>
             <p v-if="error" class="form-error">{{ error }}</p>
             <BaseButton

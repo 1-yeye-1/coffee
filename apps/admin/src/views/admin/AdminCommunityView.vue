@@ -24,7 +24,11 @@ const penaltyType = ref('mute_1d')
 const penaltyDurationDays = ref(3)
 const penaltyUntil = ref('')
 const penaltyLoading = ref(false)
+<<<<<<< HEAD
 const filters = reactive({ keyword: String(route.query.keyword || ''), status: String(route.query.status || 'all'), featured: 'all', media: 'all' })
+=======
+const filters = reactive({ keyword: String(route.query.keyword || ''), status: 'all', featured: 'all', media: 'all' })
+>>>>>>> origin/master
 
 const columns = [
   { key: 'select', label: '' },

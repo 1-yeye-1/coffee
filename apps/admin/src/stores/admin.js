@@ -304,6 +304,7 @@ export const useAdminStore = defineStore('admin', {
     },
     async updateUserRisk(id, payload) {
       try {
+<<<<<<< HEAD
         const body = {}
         if (payload.status) {
           body.riskType = payload.status === 'active' ? 'enable' : 'disable'
@@ -318,6 +319,9 @@ export const useAdminStore = defineStore('admin', {
         if (payload.endAt) body.endAt = payload.endAt
         if (!body.riskType) throw new Error('无效的风控操作类型')
         const result = (await adminApi.updateAdminUserRisk(id, body)).data
+=======
+        const result = (await adminApi.updateAdminUserRisk(id, payload)).data
+>>>>>>> origin/master
         await this.fetchAdminCollection('users')
         return result
       } catch (error) { this.apiError = error.message; throw error }
@@ -329,6 +333,7 @@ export const useAdminStore = defineStore('admin', {
       try { return (await adminApi.fetchAdminBookingStats(params)).data }
       catch (error) { this.apiError = error.message; throw error }
     },
+<<<<<<< HEAD
     async fetchAdminBookReservations(bookId, params = {}) {
       try { return await adminApi.fetchAdminBookReservations(bookId, params) }
       catch (error) { this.apiError = error.message; throw error }
@@ -341,6 +346,8 @@ export const useAdminStore = defineStore('admin', {
       try { return (await adminApi.fetchUploadFileDetail(id)).data }
       catch (error) { this.apiError = error.message; throw error }
     },
+=======
+>>>>>>> origin/master
     async fetchAdminBookingDetail(id) {
       try { return (await adminApi.getAdminBookingDetail(id)).data }
       catch (error) { this.apiError = error.message; throw error }

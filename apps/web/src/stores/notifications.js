@@ -9,11 +9,15 @@ import {
 } from '@/api/notifications'
 import { useAuthStore } from '@/stores/auth'
 
+<<<<<<< HEAD
 function notifyUpdated() {
   try { window.dispatchEvent(new CustomEvent('coffee-book:notifications-updated')) } catch { /* noop */ }
 }
 
 const UNREAD_CACHE_TTL = 15_000
+=======
+const UNREAD_CACHE_TTL = 45_000
+>>>>>>> origin/master
 let unreadCountRequest = null
 let unreadCountFetchedAt = 0
 
@@ -40,7 +44,10 @@ export const useNotificationsStore = defineStore('notifications', {
             this.unreadCount = response.data.count
             unreadCountFetchedAt = Date.now()
             this.error = ''
+<<<<<<< HEAD
             notifyUpdated()
+=======
+>>>>>>> origin/master
             return this.unreadCount
           })
           .finally(() => {
@@ -71,19 +78,28 @@ export const useNotificationsStore = defineStore('notifications', {
       await markNotificationRead(id)
       await this.fetchNotifications(params)
       await this.fetchUnreadCount({ force: true })
+<<<<<<< HEAD
       notifyUpdated()
+=======
+>>>>>>> origin/master
     },
     async markAllRead(params = {}) {
       await markAllNotificationsRead()
       await this.fetchNotifications(params)
       await this.fetchUnreadCount({ force: true })
+<<<<<<< HEAD
       notifyUpdated()
+=======
+>>>>>>> origin/master
     },
     async remove(id, params = {}) {
       await deleteNotification(id)
       await this.fetchNotifications(params)
       await this.fetchUnreadCount({ force: true })
+<<<<<<< HEAD
       notifyUpdated()
+=======
+>>>>>>> origin/master
     },
     reset() {
       this.items = []

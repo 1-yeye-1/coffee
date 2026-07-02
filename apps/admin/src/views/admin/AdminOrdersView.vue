@@ -10,7 +10,11 @@ import '@/assets/styles/pages/admin-management.css'
 const adminStore = useAdminStore()
 const route = useRoute()
 const keyword = ref(String(route.query.keyword || ''))
+<<<<<<< HEAD
 const status = ref(String(route.query.status || 'all'))
+=======
+const status = ref('all')
+>>>>>>> origin/master
 const drawerOpen = ref(false)
 const current = ref(null)
 const selectedIds = ref([])

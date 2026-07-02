@@ -12,7 +12,10 @@ function buildFormData(file) {
 export function resolveUploadUrl(url) {
   const raw = url == null ? '' : String(url).trim()
   if (!raw || /^(https?:\/\/|data:|blob:)/i.test(raw)) return raw
+<<<<<<< HEAD
   if (import.meta.env.DEV) return raw.startsWith('/') ? raw : `/${raw}`
+=======
+>>>>>>> origin/master
   return `${apiOrigin}${raw.startsWith('/') ? raw : `/${raw}`}`
 }
 

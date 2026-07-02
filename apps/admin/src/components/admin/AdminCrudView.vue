@@ -55,6 +55,7 @@ const registrationFilters = reactive({ keyword: '', status: 'all', checkinStatus
 const registrationAction = ref(null)
 const registrationReason = ref('')
 const registrationActionLoading = ref(false)
+<<<<<<< HEAD
 const bookReservationBook = ref(null)
 const bookReservationOpen = ref(false)
 const bookReservationLoading = ref(false)
@@ -65,6 +66,8 @@ const bookReservationFilters = reactive({ keyword: '', status: 'all', page: 1, p
 const bookReservationAction = ref(null)
 const bookReservationReason = ref('')
 const bookReservationActionLoading = ref(false)
+=======
+>>>>>>> origin/master
 const detailOpen = ref(false)
 const detailLoading = ref(false)
 const currentDetail = ref(null)
@@ -156,6 +159,7 @@ const checkinStatusOptions = [
   { label: '缺席', value: 'absent' },
   { label: '已取消', value: 'cancelled' },
 ]
+<<<<<<< HEAD
 const bookReservationColumns = [
   { key: 'nickname', label: '用户' },
   { key: 'phone', label: '手机号' },
@@ -177,6 +181,8 @@ const editableBookReservationStatuses = [
   { label: '已完成', value: 'completed' },
   { label: '已取消', value: 'cancelled' },
 ]
+=======
+>>>>>>> origin/master
 
 function resetForm(item = {}) {
   props.fields.forEach((field) => {
@@ -312,6 +318,7 @@ function viewRegistrations(item) {
   loadRegistrations()
 }
 
+<<<<<<< HEAD
 function viewBookReservations(item) {
   bookReservationBook.value = item
   bookReservationOpen.value = true
@@ -320,6 +327,8 @@ function viewBookReservations(item) {
   loadBookReservations()
 }
 
+=======
+>>>>>>> origin/master
 async function loadRegistrations() {
   if (!registrationEvent.value) return
   registrationLoading.value = true
@@ -335,6 +344,7 @@ async function loadRegistrations() {
   }
 }
 
+<<<<<<< HEAD
 async function loadBookReservations() {
   if (!bookReservationBook.value) return
   bookReservationLoading.value = true
@@ -350,26 +360,34 @@ async function loadBookReservations() {
   }
 }
 
+=======
+>>>>>>> origin/master
 function searchRegistrations() {
   registrationFilters.page = 1
   loadRegistrations()
 }
 
+<<<<<<< HEAD
 function searchBookReservations() {
   bookReservationFilters.page = 1
   loadBookReservations()
 }
 
+=======
+>>>>>>> origin/master
 function askRegistrationAction(item, status) {
   registrationReason.value = ''
   registrationAction.value = { item, status }
 }
 
+<<<<<<< HEAD
 function askBookReservationAction(item, status) {
   bookReservationReason.value = ''
   bookReservationAction.value = { item, status }
 }
 
+=======
+>>>>>>> origin/master
 async function confirmRegistrationAction() {
   if (!registrationAction.value || !registrationEvent.value) return
   const { item, status } = registrationAction.value
@@ -391,6 +409,7 @@ async function confirmRegistrationAction() {
   }
 }
 
+<<<<<<< HEAD
 async function confirmBookReservationAction() {
   if (!bookReservationAction.value || !bookReservationBook.value) return
   const { item, status } = bookReservationAction.value
@@ -416,6 +435,8 @@ async function confirmBookReservationAction() {
   }
 }
 
+=======
+>>>>>>> origin/master
 async function downloadRegistrations() {
   if (!registrationEvent.value) return
   try {
@@ -437,11 +458,14 @@ function changeRegistrationPage(page) {
   loadRegistrations()
 }
 
+<<<<<<< HEAD
 function changeBookReservationPage(page) {
   bookReservationFilters.page = page
   loadBookReservations()
 }
 
+=======
+>>>>>>> origin/master
 function registrationStatusLabel(status) {
   return { registered: '已报名', cancelled: '已取消', attended: '已参加', absent: '缺席' }[status] || status || '-'
 }
@@ -450,10 +474,13 @@ function checkinStatusLabel(status) {
   return { pending: '待签到', attended: '已参加', absent: '缺席', cancelled: '已取消' }[status] || status || '-'
 }
 
+<<<<<<< HEAD
 function bookReservationStatusLabel(status) {
   return { pending: '待处理', confirmed: '已确认', completed: '已完成', cancelled: '已取消' }[status] || status || '-'
 }
 
+=======
+>>>>>>> origin/master
 function formatRegistrationDate(value) {
   return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-'
 }
@@ -600,8 +627,12 @@ watch(filteredItems, (list) => {
         <template #cell-category="{ item }"><BaseBadge variant="neutral">{{ item.category }}</BaseBadge></template>
         <template #cell-status="{ item }"><BaseSelect :model-value="item.status" :disabled="updatingStatus === item.id" :aria-label="`修改${item.title || item.name}状态`" :options="statusField?.options || []" @update:model-value="changeStatus(item, $event)" /></template>
         <template #cell-stock="{ item }"><span :class="{ 'stock-warning': Number(item.stock || 0) <= Number(item.lowStockThreshold || (type === 'books' ? 3 : 5)) }">{{ item.stock }}</span></template>
+<<<<<<< HEAD
         <template #cell-reservableStock="{ item }"><span :class="{ 'stock-warning': type === 'books' && Number(item.reservableStock || 0) === 0 }">{{ item.reservableStock ?? 0 }}</span></template>
         <template #cell-actions="{ item }"><div class="admin-row-actions"><BaseButton size="sm" variant="ghost" @click="openDetail(item)">详情</BaseButton><BaseButton size="sm" variant="ghost" @click="openEdit(item)">编辑</BaseButton><BaseButton v-if="canManageStock" size="sm" variant="outline" @click="openStock(item)">库存</BaseButton><BaseButton v-if="type === 'books'" size="sm" variant="ghost" @click="viewBookReservations(item)">预约记录</BaseButton><BaseButton v-if="type === 'events'" size="sm" variant="ghost" @click="viewRegistrations(item)">查看报名</BaseButton><BaseButton size="sm" variant="danger" @click="askDelete(item)">删除</BaseButton></div></template>
+=======
+        <template #cell-actions="{ item }"><div class="admin-row-actions"><BaseButton size="sm" variant="ghost" @click="openDetail(item)">详情</BaseButton><BaseButton size="sm" variant="ghost" @click="openEdit(item)">编辑</BaseButton><BaseButton v-if="canManageStock" size="sm" variant="outline" @click="openStock(item)">库存</BaseButton><BaseButton v-if="type === 'events'" size="sm" variant="ghost" @click="viewRegistrations(item)">查看报名</BaseButton><BaseButton size="sm" variant="danger" @click="askDelete(item)">删除</BaseButton></div></template>
+>>>>>>> origin/master
       </BaseTable>
     </section>
 
@@ -611,6 +642,7 @@ watch(filteredItems, (list) => {
         <section>
           <BaseBadge v-if="currentDetail.status" variant="neutral">{{ currentDetail.status }}</BaseBadge>
           <h3>{{ currentDetail.title || currentDetail.name }}</h3>
+<<<<<<< HEAD
           <p v-if="type !== 'books'" class="text-muted">{{ currentDetail.description || currentDetail.summary || currentDetail.location || '暂无简介' }}</p>
           <template v-else>
             <p v-if="currentDetail.summary" class="text-muted">{{ currentDetail.summary }}</p>
@@ -624,6 +656,9 @@ watch(filteredItems, (list) => {
             </section>
             <p v-if="!currentDetail.summary && !currentDetail.description && !currentDetail.authorBio" class="text-muted">暂无简介</p>
           </template>
+=======
+          <p class="text-muted">{{ currentDetail.description || currentDetail.summary || currentDetail.location || '暂无简介' }}</p>
+>>>>>>> origin/master
         </section>
         <section v-if="['products', 'books'].includes(type)" class="flag-grid">
           <label v-if="type === 'products'"><input type="checkbox" :checked="currentDetail.isFeatured" @change="updateFlag(currentDetail, 'isFeatured', $event.target.checked)" /> 推荐</label>
@@ -637,7 +672,10 @@ watch(filteredItems, (list) => {
           <div><dt>分类</dt><dd>{{ currentDetail.category || '-' }}</dd></div>
           <div v-if="type === 'products'"><dt>价格</dt><dd>¥{{ currentDetail.price }}</dd></div>
           <div v-if="canManageStock"><dt>库存</dt><dd>{{ currentDetail.stock }} / 预警 {{ currentDetail.lowStockThreshold || (type === 'books' ? 3 : 5) }}</dd></div>
+<<<<<<< HEAD
           <div v-if="type === 'books'"><dt>可预约</dt><dd>{{ currentDetail.reservableStock ?? 0 }} / 当前预约中 {{ currentDetail.activeReservationCount || 0 }}</dd></div>
+=======
+>>>>>>> origin/master
           <div v-if="type === 'books'"><dt>馆藏位置</dt><dd>{{ currentDetail.locationLabel || currentDetail.shelfArea || '-' }} {{ currentDetail.shelfCode || '' }}</dd></div>
           <div v-if="type === 'events'"><dt>报名</dt><dd>{{ currentDetail.attendees || 0 }} / {{ currentDetail.capacity || 0 }}</dd></div>
           <div><dt>更新时间</dt><dd>{{ currentDetail.updatedAt ? new Date(currentDetail.updatedAt).toLocaleString('zh-CN') : '-' }}</dd></div>
@@ -745,6 +783,7 @@ watch(filteredItems, (list) => {
         </div>
       </div>
     </BaseDrawer>
+<<<<<<< HEAD
     <BaseDrawer v-model="bookReservationOpen" title="图书预约记录" @close="bookReservationBook = null">
       <div v-if="bookReservationBook" class="admin-detail registration-admin">
         <section>
@@ -781,12 +820,15 @@ watch(filteredItems, (list) => {
         </div>
       </div>
     </BaseDrawer>
+=======
+>>>>>>> origin/master
     <BaseModal :model-value="Boolean(registrationAction)" title="更新报名状态" @update:model-value="(value) => { if (!value) registrationAction = null }">
       <div class="admin-form">
         <p>将 {{ registrationAction?.item?.nickname }} 更新为 {{ registrationStatusLabel(registrationAction?.status) }}。</p>
         <BaseTextarea v-model="registrationReason" :label="registrationAction?.status === 'cancelled' ? '取消原因' : '备注原因'" :placeholder="registrationAction?.status === 'cancelled' ? '取消报名必须填写原因' : '标记缺席可填写原因'" :rows="4" />
         <p v-if="registrationAction?.status === 'cancelled' && !registrationReason.trim()" class="form-error">取消报名必须填写原因。</p>
         <div class="admin-actions"><BaseButton variant="ghost" @click="registrationAction = null">取消</BaseButton><BaseButton :variant="registrationAction?.status === 'cancelled' ? 'danger' : 'primary'" :loading="registrationActionLoading" @click="confirmRegistrationAction">确认更新</BaseButton></div>
+<<<<<<< HEAD
       </div>
     </BaseModal>
     <BaseModal :model-value="Boolean(bookReservationAction)" title="更新图书预约状态" @update:model-value="(value) => { if (!value) bookReservationAction = null }">
@@ -794,6 +836,8 @@ watch(filteredItems, (list) => {
         <p>将 {{ bookReservationAction?.item?.nickname || `用户${bookReservationAction?.item?.userId || ''}` }} 的预约更新为 {{ bookReservationStatusLabel(bookReservationAction?.status) }}。</p>
         <BaseTextarea v-model="bookReservationReason" label="备注" placeholder="可选填写处理说明" :rows="4" />
         <div class="admin-actions"><BaseButton variant="ghost" @click="bookReservationAction = null">取消</BaseButton><BaseButton :variant="bookReservationAction?.status === 'cancelled' ? 'danger' : 'primary'" :loading="bookReservationActionLoading" @click="confirmBookReservationAction">确认更新</BaseButton></div>
+=======
+>>>>>>> origin/master
       </div>
     </BaseModal>
     <div class="admin-toast"><BaseToast v-model="toastVisible" :variant="toastVariant" :title="toastTitle">{{ toastVariant === 'success' ? '数据已更新。' : '操作未完成。' }}</BaseToast></div>
@@ -865,6 +909,7 @@ watch(filteredItems, (list) => {
   font-size: var(--cb-font-size-2xl);
 }
 
+<<<<<<< HEAD
 .admin-detail-text h4 {
   margin: 0 0 var(--cb-space-2);
   font-size: var(--cb-font-size-sm);
@@ -878,6 +923,8 @@ watch(filteredItems, (list) => {
   line-height: 1.6;
 }
 
+=======
+>>>>>>> origin/master
 .flag-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

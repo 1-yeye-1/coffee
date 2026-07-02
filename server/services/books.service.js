@@ -4,7 +4,10 @@ import { pool } from '../db/mysql.js'
 import { parsePagination } from '../utils/pagination.js'
 import { bookFavoriteCountSql } from './stats.service.js'
 import { writeAudit } from './admin.service.js'
+<<<<<<< HEAD
 import { createNotification } from './notifications.service.js'
+=======
+>>>>>>> origin/master
 
 const columns = `
   id, slug, title, author, category, rating, stock, reservable_stock AS reservableStock, status,
@@ -16,7 +19,10 @@ const columns = `
   shelf_area AS shelfArea, shelf_code AS shelfCode, borrow_count AS borrowCount,
   favorite_count AS favoriteCount, damaged_count AS damagedCount, lost_count AS lostCount,
   low_stock_threshold AS lowStockThreshold,
+<<<<<<< HEAD
   (SELECT COUNT(*) FROM book_reservations br WHERE br.book_id = books.id AND br.status IN ('pending', 'confirmed')) AS activeReservationCount,
+=======
+>>>>>>> origin/master
   (SELECT COALESCE(ROUND(AVG(br.rating), 1), 0) FROM book_reviews br WHERE br.book_id = books.id AND br.status = 'published' AND br.parent_id IS NULL) AS reviewAverage,
   (SELECT COUNT(*) FROM book_reviews br WHERE br.book_id = books.id AND br.status = 'published' AND br.parent_id IS NULL) AS reviewCount,
   created_at AS createdAt, updated_at AS updatedAt
@@ -122,10 +128,17 @@ export async function createBook(payload) {
   const slug = payload.slug || await uniqueBookSlug(payload.title)
   const { stock, reservableStock } = resolveBookCounts(payload, { stock: 0, reservableStock: payload.stock })
   const [result] = await pool.execute(
+<<<<<<< HEAD
     `INSERT INTO books (slug, title, author, category, rating, stock, reservable_stock, status, cover_tone, cover_url, summary,
       description, isbn, publisher, year, pages, language, author_bio, seat_id, location_label,
       is_recommended, is_featured, is_new, shelf_area, shelf_code, low_stock_threshold)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+=======
+    `INSERT INTO books (slug, title, author, category, rating, stock, status, cover_tone, cover_url, summary,
+      description, isbn, publisher, year, pages, language, author_bio, seat_id, location_label,
+      is_recommended, is_featured, is_new, shelf_area, shelf_code, low_stock_threshold)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+>>>>>>> origin/master
     [slug, payload.title, payload.author, payload.category || '', Number(payload.rating) || 0,
       stock, reservableStock, payload.status || 'available', payload.coverTone || null, payload.coverUrl || null,
       payload.summary || null, payload.description || null, payload.isbn || null, payload.publisher || null,
@@ -145,7 +158,11 @@ export async function updateBook(id, payload) {
   assertBookStatus(next.status || 'available')
   const { stock, reservableStock } = resolveBookCounts(next, current)
   await pool.execute(
+<<<<<<< HEAD
     `UPDATE books SET slug=?, title=?, author=?, category=?, rating=?, stock=?, reservable_stock=?, status=?, cover_tone=?, cover_url=?,
+=======
+    `UPDATE books SET slug=?, title=?, author=?, category=?, rating=?, stock=?, status=?, cover_tone=?, cover_url=?,
+>>>>>>> origin/master
       summary=?, description=?, isbn=?, publisher=?, year=?, pages=?, language=?, author_bio=?, seat_id=?, location_label=?,
       is_recommended=?, is_featured=?, is_new=?, shelf_area=?, shelf_code=?, low_stock_threshold=? WHERE id=?`,
     [next.slug, next.title, next.author, next.category || '', Number(next.rating) || 0,
@@ -544,15 +561,25 @@ export async function adjustBookStock(id, payload = {}, operatorId = null) {
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
+<<<<<<< HEAD
     const [[book]] = await connection.execute('SELECT id, stock, reservable_stock AS reservableStock FROM books WHERE id = ? FOR UPDATE', [id])
+=======
+    const [[book]] = await connection.execute('SELECT id, stock FROM books WHERE id = ? FOR UPDATE', [id])
+>>>>>>> origin/master
     if (!book) { await connection.rollback(); return null }
     const beforeStock = Number(book.stock || 0)
     const afterStock = mode === 'in' ? beforeStock + Math.abs(amount) : mode === 'out' || mode === 'damaged' || mode === 'lost' ? beforeStock - Math.abs(amount) : amount
     if (!Number.isInteger(afterStock) || afterStock < 0) throw Object.assign(new Error('???????????'), { statusCode: 400 })
+<<<<<<< HEAD
     const nextReservableStock = Math.min(Number(book.reservableStock || 0), afterStock)
     const extraSet = mode === 'damaged' ? ', damaged_count = damaged_count + ?' : mode === 'lost' ? ', lost_count = lost_count + ?' : ''
     const params = extraSet ? [afterStock, nextReservableStock, Math.abs(amount), id] : [afterStock, nextReservableStock, id]
     await connection.execute(`UPDATE books SET stock = ?, reservable_stock = ?${extraSet} WHERE id = ?`, params)
+=======
+    const extraSet = mode === 'damaged' ? ', damaged_count = damaged_count + ?' : mode === 'lost' ? ', lost_count = lost_count + ?' : ''
+    const params = extraSet ? [afterStock, Math.abs(amount), id] : [afterStock, id]
+    await connection.execute(`UPDATE books SET stock = ?${extraSet} WHERE id = ?`, params)
+>>>>>>> origin/master
     await connection.execute(
       `INSERT INTO book_stock_logs (book_id, change_type, change_amount, before_stock, after_stock, reason, operator_id)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,

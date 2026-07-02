@@ -1,5 +1,9 @@
 <script setup>
+<<<<<<< HEAD
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
+=======
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+>>>>>>> origin/master
 import { useRouter } from 'vue-router'
 
 import { fetchHomeLiteSnapshot, fetchHomeSnapshot } from '@/api/home'
@@ -34,14 +38,23 @@ const toastVisible = ref(false)
 const homeLoading = ref(true)
 const homeError = ref('')
 const homeAnimated = ref(false)
+<<<<<<< HEAD
 const motionReady = ref(false)
 const homeCssReady = ref(false)
+=======
+const homeAnimationScheduled = ref(false)
+const motionReady = ref(false)
+>>>>>>> origin/master
 const communityStats = ref({ members: 0, monthlyShares: 0, posts: 0, comments: 0 })
 let liteRequest = null
 let fullRequest = null
 let deferredModulesLoaded = false
 let homeAbortController = null
 let fullHomeTimer = 0
+<<<<<<< HEAD
+=======
+let motionTimer = 0
+>>>>>>> origin/master
 let scrollDeferredBound = false
 let fullHomeScrollHandler = null
 
@@ -201,18 +214,65 @@ function wiggleIcon(element) {
     { transform: 'rotate(-8deg) scale(1.08)' },
     { transform: 'rotate(6deg) scale(1)' },
   ], { duration: 180, easing: 'ease-out' })
+<<<<<<< HEAD
 }
 
 function scheduleHomeAnimation() {
   if (!hasHomeData.value || homeLoading.value || homeAnimated.value) return
+=======
+}
+
+async function waitForHeroImages() {
+  const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
+  await nextTick()
+  const images = Array.from(homeRef.value?.querySelectorAll('.hero img, .hero-art img') || [])
+  if (!images.length) {
+    logHomePerf('hero-ready', startedAt)
+    return
+  }
+  await Promise.race([
+    Promise.all(images.map((image) => {
+    if (image.complete) return image.decode?.().catch(() => {}) || Promise.resolve()
+    return new Promise((resolve) => {
+      image.addEventListener('load', resolve, { once: true })
+      image.addEventListener('error', resolve, { once: true })
+      window.setTimeout(resolve, 320)
+    })
+    })),
+    new Promise((resolve) => window.setTimeout(resolve, 360)),
+  ])
+  logHomePerf('hero-ready', startedAt)
+}
+
+function scheduleHomeAnimation() {
+  if (!hasHomeData.value || homeLoading.value || homeAnimated.value || homeAnimationScheduled.value) return
+>>>>>>> origin/master
   if (reducedMotion()) {
     homeAnimated.value = true
     return
   }
+<<<<<<< HEAD
   runAfterPaint(() => {
     motionReady.value = true
     homeAnimated.value = true
     logHomePerf('motion-runtime-ready')
+=======
+  homeAnimationScheduled.value = true
+  runIdle(async () => {
+    try {
+      await waitForHeroImages()
+      window.clearTimeout(motionTimer)
+      motionTimer = window.setTimeout(() => {
+        runIdle(() => {
+          motionReady.value = true
+          homeAnimated.value = true
+          logHomePerf('motion-runtime-ready')
+        })
+      }, 800)
+    } finally {
+      homeAnimationScheduled.value = false
+    }
+>>>>>>> origin/master
   })
 }
 
@@ -311,7 +371,10 @@ onMounted(() => {
   logHomePerf('mounted')
   const hadCache = hydrateHomeCache()
   if (hadCache) homeLoading.value = false
+<<<<<<< HEAD
   homeCssReady.value = true
+=======
+>>>>>>> origin/master
   scheduleHomeAnimation()
   runAfterPaint(refreshHomeData)
 })
@@ -319,6 +382,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   homeAbortController?.abort()
   window.clearTimeout(fullHomeTimer)
+<<<<<<< HEAD
+=======
+  window.clearTimeout(motionTimer)
+>>>>>>> origin/master
   if (fullHomeScrollHandler) window.removeEventListener('scroll', fullHomeScrollHandler)
 })
 </script>

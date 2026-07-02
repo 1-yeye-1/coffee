@@ -43,8 +43,12 @@ app.use('/uploads', express.static(path.join(__dirname, 'public/uploads'), {
   fallthrough: false,
   setHeaders(res) {
     res.setHeader('X-Content-Type-Options', 'nosniff')
+<<<<<<< HEAD
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
     res.setHeader('Cache-Control', 'public, max-age=86400')
+=======
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
+>>>>>>> origin/master
   },
 }))
 

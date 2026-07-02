@@ -248,7 +248,10 @@ CREATE TABLE IF NOT EXISTS books (
   KEY idx_books_status (status),
   KEY idx_books_seat (seat_id),
   KEY idx_books_stock (stock),
+<<<<<<< HEAD
   KEY idx_books_reservable_stock (reservable_stock),
+=======
+>>>>>>> origin/master
   KEY idx_books_flags (is_recommended, is_featured, is_new)
 ) ENGINE=InnoDB;
 

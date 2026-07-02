@@ -38,6 +38,7 @@ const currentPhone = computed(() => authStore.user?.phone || '')
 
 function isPhone(value) {
   return /^\d{11}$/.test(String(value || '').trim())
+<<<<<<< HEAD
 }
 
 function phoneHint(value) {
@@ -47,6 +48,8 @@ function phoneHint(value) {
   if (digits.length === 11 && /^\d{11}$/.test(String(value || '').trim())) return '格式正确'
   if (digits.length > 11) return '手机号超过 11 位'
   return '手机号只能为数字'
+=======
+>>>>>>> origin/master
 }
 
 function startCountdown(target, seconds = 60) {

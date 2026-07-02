@@ -27,8 +27,11 @@ const fields = [
   { key: 'coverUrl', label: '图书封面', type: 'image', uploadScene: 'book' },
   { key: 'rating', label: '评分', type: 'number' },
   { key: 'stock', label: '库存', type: 'number' },
+<<<<<<< HEAD
   { key: 'reservableStock', label: '可预约数目', type: 'number' },
   { key: 'isbn', label: 'ISBN' },
+=======
+>>>>>>> origin/master
   { key: 'lowStockThreshold', label: '低库存预警值', type: 'number', default: 3 },
   { key: 'isRecommended', label: '推荐图书', type: 'checkbox', default: false },
   { key: 'isFeatured', label: '热门图书', type: 'checkbox', default: false },
@@ -51,7 +54,10 @@ const stats = [
   { label: '图书总数', icon: 'B', value: (items) => items.length, hint: '全部馆藏' },
   { label: '推荐 / 热门', icon: '★', value: (items) => `${items.filter((item) => item.isRecommended).length} / ${items.filter((item) => item.isFeatured).length}`, hint: '推荐与热门标记' },
   { label: '新书', icon: 'N', value: (items) => items.filter((item) => item.isNew).length, hint: '新书标记' },
+<<<<<<< HEAD
   { label: '可预约图书', icon: 'R', value: (items) => items.filter((item) => Number(item.reservableStock || 0) > 0).length, hint: '仍有预约名额' },
+=======
+>>>>>>> origin/master
   { label: '低库存预警', icon: '!', value: (items) => items.filter((item) => Number(item.stock || 0) <= Number(item.lowStockThreshold || 3)).length, hint: '库存达到预警值' },
 ]
 </script>
@@ -60,7 +66,11 @@ const stats = [
   <AdminCrudView
     type="books"
     title="图书管理"
+<<<<<<< HEAD
     description="维护图书馆藏、封面、分类、库存、可预约数目、馆藏位置和展示状态，支持内容简介与作者介绍编辑，以及推荐、热门、新书标记。"
+=======
+    description="维护图书馆藏、封面、分类、库存、馆藏位置和展示状态，支持推荐、热门、新书标记。"
+>>>>>>> origin/master
     singular="图书"
     :columns="columns"
     :fields="fields"

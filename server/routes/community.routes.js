@@ -71,11 +71,14 @@ export function registerCommunityRoutes(router) {
     return success(res, {}, '评论已删除')
   })
 
+<<<<<<< HEAD
   router.delete('/api/posts/:id', requireUser, async (req, res) => {
     if (!await deleteOwnPost(req.params.id, req.user.id)) return failure(res, 404, '帖子不存在或无权删除', 404)
     return success(res, {}, '帖子已删除')
   })
 
+=======
+>>>>>>> origin/master
   router.post('/api/posts/:id/comments/:commentId/like', communityWriteLimit, requireUser, async (req, res) => {
     if (!await findPost(req.params.id, true)) return failure(res, 404, '帖子不存在', 404)
     return success(res, await likeComment(req.params.id, req.params.commentId, req.user.id), '已点赞')

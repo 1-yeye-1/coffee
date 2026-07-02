@@ -1,5 +1,9 @@
 <script setup>
+<<<<<<< HEAD
 import { onMounted, ref, watch } from 'vue'
+=======
+import { nextTick, onMounted, ref, watch } from 'vue'
+>>>>>>> origin/master
 
 import { useGsapNumber } from '@/composables/useGsapNumber'
 import { useGsapReveal } from '@/composables/useGsapReveal'
@@ -38,6 +42,7 @@ function initializeHomeMotion(startedAt) {
   homeRoot.value = document.querySelector('.home-view')
   if (!homeRoot.value || initialized.value) return
   initialized.value = true
+<<<<<<< HEAD
   // Phase 1: critical — hero stagger and stats (blocking perception)
   revealCards('.hero__stagger', { key: 'hero', y: 18, duration: 0.48, stagger: 0.045 })
   animateStats()
@@ -49,12 +54,25 @@ function initializeHomeMotion(startedAt) {
     bindParallax('.hero', '.hero-art')
   })
   // Phase 4: expensive — pointer-based tilt (heavy event listeners)
+=======
+  revealCards('.hero__stagger', { key: 'hero', y: 18, duration: 0.48, stagger: 0.045 })
+  revealOnScroll('[data-reveal]', { limit: 14, y: 16, duration: 0.24 })
+  floatVisual('.hero-art__card')
+  bindParallax('.hero', '.hero-art')
+  animateStats()
+>>>>>>> origin/master
   runIdle(() => bindTiltCards())
   logHomePerf('animation-init', startedAt)
 }
 
+<<<<<<< HEAD
 onMounted(() => {
   const startedAt = performance.now()
+=======
+onMounted(async () => {
+  const startedAt = performance.now()
+  await nextTick()
+>>>>>>> origin/master
   logHomePerf('motion-loaded', startedAt)
   window.requestAnimationFrame(() => initializeHomeMotion(startedAt))
 })

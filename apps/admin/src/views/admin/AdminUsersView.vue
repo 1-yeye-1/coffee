@@ -20,7 +20,11 @@ const selectedIds = ref([])
 const batchLoading = ref(false)
 const userDetail = ref(null)
 const form = reactive({ nickname: '', phone: '', email: '', level: '普通会员', points: 0, status: 'active' })
+<<<<<<< HEAD
 const riskForm = reactive({ type: 'disable', title: '', reason: '', pointsDelta: 0, endAt: '', target: null })
+=======
+const riskForm = reactive({ type: 'disable', title: '', reason: '', pointsDelta: 0, target: null })
+>>>>>>> origin/master
 
 const statusOptions = [
   { label: '全部状态', value: 'all' },
@@ -56,8 +60,13 @@ const stats = computed(() => [
   ['启用用户', adminStore.users.filter((item) => item.status === 'active').length],
   ['禁用用户', adminStore.users.filter((item) => item.status === 'disabled').length],
   ['会员用户', adminStore.users.filter((item) => item.level && item.level !== '普通会员').length],
+<<<<<<< HEAD
   ['预约受限', adminStore.users.filter((item) => item.bookingLimitUntil && new Date(item.bookingLimitUntil) > new Date()).length],
   ['发帖受限', adminStore.users.filter((item) => item.postLimitUntil && new Date(item.postLimitUntil) > new Date()).length],
+=======
+  ['预约受限', adminStore.users.filter((item) => item.bookingRestricted || item.risk?.bookingRestricted).length],
+  ['发帖受限', adminStore.users.filter((item) => item.postRestricted || item.risk?.postRestricted).length],
+>>>>>>> origin/master
 ])
 
 const allVisibleSelected = computed(() => visible.value.length > 0 && visible.value.every((item) => selectedIds.value.includes(item.id)))
@@ -131,6 +140,7 @@ async function save() {
 }
 
 function openRisk(item, type) {
+<<<<<<< HEAD
   const isBookingRestricted = item.bookingLimitUntil && (!item.expired || new Date(item.bookingLimitUntil) > new Date())
   const isPostRestricted = item.postLimitUntil && (!item.expired || new Date(item.postLimitUntil) > new Date())
   const titleMap = {
@@ -170,6 +180,18 @@ function openRiskFromLog(log) {
   riskForm.endAt = log.endAt || ''
 }
 
+=======
+  const titleMap = {
+    disable: item.status === 'active' ? '禁用用户' : '解禁用户',
+    booking: '限制预约',
+    post: '限制发帖',
+    points: '积分调整',
+  }
+  Object.assign(riskForm, { type, title: titleMap[type], reason: '', pointsDelta: 0, target: item })
+  riskOpen.value = true
+}
+
+>>>>>>> origin/master
 async function confirmRisk() {
   if (['disable', 'booking', 'post'].includes(riskForm.type) && !riskForm.reason.trim()) {
     adminStore.apiError = '处理原因必填'
@@ -180,6 +202,7 @@ async function confirmRisk() {
   if (riskForm.type === 'disable') {
     await adminStore.updateUserRisk(user.id, { status: user.status === 'active' ? 'disabled' : 'active', reason: riskForm.reason.trim() })
   } else if (riskForm.type === 'booking') {
+<<<<<<< HEAD
     const isRestricted = user.bookingLimitUntil && new Date(user.bookingLimitUntil) > new Date()
     const endAt = isRestricted ? undefined : (riskForm.endAt || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 16))
     await adminStore.updateUserRisk(user.id, { bookingRestricted: !isRestricted, reason: riskForm.reason.trim(), endAt })
@@ -187,6 +210,11 @@ async function confirmRisk() {
     const isRestricted = user.postLimitUntil && new Date(user.postLimitUntil) > new Date()
     const endAt = isRestricted ? undefined : (riskForm.endAt || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 16))
     await adminStore.updateUserRisk(user.id, { postRestricted: !isRestricted, reason: riskForm.reason.trim(), endAt })
+=======
+    await adminStore.updateUserRisk(user.id, { bookingRestricted: !(user.bookingRestricted || user.risk?.bookingRestricted), reason: riskForm.reason.trim() })
+  } else if (riskForm.type === 'post') {
+    await adminStore.updateUserRisk(user.id, { postRestricted: !(user.postRestricted || user.risk?.postRestricted), reason: riskForm.reason.trim() })
+>>>>>>> origin/master
   } else {
     await adminStore.updateUser(user.id, { points: Number(user.points || 0) + Number(riskForm.pointsDelta || 0) })
   }
@@ -233,10 +261,14 @@ watch(visible, (list) => {
     <BaseTable class="admin-users-table" :columns="columns" :items="visible" :loading="adminStore.apiLoading" empty-text="暂无匹配用户">
       <template #head-select><input class="admin-select-head" type="checkbox" :checked="allVisibleSelected" :disabled="!visible.length || batchLoading" aria-label="全选当前页" @change="toggleSelectAll" /></template>
       <template #cell-select="{ item }"><input class="admin-select-cell" type="checkbox" :checked="selectedIds.includes(item.id)" :aria-label="`选择 ${item.nickname || item.username || item.id}`" @change="toggleSelect(item.id)" /></template>
+<<<<<<< HEAD
       <template #cell-avatar="{ item }">
         <img v-if="item.avatar" class="admin-user-avatar" :src="resolveMediaUrl(item.avatar)" alt="用户头像" loading="lazy" decoding="async" @error="($event) => ($event.currentTarget.style.display = 'none')" />
         <span v-else class="admin-user-avatar admin-user-avatar--text">{{ (item.nickname || item.username || '用').slice(0, 1) }}</span>
       </template>
+=======
+      <template #cell-avatar="{ item }"><span class="admin-user-avatar">{{ (item.nickname || item.username || '用').slice(0, 1) }}</span></template>
+>>>>>>> origin/master
       <template #cell-nickname="{ item }"><button class="user-link" type="button" @click="openDetail(item)">{{ item.nickname || item.username || '-' }}</button></template>
       <template #cell-email="{ value }">{{ value || '-' }}</template>
       <template #cell-couponCount="{ value }">{{ value || 0 }} 张</template>
@@ -254,7 +286,11 @@ watch(visible, (list) => {
       </template>
     </BaseTable>
 
+<<<<<<< HEAD
     <BaseDrawer v-model="detailOpen" :title="userDetail?.nickname || userDetail?.username || '用户详情'" @close="userDetail = null">
+=======
+    <BaseDrawer v-model="detailOpen" title="用户 360 详情" @close="userDetail = null">
+>>>>>>> origin/master
       <div v-if="detailLoading" class="user-detail">加载中...</div>
       <div v-else-if="userDetail" class="user-detail">
         <section>
@@ -275,6 +311,7 @@ watch(visible, (list) => {
           <div class="detail-list__row"><span>成长值</span><strong>{{ userDetail.growthValue || 0 }}</strong></div>
           <div class="detail-list__row"><span>最近签到</span><strong>{{ userDetail.lastCheckinDate || '未签到' }}</strong></div>
           <div class="detail-list__row"><span>注册时间</span><strong>{{ formatDate(userDetail.createdAt) }}</strong></div>
+<<<<<<< HEAD
           <div class="detail-list__row"><span>预约限制</span><strong>{{ userDetail.bookingLimitUntil && new Date(userDetail.bookingLimitUntil) > new Date() ? '限制中（至 ' + formatDate(userDetail.bookingLimitUntil) + '）' : '未限制' }}</strong></div>
           <div class="detail-list__row"><span>发帖限制</span><strong>{{ userDetail.postLimitUntil && new Date(userDetail.postLimitUntil) > new Date() ? '限制中（至 ' + formatDate(userDetail.postLimitUntil) + '）' : '未限制' }}</strong></div>
         </section>
@@ -290,6 +327,14 @@ watch(visible, (list) => {
             <span v-if="log.endAt">有效期至：{{ formatDate(log.endAt) }}</span>
             <BaseButton size="sm" variant="outline" @click="openRiskFromLog(log)">调整</BaseButton>
           </article>
+=======
+          <div class="detail-list__row"><span>预约限制</span><strong>{{ userDetail.bookingRestricted || userDetail.risk?.bookingRestricted ? '已限制' : '未限制' }}</strong></div>
+          <div class="detail-list__row"><span>发帖限制</span><strong>{{ userDetail.postRestricted || userDetail.risk?.postRestricted ? '已限制' : '未限制' }}</strong></div>
+        </section>
+        <section>
+          <h3>风控记录</h3>
+          <article v-for="log in userDetail.riskLogs || []" :key="log.id" class="user-log"><strong>{{ log.action || log.type }}</strong><span>{{ log.reason || '-' }} · {{ formatDate(log.createdAt) }}</span></article>
+>>>>>>> origin/master
           <p v-if="!userDetail.riskLogs?.length" class="text-muted">暂无风控记录</p>
         </section>
         <section>
@@ -298,8 +343,13 @@ watch(visible, (list) => {
           <p v-if="!userDetail.pointLogs?.length" class="text-muted">暂无积分记录</p>
         </section>
         <div class="admin-row-actions">
+<<<<<<< HEAD
           <BaseButton size="sm" variant="outline" @click="openRisk(userDetail, 'booking')">{{ userDetail.bookingLimitUntil && new Date(userDetail.bookingLimitUntil) > new Date() ? '解除预约限制' : '限制预约' }}</BaseButton>
           <BaseButton size="sm" variant="outline" @click="openRisk(userDetail, 'post')">{{ userDetail.postLimitUntil && new Date(userDetail.postLimitUntil) > new Date() ? '解除发帖限制' : '限制发帖' }}</BaseButton>
+=======
+          <BaseButton size="sm" variant="outline" @click="openRisk(userDetail, 'booking')">{{ userDetail.bookingRestricted || userDetail.risk?.bookingRestricted ? '解除预约限制' : '限制预约' }}</BaseButton>
+          <BaseButton size="sm" variant="outline" @click="openRisk(userDetail, 'post')">{{ userDetail.postRestricted || userDetail.risk?.postRestricted ? '解除发帖限制' : '限制发帖' }}</BaseButton>
+>>>>>>> origin/master
           <BaseButton size="sm" variant="outline" @click="openRisk(userDetail, 'points')">调整积分</BaseButton>
           <BaseButton size="sm" variant="danger" @click="openRisk(userDetail, 'disable')">{{ userDetail.status === 'active' ? '禁用用户' : '解禁用户' }}</BaseButton>
         </div>
@@ -323,7 +373,10 @@ watch(visible, (list) => {
         <p>处理对象：{{ riskForm.target?.nickname || riskForm.target?.username }}</p>
         <BaseInput v-if="riskForm.type === 'points'" v-model="riskForm.pointsDelta" type="number" label="积分变动值" />
         <BaseTextarea v-else v-model="riskForm.reason" label="处理原因" placeholder="原因必填" :rows="5" />
+<<<<<<< HEAD
         <BaseInput v-if="riskForm.type === 'booking' || riskForm.type === 'post'" v-model="riskForm.endAt" type="datetime-local" label="限制到期时间（选填）" />
+=======
+>>>>>>> origin/master
         <p v-if="riskForm.type !== 'points' && !riskForm.reason.trim()" class="form-error">原因必填。</p>
         <div class="admin-actions"><BaseButton variant="ghost" @click="riskOpen = false">取消</BaseButton><BaseButton :variant="riskForm.type === 'disable' ? 'danger' : 'primary'" @click="confirmRisk">确认处理</BaseButton></div>
       </div>
@@ -379,6 +432,9 @@ watch(visible, (list) => {
 .user-log span {
   color: var(--cb-text-muted);
 }
+<<<<<<< HEAD
 .user-log__head { display:flex; justify-content:space-between; align-items:center; gap:var(--cb-space-3); }
 .user-log__head small { color:var(--cb-text-muted); font-size:var(--cb-font-size-xs); }
+=======
+>>>>>>> origin/master
 </style>

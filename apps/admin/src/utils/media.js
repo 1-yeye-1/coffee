@@ -7,6 +7,9 @@ export function resolveMediaUrl(value) {
   if (!raw) return ''
   if (/^(https?:\/\/|data:|blob:)/i.test(raw)) return raw
   const path = raw.startsWith('/') ? raw : `/${raw}`
+<<<<<<< HEAD
   if (import.meta.env.DEV) return path
+=======
+>>>>>>> origin/master
   return `${mediaOrigin}${path}`
 }
